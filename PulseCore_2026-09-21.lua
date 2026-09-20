@@ -39,6 +39,133 @@ CONFIG_ATTRIBUTE_NAME = "SpeedBoostConfigsV1"
 AUTO_LOAD_ATTRIBUTE_NAME = "SpeedBoostAutoLoadV1"
 CONSOLE_MODE_ATTRIBUTE_NAME = "PulseCoreConsoleModeV1"
 
+
+CONFIG_ROOT_PATH = nil
+CONFIG_AUTOLOAD_FILE = nil
+CONFIG_FILE_EXTENSION = ".json"
+
+function getPulseCoreExecutorName()
+    local names = {
+        "identifyexecutor",
+        "getexecutorname",
+    }
+
+    for _, functionName in ipairs(names) do
+        local resolver = _G[functionName]
+        if type(resolver) == "function" then
+            local ok, result = pcall(resolver)
+            if ok and result and tostring(result) ~= "" then
+                local executorName = tostring(result)
+                    :gsub('[<>:"/\\|?*]', "_")
+                    :gsub("[%c]", "_")
+                    :gsub("%s+$", "")
+                if executorName ~= "" then
+                    return executorName
+                end
+            end
+        end
+    end
+
+    return "Executor"
+end
+
+function getPulseCoreLocalAppData()
+    local ok, localAppData = pcall(function()
+        return os.getenv("LOCALAPPDATA")
+    end)
+
+    if ok and type(localAppData) == "string" and localAppData ~= "" then
+        return localAppData
+    end
+
+    local okUser, userProfile = pcall(function()
+        return os.getenv("USERPROFILE")
+    end)
+
+    if okUser and type(userProfile) == "string" and userProfile ~= "" then
+        return userProfile .. "\\AppData\\Local"
+    end
+
+    return nil
+end
+
+function initializePulseCoreConfigPath()
+    if CONFIG_ROOT_PATH then
+        return true
+    end
+
+    local localAppData = getPulseCoreLocalAppData()
+    if not localAppData then
+        return false
+    end
+
+    local executorName = getPulseCoreExecutorName()
+
+    CONFIG_ROOT_PATH = localAppData
+        .. "\\" .. executorName
+        .. "\\workspace\\PulseCore\\Configs"
+
+    CONFIG_AUTOLOAD_FILE = CONFIG_ROOT_PATH .. "\\AutoLoad.txt"
+
+    if type(makefolder) ~= "function" or type(writefile) ~= "function"
+        or type(readfile) ~= "function" or type(listfiles) ~= "function"
+        or type(isfile) ~= "function" or type(delfile) ~= "function" then
+        return false
+    end
+
+    local segments = {
+        localAppData .. "\\" .. executorName,
+        localAppData .. "\\" .. executorName .. "\\workspace",
+        localAppData .. "\\" .. executorName .. "\\workspace\\PulseCore",
+        CONFIG_ROOT_PATH,
+    }
+
+    for _, folderPath in ipairs(segments) do
+        if type(isfolder) == "function" then
+            local folderExists = false
+            pcall(function()
+                folderExists = isfolder(folderPath)
+            end)
+            if folderExists then
+                continue
+            end
+        end
+
+        pcall(function()
+            makefolder(folderPath)
+        end)
+    end
+
+    if type(isfolder) == "function" then
+        local verified = false
+        pcall(function()
+            verified = isfolder(CONFIG_ROOT_PATH)
+        end)
+        return verified
+    end
+
+    return true
+end
+
+function getPulseCoreConfigFilePath(configName)
+    if not CONFIG_ROOT_PATH or not configName then
+        return nil
+    end
+
+    return CONFIG_ROOT_PATH .. "\\" .. configName .. CONFIG_FILE_EXTENSION
+end
+
+function isReservedWindowsConfigName(name)
+    local upper = string.upper(name):gsub("%.[^%.]*$", "")
+    return upper == "CON"
+        or upper == "PRN"
+        or upper == "AUX"
+        or upper == "NUL"
+        or upper:match("^COM[1-9]$")
+        or upper:match("^LPT[1-9]$")
+end
+
+
 ESP_HIGHLIGHT_NAME = "SpeedBoostVisualESP"
 
 -- Имена нормализуются: пробелы, дефисы и подчёркивания не учитываются.
@@ -734,7 +861,7 @@ uiScale = create("UIScale", {
     Scale = 1,
 }, screenGui)
 
-expandedSize = UDim2.fromOffset(820, 520)
+expandedSize = UDim2.fromOffset(820, 640)
 minimizedSize = UDim2.fromOffset(820, 56)
 
 mainFrame = create("Frame", {
@@ -1134,7 +1261,7 @@ clientModules.header.subtitle = create("TextLabel", {
     Position = UDim2.fromOffset(24, 34),
     Size = UDim2.new(1, -64, 0, 18),
     BackgroundTransparency = 1,
-    Text = "Script information and quick overview",
+    Text = "Creator, version and latest changes",
     Font = Enum.Font.GothamMedium,
     TextSize = 11,
     TextColor3 = COLORS.MutedText,
@@ -1431,150 +1558,69 @@ end
 createSectionLabel(clientModules.pages.info, "INFO  /  PULSECORE", 1)
 
 do
-    local scriptInfo = create("TextLabel", {
+    local creatorInfo = create("TextLabel", {
         LayoutOrder = 2,
-        Size = UDim2.new(1, 0, 0, 116),
+        Size = UDim2.new(1, 0, 0, 64),
         BackgroundColor3 = COLORS.CyanDeep,
         BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
-        Text = "PulseCore  •  Client Tools\nVersion: " .. SCRIPT_VERSION .. "\nType: Roblox LocalScript",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 14,
+        Text = "CREATOR\\nMarckoq",
+        Font = Enum.Font.GothamBold,
+        TextSize = 16,
         TextColor3 = COLORS.Text,
         TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
     }, clientModules.pages.info)
-    addCorner(scriptInfo, 12)
-    addStroke(scriptInfo, COLORS.Cyan, 0.55, 1)
+    addCorner(creatorInfo, 12)
+    addStroke(creatorInfo, COLORS.Cyan, 0.55, 1)
     create("UIPadding", {
         PaddingLeft = UDim.new(0, 16),
         PaddingRight = UDim.new(0, 16),
-    }, scriptInfo)
+    }, creatorInfo)
 end
 
 do
-    local featuresInfo = create("TextLabel", {
+    local versionInfo = create("TextLabel", {
         LayoutOrder = 3,
-        Size = UDim2.new(1, 0, 0, 188),
+        Size = UDim2.new(1, 0, 0, 64),
         BackgroundColor3 = COLORS.CyanDeep,
-        BackgroundTransparency = 0.28,
+        BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
-        Text = "MAIN FEATURES\n• WalkSpeed speed method with Increase and Set calculation modes\n• Optional AssemblyLinearVelocity Jump Boost for Local and every Ability\n• Up to four custom Abilities with delay, duration, cooldown, and hotkeys\n• Survivor / Executioner ESP overlay\n• Auto Select, Inf Flight, Noclip, Infinity Jump, live console mode, and session configs",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 13,
-        TextColor3 = COLORS.MutedText,
+        Text = "CURRENT VERSION\\n" .. SCRIPT_VERSION,
+        Font = Enum.Font.GothamBold,
+        TextSize = 16,
+        TextColor3 = COLORS.Text,
         TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
+        TextYAlignment = Enum.TextYAlignment.Center,
     }, clientModules.pages.info)
-    addCorner(featuresInfo, 12)
+    addCorner(versionInfo, 12)
+    addStroke(versionInfo, COLORS.Cyan, 0.55, 1)
     create("UIPadding", {
-        PaddingTop = UDim.new(0, 14),
-        PaddingBottom = UDim.new(0, 14),
         PaddingLeft = UDim.new(0, 16),
         PaddingRight = UDim.new(0, 16),
-    }, featuresInfo)
+    }, versionInfo)
 end
 
 do
-    local controlsInfo = create("TextLabel", {
-        LayoutOrder = 4,
-        Size = UDim2.new(1, 0, 0, 128),
-        BackgroundColor3 = COLORS.CyanDeep,
-        BackgroundTransparency = 0.28,
-        BorderSizePixel = 0,
-        Text = "DEFAULT CONTROLS\nR — activate / stop Standard Boost\nV — hide / show the interface\nF — toggle Flight\nN — toggle Noclip\nE, Q, Z, C — default Ability hotkeys\nAll main hotkeys can be changed in KEY LIST.",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 13,
-        TextColor3 = COLORS.MutedText,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-    }, clientModules.pages.info)
-    addCorner(controlsInfo, 12)
-    create("UIPadding", {
-        PaddingTop = UDim.new(0, 14),
-        PaddingBottom = UDim.new(0, 14),
-        PaddingLeft = UDim.new(0, 16),
-        PaddingRight = UDim.new(0, 16),
-    }, controlsInfo)
-end
-
-do
-    local notesInfo = create("TextLabel", {
-        LayoutOrder = 5,
-        Size = UDim2.new(1, 0, 0, 118),
-        BackgroundColor3 = COLORS.CyanDeep,
-        BackgroundTransparency = 0.28,
-        BorderSizePixel = 0,
-        Text = "NOTES\nConfigs are stored on LocalPlayer for the current game session.\nInf Flight is intended for Silver and Fleetway.\nConsole mode persists only while you stay in the same game session.\nThe Info page always opens when this script starts.",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 13,
-        TextColor3 = COLORS.MutedText,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-    }, clientModules.pages.info)
-    addCorner(notesInfo, 12)
-    create("UIPadding", {
-        PaddingTop = UDim.new(0, 14),
-        PaddingBottom = UDim.new(0, 14),
-        PaddingLeft = UDim.new(0, 16),
-        PaddingRight = UDim.new(0, 16),
-    }, notesInfo)
-end
-
-do
-    local changelogText = table.concat({
-        "CHANGELOG / UPDATE HISTORY",
-        "Current update — " .. SCRIPT_VERSION,
-        "• Improved ESP discovery: any Model under Survivors, EXE, or Executioners is tracked regardless of container class or Humanoid timing.",
-        "• Fixed Velocity Boost so it no longer overwrites faster dash/slide/knockback motion from the game.",
-        "• Fixed movement animation tracks restarting at an already-boosted playback rate.",
-        "• Kept the original InputBegan hotkey path for maximum executor/game compatibility while retaining gameProcessedEvent and GUI-focus protection.",
-        "• Fixed cleanup on external UI destruction so repeated script launches do not leave old input and frame connections running.",
-        "• Fixed the Inf Flight button so it can both enable and disable the feature.",
-        "• Fixed the initial page offset and corrected Speed / Jump validation messages to the actual 200 limit.",
-        "• Added WalkSpeed with Increase and Set calculation modes for Standard Boost and every Ability.",
-        "• Speed and Jump Boost are limited to 200; their input fields accept digits only.",
-        "• Added a separate Local Flight with F hotkey, camera-relative movement, and configurable speed up to 200.",
-        "• Speed Boost now accelerates movement animations proportionally to movement speed, capped at 4x.",
-        "• Added Sharp Movement / Anti-Slide for Standard Boost and every custom Ability; ground sliding is cancelled and air direction can be redirected instantly.",
-        "• Added N as the default Local Noclip toggle hotkey.",
-        "• Previous animation lock behavior used a fixed 1.0 playback rate while Speed Boost was active.",
-        "• Added a separate Use Jump Boost switch for Standard Boost and every custom Ability.",
-        "• Movement animation playback is now synchronized with the active Speed Boost.",
-        "• Script version format changed to YYYY.MM.DD and now represents the date of the latest update.",
-        "",
-        "Previous updates",
-        "• Added the original additive Speed Boost with delay, duration, hotkey, and up to four custom Abilities.",
-        "• Added cooldown support to Standard Boost and every Ability.",
-        "• Added session config management: save, list, select, edit, delete, load, and auto-load.",
-        "• Added Survivor / Executioner ESP and character-model caching.",
-        "• Added Auto Select with Sonic, Tails, Knuckles, Eggman, Amy, Cream, Blaze, Silver, and Metal Sonic.",
-        "• Fixed Auto Select so it waits for the real character-select screen before voting.",
-        "• Fixed hotkeys so Roblox UI keyboard activation does not also trigger Speed Boost.",
-        "• Removed the old Performance and HUD pages and converted the interface to English.",
-        "• Added movement guard experiments for sliding / sudden dashes, then removed them completely.",
-        "• Added Inf Flight for Silver / Fleetway and fixed its interaction with movement speed.",
-        "• Added Jump Boost through AssemblyLinearVelocity and removed the old Camera page.",
-        "• Added the startup Info page and the Visuals / Tabs live boost-status overlay.",
-        "• Redesigned the interface with the current purple translucent style and animated tab transitions.",
-        "• Added and later removed the Key System so the main interface opens immediately.",
-        "• Added live Console mode for the current game session.",
-        "• Added Local and per-Ability Noclip / Infinity Jump controls.",
-    }, "\n")
-
     local changelogInfo = create("TextLabel", {
-        LayoutOrder = 6,
-        Size = UDim2.new(1, 0, 0, 620),
+        LayoutOrder = 4,
+        Size = UDim2.new(1, 0, 0, 260),
         BackgroundColor3 = COLORS.CyanDeep,
         BackgroundTransparency = 0.28,
         BorderSizePixel = 0,
-        Text = changelogText,
+        Text = table.concat({
+            "CHANGELOG / LATEST UPDATE",
+            "",
+            "• Reworked the Info page: it now contains only the creator, current version, and latest changelog.",
+            "• Added local config file storage in the executor workspace under AppData\\Local.",
+            "• Each config is saved as its own JSON file using the config name as the file name.",
+            "• Configs now survive a full Roblox restart; save, load, rename, delete, and Auto Load are synchronized with the files.",
+            "• Increased the main interface height for more comfortable Settings and config management.",
+        }, "\\n"),
         Font = Enum.Font.GothamMedium,
-        TextSize = 12,
+        TextSize = 13,
         TextColor3 = COLORS.MutedText,
         TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3855,7 +3901,7 @@ function selectTab(tabName)
         Performance = { "PERFORMANCE", "Optimization and FPS limiter" },
         AutoSelect = { "AUTO SELECT", "Automatic Survivor selection" },
         KeyList = { "KEY LIST", "All hotkeys in one place" },
-        Settings = { "SETTINGS", "Interface, hotkeys and configurations" },
+        Settings = { "SETTINGS", "Interface, hotkeys, files and configurations" },
     }
 
     local incomingPage = pageByName[tabName]
@@ -7360,9 +7406,19 @@ clientModules.abilityUI.addNewAbility = function(configData, options)
 end
 
 function configManager.normalizeConfigName(text)
-    local configName = clientModules.abilityUI.clampTextLength(clientModules.abilityUI.trimText(text), MAX_CONFIG_NAME_LENGTH)
+    local configName = clientModules.abilityUI.clampTextLength(
+        clientModules.abilityUI.trimText(text),
+        MAX_CONFIG_NAME_LENGTH
+    )
 
     if configName == "" then
+        return nil
+    end
+
+    if configName == "." or configName == ".."
+        or configName:find('[<>:"/\\|?*]')
+        or configName:match("[%. ]$")
+        or isReservedWindowsConfigName(configName) then
         return nil
     end
 
@@ -7422,34 +7478,91 @@ function configManager.updateConfigStatus(message, color)
 end
 
 function configManager.persistConfigs()
-    local ok, encodedOrError = pcall(function()
-        return HttpService:JSONEncode(configManager.savedConfigs)
-    end)
-
-    if not ok then
-        configManager.updateConfigStatus("Config encoding error: " .. tostring(encodedOrError), COLORS.Red)
+    if not initializePulseCoreConfigPath() then
+        configManager.updateConfigStatus(
+            "Config file API is unavailable in this executor.",
+            COLORS.Red
+        )
         return false
     end
 
-    local saved, saveError = pcall(function()
-        localPlayer:SetAttribute(CONFIG_ATTRIBUTE_NAME, encodedOrError)
-    end)
+    local wroteAll = true
+    local encodedNames = {}
 
-    if not saved then
-        configManager.updateConfigStatus("Config save error: " .. tostring(saveError), COLORS.Red)
-        return false
+    for name, configData in pairs(configManager.savedConfigs) do
+        local filePath = getPulseCoreConfigFilePath(name)
+
+        local ok, encodedOrError = pcall(function()
+            return HttpService:JSONEncode(configData)
+        end)
+
+        if not ok then
+            configManager.updateConfigStatus(
+                "Config encoding error: " .. tostring(encodedOrError),
+                COLORS.Red
+            )
+            wroteAll = false
+            break
+        end
+
+        local saved, saveError = pcall(function()
+            writefile(filePath, encodedOrError)
+        end)
+
+        if not saved then
+            configManager.updateConfigStatus(
+                "Config save error: " .. tostring(saveError),
+                COLORS.Red
+            )
+            wroteAll = false
+            break
+        end
+
+        encodedNames[name .. CONFIG_FILE_EXTENSION] = true
     end
 
-    return true
+    if wroteAll then
+        local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+        if listedOk and type(files) == "table" then
+            for _, filePath in ipairs(files) do
+                local fileName = tostring(filePath):match("[^\\/]+$")
+                if fileName and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION
+                    and not encodedNames[fileName] then
+                    pcall(delfile, filePath)
+                end
+            end
+        end
+    end
+
+    return wroteAll
 end
 
 function configManager.persistAutoLoadConfig()
+    if not initializePulseCoreConfigPath() then
+        configManager.updateConfigStatus(
+            "Config file API is unavailable in this executor.",
+            COLORS.Red
+        )
+        return false
+    end
+
+    if not configManager.autoLoadConfigName then
+        local deleted = true
+        if type(isfile) == "function" and isfile(CONFIG_AUTOLOAD_FILE) then
+            deleted = pcall(delfile, CONFIG_AUTOLOAD_FILE)
+        end
+        return deleted == true
+    end
+
     local saved, saveError = pcall(function()
-        localPlayer:SetAttribute(AUTO_LOAD_ATTRIBUTE_NAME, configManager.autoLoadConfigName)
+        writefile(CONFIG_AUTOLOAD_FILE, configManager.autoLoadConfigName)
     end)
 
     if not saved then
-        configManager.updateConfigStatus("Auto Load save error: " .. tostring(saveError), COLORS.Red)
+        configManager.updateConfigStatus(
+            "Auto Load save error: " .. tostring(saveError),
+            COLORS.Red
+        )
         return false
     end
 
@@ -7457,36 +7570,78 @@ function configManager.persistAutoLoadConfig()
 end
 
 function configManager.loadStoredConfigs()
-    local encoded = localPlayer:GetAttribute(CONFIG_ATTRIBUTE_NAME)
+    configManager.savedConfigs = {}
+    configManager.autoLoadConfigName = nil
 
-    if type(encoded) ~= "string" or encoded == "" then
-        configManager.savedConfigs = {}
-    else
-        local ok, decoded = pcall(function()
-            return HttpService:JSONDecode(encoded)
-        end)
+    local fileStorageReady = initializePulseCoreConfigPath()
 
-        if ok and type(decoded) == "table" then
-            configManager.savedConfigs = decoded
-        else
-            configManager.savedConfigs = {}
-            configManager.updateConfigStatus("Unable to read saved configs.", COLORS.Red)
+    if fileStorageReady then
+        local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+
+        if listedOk and type(files) == "table" then
+            for _, filePath in ipairs(files) do
+                local fileName = tostring(filePath):match("[^\\/]+$")
+                if fileName and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION then
+                    local configName = fileName:sub(1, -#CONFIG_FILE_EXTENSION - 1)
+
+                    local readOk, encoded = pcall(readfile, filePath)
+                    if readOk and type(encoded) == "string" and encoded ~= "" then
+                        local decodeOk, decoded = pcall(function()
+                            return HttpService:JSONDecode(encoded)
+                        end)
+
+                        if decodeOk and type(decoded) == "table" then
+                            configManager.savedConfigs[configName] = decoded
+                        end
+                    end
+                end
+            end
         end
+
+        if type(isfile) == "function" and isfile(CONFIG_AUTOLOAD_FILE) then
+            local readOk, storedAutoLoad = pcall(readfile, CONFIG_AUTOLOAD_FILE)
+            if readOk then
+                storedAutoLoad = clientModules.abilityUI.trimText(tostring(storedAutoLoad or ""))
+                if storedAutoLoad ~= ""
+                    and type(configManager.savedConfigs[storedAutoLoad]) == "table" then
+                    configManager.autoLoadConfigName = storedAutoLoad
+                end
+            end
+        end
+
+        -- One-time migration from the old LocalPlayer attribute storage.
+        if configManager.countSavedConfigs() == 0 then
+            local legacyEncoded = localPlayer:GetAttribute(CONFIG_ATTRIBUTE_NAME)
+            if type(legacyEncoded) == "string" and legacyEncoded ~= "" then
+                local legacyOk, legacyDecoded = pcall(function()
+                    return HttpService:JSONDecode(legacyEncoded)
+                end)
+
+                if legacyOk and type(legacyDecoded) == "table" then
+                    configManager.savedConfigs = legacyDecoded
+                    configManager.persistConfigs()
+
+                    local legacyAuto = localPlayer:GetAttribute(AUTO_LOAD_ATTRIBUTE_NAME)
+                    if type(legacyAuto) == "string"
+                        and type(configManager.savedConfigs[legacyAuto]) == "table" then
+                        configManager.autoLoadConfigName = legacyAuto
+                        configManager.persistAutoLoadConfig()
+                    end
+                end
+            end
+        end
+
+        configManager.updateConfigStatus(
+            "Configs loaded from local files.\\nFolder: " .. tostring(CONFIG_ROOT_PATH),
+            COLORS.Green
+        )
+        return
     end
 
-    local storedAutoLoad = localPlayer:GetAttribute(AUTO_LOAD_ATTRIBUTE_NAME)
-    if type(storedAutoLoad) == "string"
-        and storedAutoLoad ~= ""
-        and type(configManager.savedConfigs[storedAutoLoad]) == "table" then
-        configManager.autoLoadConfigName = storedAutoLoad
-    else
-        configManager.autoLoadConfigName = nil
-        pcall(function()
-            localPlayer:SetAttribute(AUTO_LOAD_ATTRIBUTE_NAME, nil)
-        end)
-    end
-
-    configManager.updateConfigStatus("Configs loaded from LocalPlayer.", COLORS.Green)
+    configManager.updateConfigStatus(
+        "Local file storage is unavailable in this executor.",
+        COLORS.Red
+    )
 end
 
 function configManager.setConfigManagerButtonState(button, enabled, enabledColor)
@@ -7616,7 +7771,7 @@ function configManager.captureCurrentConfig()
     end)
 
     return {
-        version = 13,
+        version = 14,
         standard = {
             speed = speedBox.Text,
             speedMethod = "WalkSpeed",
