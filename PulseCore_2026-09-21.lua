@@ -1,4 +1,4 @@
-SCRIPT_VERSION = "2026.09.11"
+SCRIPT_VERSION = "2026.09.21"
 
 Players = game:GetService("Players")
 RunService = game:GetService("RunService")
@@ -22,12 +22,6 @@ MAX_JUMP_BONUS = 200
 DEFAULT_BOOST_KEY = Enum.KeyCode.R
 DEFAULT_INTERFACE_KEY = Enum.KeyCode.V
 DEFAULT_NOCLIP_KEY = Enum.KeyCode.N
-DEFAULT_DANCE1_KEY = Enum.KeyCode.KeypadOne
-DEFAULT_DANCE2_KEY = Enum.KeyCode.KeypadTwo
-DEFAULT_DANCE3_KEY = Enum.KeyCode.KeypadThree
-DEFAULT_SIT_KEY = Enum.KeyCode.KeypadFour
-DEFAULT_WALL_HACK_KEY = Enum.KeyCode.KeypadFive
-DEFAULT_PAUSE_ANIMATION_KEY = Enum.KeyCode.M
 DEFAULT_FLIGHT_KEY = Enum.KeyCode.F
 DEFAULT_FLIGHT_SPEED = 50
 MIN_FLIGHT_SPEED = 1
@@ -39,14 +33,6 @@ ABILITY_DEFAULT_KEYS = {
     Enum.KeyCode.Z,
     Enum.KeyCode.C,
 }
-
-FUN_DANCE_ANIMATION_IDS = {
-    [1] = 122117255044047,
-    [2] = 124072098165199,
-    [3] = 112820395289785,
-}
-
-FUN_WALL_HACK_EMOTE_ID = 114537898785444
 
 MAX_CONFIG_NAME_LENGTH = 32
 CONFIG_ATTRIBUTE_NAME = "SpeedBoostConfigsV1"
@@ -1393,21 +1379,6 @@ clientModules = {
         restoreSerial = 0,
         restoring = false,
     },
-    fun = {
-        pauseAnimationsEnabled = false,
-        flingEnabled = false,
-        flingSerial = 0,
-        flingConnection = nil,
-        flingHeartbeatConnection = nil,
-        flingDeathConnection = nil,
-        flingCharacterConnection = nil,
-        flingCollider = nil,
-        flingWeld = nil,
-        danceTrack = nil,
-        pauseRenderConnection = nil,
-        animationPlayedConnection = nil,
-        pausedTracks = setmetatable({}, { __mode = "k" }),
-    },
     console = {
         attributeConnection = nil,
     },
@@ -1455,7 +1426,6 @@ localTab = createTabButton("LocalTab", "LOCAL", 66)
 visualsTab = createTabButton("VisualsTab", "VISUALS", 118)
 clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 170)
 clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 222)
--- Fun tab removed from the visible sidebar.
 clientModules.tabs.keyList = createTabButton("KeyListTab", "KEY LIST", 274)
 settingsTab = createTabButton("SettingsTab", "SETTINGS", 326)
 
@@ -1610,7 +1580,6 @@ clientModules.pages.camera = createScrollingPage("CameraPage")
 clientModules.pages.performance = createScrollingPage("PerformancePage")
 clientModules.pages.hud = createScrollingPage("HudPage")
 clientModules.pages.autoSelect = createScrollingPage("AutoSelectPage")
-clientModules.pages.fun = createScrollingPage("FunPage")
 clientModules.pages.keyList = createScrollingPage("KeyListPage")
 settingsPage = createScrollingPage("SettingsPage")
 clientModules.pages.info.Visible = true
@@ -1620,7 +1589,6 @@ clientModules.pages.camera.Visible = false
 clientModules.pages.performance.Visible = false
 clientModules.pages.hud.Visible = false
 clientModules.pages.autoSelect.Visible = false
-clientModules.pages.fun.Visible = false
 clientModules.pages.keyList.Visible = false
 settingsPage.Visible = false
 
@@ -1896,7 +1864,7 @@ do
         BackgroundColor3 = COLORS.CyanDeep,
         BackgroundTransparency = 0.28,
         BorderSizePixel = 0,
-        Text = "DEFAULT CONTROLS\nR — activate / stop Standard Boost\nV — hide / show the interface\nF — toggle Flight\nX — Fling\nN — toggle Noclip\nKeypad 1–3 — Dance 1/2/3\nKeypad 4 — Sit\nKeypad 5 — Wall Hack\nM — Pause Animation\nE, Q, Z, C — default Ability hotkeys\nAll main hotkeys can be changed in KEY LIST.",
+        Text = "DEFAULT CONTROLS\nR — activate / stop Standard Boost\nV — hide / show the interface\nF — toggle Flight\nN — toggle Noclip\nE, Q, Z, C — default Ability hotkeys\nAll main hotkeys can be changed in KEY LIST.",
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
         TextColor3 = COLORS.MutedText,
@@ -1920,7 +1888,7 @@ do
         BackgroundColor3 = COLORS.CyanDeep,
         BackgroundTransparency = 0.28,
         BorderSizePixel = 0,
-        Text = "NOTES\nConfigs are stored on LocalPlayer for the current game session.\nFling is a contact-based local physics mode. It relies on Roblox physics/network ownership, so server-side anti-cheat or network ownership can limit its effect.\nInf Flight is intended for Silver and Fleetway.\nConsole mode persists only while you stay in the same game session.\nThe Info page always opens when this script starts.",
+        Text = "NOTES\nConfigs are stored on LocalPlayer for the current game session.\nInf Flight is intended for Silver and Fleetway.\nConsole mode persists only while you stay in the same game session.\nThe Info page always opens when this script starts.",
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
         TextColor3 = COLORS.MutedText,
@@ -1942,28 +1910,18 @@ do
         "CHANGELOG / UPDATE HISTORY",
         "Current update — " .. SCRIPT_VERSION,
         "• Improved ESP discovery: any Model under Survivors, EXE, or Executioners is tracked regardless of container class or Humanoid timing.",
-        "• Fixed Fling so enabling it no longer applies spin/velocity to the local character; the touch sensor only attempts to launch the contacted player's assembly.",
         "• Fixed Velocity Boost so it no longer overwrites faster dash/slide/knockback motion from the game.",
         "• Fixed movement animation tracks restarting at an already-boosted playback rate.",
         "• Kept the original InputBegan hotkey path for maximum executor/game compatibility while retaining gameProcessedEvent and GUI-focus protection.",
         "• Fixed cleanup on external UI destruction so repeated script launches do not leave old input and frame connections running.",
-        "• Fixed Flight state restoration after character replacement and cleaned up the Fling death connection when Fling stops.",
         "• Fixed the Inf Flight button so it can both enable and disable the feature.",
         "• Fixed the initial page offset and corrected Speed / Jump validation messages to the actual 200 limit.",
-        "• Fixed Speed Boost animation synchronization: only locomotion tracks are scaled and their neutral speed is restored after Boost or Pause Animation.",
         "• Added WalkSpeed with Increase and Set calculation modes for Standard Boost and every Ability.",
-        "• Removed Auto Scope; restored contact-based Fling as a local Fun action on X.",
         "• Speed and Jump Boost are limited to 200; their input fields accept digits only.",
         "• Added a separate Local Flight with F hotkey, camera-relative movement, and configurable speed up to 200.",
-        "• Added contact-based Local Fling in Fun with X as the default hotkey; Ability 4 defaults to C to avoid a key conflict.",
         "• Speed Boost now accelerates movement animations proportionally to movement speed, capped at 4x.",
         "• Added Sharp Movement / Anti-Slide for Standard Boost and every custom Ability; ground sliding is cancelled and air direction can be redirected instantly.",
-        "• Added Preserve Inventory Order to restore Backpack tool order after respawn.",
-        "• Restored Fun dance 1/2/3 to simple /e dance chat-command execution.",
         "• Added N as the default Local Noclip toggle hotkey.",
-        "• Added Marketplace Emote playback for R15 Dance 1/2/3 and Wall Hack; R6 dances use /e dance 1/2/3.",
-        "• Added the Key List tab for changing all main hotkeys from one place; Wall Hack defaults to Keypad 5.",
-        "• Added the Fun page with Numpad dance / sit commands, contact Fling (X), and Pause Animation (M).",
         "• Previous animation lock behavior used a fixed 1.0 playback rate while Speed Boost was active.",
         "• Added a separate Use Jump Boost switch for Standard Boost and every custom Ability.",
         "• Movement animation playback is now synchronized with the active Speed Boost.",
@@ -2022,14 +1980,20 @@ speedBox = createInputRow(
     2
 )
 
--- Velocity method selector removed. WalkSpeed is always used.
+clientModules.speedControl.standardMethodButton = clientModules.speedControl.createChoiceRow(
+    localPage,
+    "Speed method",
+    "WalkSpeed",
+    3
+)
+clientModules.speedControl.standardMethodButton.Parent.Visible = false
 clientModules.speedControl.standardMethod = "WalkSpeed"
 
 clientModules.speedControl.standardModeButton = clientModules.speedControl.createChoiceRow(
     localPage,
     "Speed calculation",
     clientModules.speedControl.getModeLabel(clientModules.speedControl.standardMode),
-    3
+    4
 )
 
 jumpBox = createInputRow(
@@ -2178,6 +2142,14 @@ clientModules.characterTools.infinityJumpButton, clientModules.characterTools.in
     "Infinity Jump",
     18
 )
+
+clientModules.inventoryOrder.toggleButton, clientModules.inventoryOrder.toggleDot = createToggleRow(
+    localPage,
+    "Preserve Inventory Order",
+    19
+)
+clientModules.inventoryOrder.toggleButton.Parent.Visible = false
+clientModules.inventoryOrder.enabled = false
 
 clientModules.infFlight.button = create("TextButton", {
     LayoutOrder = 20,
@@ -2364,6 +2336,85 @@ create("UIPadding", {
     PaddingLeft = UDim.new(0, 14),
     PaddingRight = UDim.new(0, 14),
 }, visualsHint)
+
+createSectionLabel(visualsPage, "VISUALS  /  BOOST TABS", 6)
+clientModules.boostTabs.toggleButton, clientModules.boostTabs.toggleDot = createToggleRow(
+    visualsPage,
+    "Tabs — show boost status window",
+    7
+)
+clientModules.boostTabs.toggleButton.Parent.Visible = false
+clientModules.boostTabs.enabled = false
+
+clientModules.boostTabs.hintLabel = create("TextLabel", {
+    LayoutOrder = 8,
+    Size = UDim2.new(1, 0, 0, 70),
+    BackgroundColor3 = COLORS.CyanDeep,
+    BackgroundTransparency = 0.32,
+    BorderSizePixel = 0,
+    Text = "Shows a window on the left side of the screen with active boosts, activation delay, remaining duration, and cooldown.",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 12,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, visualsPage)
+addCorner(clientModules.boostTabs.hintLabel, 12)
+create("UIPadding", {
+    PaddingLeft = UDim.new(0, 14),
+    PaddingRight = UDim.new(0, 14),
+}, clientModules.boostTabs.hintLabel)
+
+clientModules.boostTabs.window = create("Frame", {
+    Name = "BoostTabsWindow",
+    AnchorPoint = Vector2.new(0, 0.5),
+    Position = UDim2.new(0, 14, 0.5, 0),
+    Size = UDim2.fromOffset(270, 340),
+    BackgroundColor3 = COLORS.Panel,
+    BackgroundTransparency = 0.12,
+    BorderSizePixel = 0,
+    Visible = false,
+    Active = false,
+    ZIndex = 60,
+}, screenGui)
+addCorner(clientModules.boostTabs.window, 14)
+addStroke(clientModules.boostTabs.window, COLORS.Cyan, 0.2, 1.4)
+
+clientModules.boostTabs.titleLabel = create("TextLabel", {
+    Position = UDim2.fromOffset(14, 8),
+    Size = UDim2.new(1, -28, 0, 30),
+    BackgroundTransparency = 1,
+    Text = "BOOST TABS",
+    Font = Enum.Font.GothamBold,
+    TextSize = 15,
+    TextColor3 = COLORS.Text,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 61,
+}, clientModules.boostTabs.window)
+
+clientModules.boostTabs.contentLabel = create("TextLabel", {
+    Position = UDim2.fromOffset(14, 43),
+    Size = UDim2.new(1, -28, 1, -55),
+    BackgroundColor3 = COLORS.CyanDeep,
+    BackgroundTransparency = 0.22,
+    BorderSizePixel = 0,
+    Text = "No active boosts, delays, or cooldowns.",
+    Font = Enum.Font.Code,
+    TextSize = 12,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    ZIndex = 61,
+}, clientModules.boostTabs.window)
+addCorner(clientModules.boostTabs.contentLabel, 10)
+create("UIPadding", {
+    PaddingTop = UDim.new(0, 10),
+    PaddingBottom = UDim.new(0, 10),
+    PaddingLeft = UDim.new(0, 10),
+    PaddingRight = UDim.new(0, 10),
+}, clientModules.boostTabs.contentLabel)
 
 function clientModules.createActionButton(parent, textValue, position, size, backgroundColor)
     local button = create("TextButton", {
@@ -2673,89 +2724,6 @@ create("UIPadding", {
 }, clientModules.hud.overlay)
 
 
--- FUN: quick local commands and animation controls.
-createSectionLabel(clientModules.pages.fun, "FUN  /  QUICK COMMANDS", 1)
-
-clientModules.fun.dance1Button = clientModules.createActionButton(
-    clientModules.pages.fun,
-    "/e dance1    •    Keypad 1",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 46),
-    COLORS.CyanDark
-)
-clientModules.fun.dance1Button.LayoutOrder = 2
-
-clientModules.fun.dance2Button = clientModules.createActionButton(
-    clientModules.pages.fun,
-    "/e dance2    •    Keypad 2",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 46),
-    COLORS.CyanDark
-)
-clientModules.fun.dance2Button.LayoutOrder = 3
-
-clientModules.fun.dance3Button = clientModules.createActionButton(
-    clientModules.pages.fun,
-    "/e dance3    •    Keypad 3",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 46),
-    COLORS.CyanDark
-)
-clientModules.fun.dance3Button.LayoutOrder = 4
-
-clientModules.fun.wallHackButton = clientModules.createActionButton(
-    clientModules.pages.fun,
-    "WALL HACK    •    Keypad 5",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 46),
-    COLORS.CyanDark
-)
-clientModules.fun.wallHackButton.LayoutOrder = 5
-
-clientModules.fun.sitButton = clientModules.createActionButton(
-    clientModules.pages.fun,
-    "SIT    •    Keypad 4",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 46),
-    COLORS.CyanDark
-)
-clientModules.fun.sitButton.LayoutOrder = 6
-
-clientModules.fun.flingButton = clientModules.createActionButton(
-    clientModules.pages.fun,
-    "FLING    •    X",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 46),
-    COLORS.CyanDark
-)
-clientModules.fun.flingButton.LayoutOrder = 7
-
-clientModules.fun.pauseButton, clientModules.fun.pauseDot = createToggleRow(
-    clientModules.pages.fun,
-    "Pause Animation    •    M",
-    8
-)
-
-clientModules.fun.statusLabel = create("TextLabel", {
-    LayoutOrder = 9,
-    Size = UDim2.new(1, 0, 0, 70),
-    BackgroundColor3 = COLORS.CyanDeep,
-    BackgroundTransparency = 0.32,
-    BorderSizePixel = 0,
-    Text = "Fun commands are ready. Fling stays active until disabled and strongly throws players when your character touches them.",
-    Font = Enum.Font.GothamMedium,
-    TextSize = 12,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-}, clientModules.pages.fun)
-addCorner(clientModules.fun.statusLabel, 12)
-create("UIPadding", {
-    PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 14),
-}, clientModules.fun.statusLabel)
-
 -- KEY LIST: all hotkeys in one place. Keep these references in a table instead of
 -- creating many top-level locals; Luau has a 200-register limit for a chunk.
 clientModules.keyList = clientModules.keyList or {}
@@ -2787,14 +2755,6 @@ clientModules.keyList.buttons.Boost = createKeybindRow(clientModules.pages.keyLi
 clientModules.keyList.buttons.Interface = createKeybindRow(clientModules.pages.keyList, "Hide / Show Interface", DEFAULT_INTERFACE_KEY.Name, 4)
 clientModules.keyList.buttons.Noclip = createKeybindRow(clientModules.pages.keyList, "Enable Noclip", DEFAULT_NOCLIP_KEY.Name, 5)
 clientModules.keyList.buttons.Flight = createKeybindRow(clientModules.pages.keyList, "Toggle Flight", DEFAULT_FLIGHT_KEY.Name, 6)
-clientModules.keyList.buttons.Dance1 = createKeybindRow(clientModules.pages.keyList, "Dance 1", DEFAULT_DANCE1_KEY.Name, 7)
-clientModules.keyList.buttons.Dance2 = createKeybindRow(clientModules.pages.keyList, "Dance 2", DEFAULT_DANCE2_KEY.Name, 8)
-clientModules.keyList.buttons.Dance3 = createKeybindRow(clientModules.pages.keyList, "Dance 3", DEFAULT_DANCE3_KEY.Name, 9)
-clientModules.keyList.buttons.Sit = createKeybindRow(clientModules.pages.keyList, "Sit", DEFAULT_SIT_KEY.Name, 10)
-clientModules.keyList.buttons.WallHack = createKeybindRow(clientModules.pages.keyList, "Wall Hack", DEFAULT_WALL_HACK_KEY.Name, 11)
-clientModules.keyList.buttons.PauseAnimation = createKeybindRow(clientModules.pages.keyList, "Pause Animation", DEFAULT_PAUSE_ANIMATION_KEY.Name, 12)
-clientModules.keyList.buttons.Fling = createKeybindRow(clientModules.pages.keyList, "Fling", Enum.KeyCode.X.Name, 13)
-
 createSectionLabel(clientModules.pages.keyList, "ABILITY HOTKEYS", 14)
 for index = 1, MAX_ABILITIES do
     clientModules.keyList.abilityButtons[index] = createKeybindRow(
@@ -2830,13 +2790,6 @@ clientModules.keyList.state = clientModules.keyList.state or {
     interfaceKey = DEFAULT_INTERFACE_KEY,
     noclipKey = DEFAULT_NOCLIP_KEY,
     flightKey = DEFAULT_FLIGHT_KEY,
-    dance1Key = DEFAULT_DANCE1_KEY,
-    dance2Key = DEFAULT_DANCE2_KEY,
-    dance3Key = DEFAULT_DANCE3_KEY,
-    sitKey = DEFAULT_SIT_KEY,
-    wallHackKey = DEFAULT_WALL_HACK_KEY,
-    pauseAnimationKey = DEFAULT_PAUSE_ANIMATION_KEY,
-    flingKey = Enum.KeyCode.X,
     bindingTarget = nil,
     bindingPreviousText = nil,
 }
@@ -3006,71 +2959,118 @@ create("UIPadding", {
 
 configManager = {}
 
-
 --==================================================
--- PERSONALIZATION / APPEARANCE
+-- PERSONALIZATION
 --==================================================
 
-clientModules.personalization = clientModules.personalization or {
-    themeIndex = 1,
-    transparency = 0.16,
-}
+clientModules.personalization = clientModules.personalization or {}
 
 clientModules.personalization.themes = {
     { name = "Graphite", accent = Color3.fromRGB(210, 210, 210), dark = Color3.fromRGB(68, 68, 68), deep = Color3.fromRGB(18, 18, 18) },
-    { name = "Purple",   accent = Color3.fromRGB(190, 145, 255), dark = Color3.fromRGB(86, 48, 125), deep = Color3.fromRGB(30, 18, 43) },
-    { name = "Blue",     accent = Color3.fromRGB(120, 180, 255), dark = Color3.fromRGB(36, 78, 125), deep = Color3.fromRGB(13, 24, 40) },
-    { name = "Red",      accent = Color3.fromRGB(255, 120, 130), dark = Color3.fromRGB(126, 43, 53), deep = Color3.fromRGB(39, 12, 16) },
-    { name = "Green",    accent = Color3.fromRGB(120, 225, 170), dark = Color3.fromRGB(39, 111, 75), deep = Color3.fromRGB(12, 36, 24) },
+    { name = "Purple", accent = Color3.fromRGB(190, 145, 255), dark = Color3.fromRGB(86, 48, 125), deep = Color3.fromRGB(30, 18, 43) },
+    { name = "Blue", accent = Color3.fromRGB(120, 180, 255), dark = Color3.fromRGB(36, 78, 125), deep = Color3.fromRGB(13, 24, 40) },
+    { name = "Red", accent = Color3.fromRGB(255, 120, 130), dark = Color3.fromRGB(126, 43, 53), deep = Color3.fromRGB(39, 12, 16) },
+    { name = "Green", accent = Color3.fromRGB(120, 225, 170), dark = Color3.fromRGB(39, 111, 75), deep = Color3.fromRGB(12, 36, 24) },
 }
 
+clientModules.personalization.themeIndex = 1
+clientModules.personalization.transparency = 0.16
+clientModules.personalization.baseColors = {}
+for key, value in pairs(COLORS) do
+    clientModules.personalization.baseColors[key] = value
+end
+
+local function personalizationColorEqual(a, b)
+    return typeof(a) == "Color3"
+        and typeof(b) == "Color3"
+        and math.abs(a.R - b.R) < 0.002
+        and math.abs(a.G - b.G) < 0.002
+        and math.abs(a.B - b.B) < 0.002
+end
+
 function clientModules.personalization.applyTheme(index)
-    local themes = clientModules.personalization.themes
-    index = math.clamp(tonumber(index) or 1, 1, #themes)
+    local theme = clientModules.personalization.themes[index]
+    if not theme then return end
+
     clientModules.personalization.themeIndex = index
-
-    local theme = themes[index]
-
     COLORS.Cyan = theme.accent
     COLORS.CyanDark = theme.dark
     COLORS.CyanDeep = theme.deep
     COLORS.Panel = theme.deep
     COLORS.Sidebar = theme.deep
     COLORS.Topbar = theme.deep
-    COLORS.Card = theme.dark:Lerp(theme.deep, 0.55)
-    COLORS.Input = theme.deep:Lerp(Color3.new(0, 0, 0), 0.18)
+    COLORS.Card = theme.deep:Lerp(Color3.new(1, 1, 1), 0.025)
+    COLORS.Input = theme.deep:Lerp(Color3.new(0, 0, 0), 0.16)
     COLORS.Border = theme.dark:Lerp(Color3.new(1, 1, 1), 0.08)
 
     if screenGui and screenGui.Parent then
         for _, object in ipairs(screenGui:GetDescendants()) do
-            if object:IsA("UIStroke") then
-                object.Color = COLORS.Cyan
-            elseif object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
-                object.TextColor3 = COLORS.Text
+            if object:IsA("GuiObject") then
+                local background = object.BackgroundColor3
+                for key, base in pairs(clientModules.personalization.baseColors) do
+                    if personalizationColorEqual(background, base) then
+                        if COLORS[key] then
+                            object.BackgroundColor3 = COLORS[key]
+                        end
+                        break
+                    end
+                end
+
+                if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+                    if personalizationColorEqual(object.TextColor3, clientModules.personalization.baseColors.Cyan) then
+                        object.TextColor3 = COLORS.Cyan
+                    elseif personalizationColorEqual(object.TextColor3, clientModules.personalization.baseColors.Text) then
+                        object.TextColor3 = COLORS.Text
+                    elseif personalizationColorEqual(object.TextColor3, clientModules.personalization.baseColors.MutedText) then
+                        object.TextColor3 = COLORS.MutedText
+                    end
+                end
+            elseif object:IsA("UIStroke") then
+                if personalizationColorEqual(object.Color, clientModules.personalization.baseColors.Cyan) then
+                    object.Color = COLORS.Cyan
+                elseif personalizationColorEqual(object.Color, clientModules.personalization.baseColors.Border) then
+                    object.Color = COLORS.Border
+                end
             end
         end
+    end
 
-        mainFrame.BackgroundColor3 = COLORS.Panel
+    if mainFrame and mainFrame.Parent then
         mainFrame.BackgroundTransparency = clientModules.personalization.transparency
-        topBar.BackgroundColor3 = COLORS.Topbar
-        sidebar.BackgroundColor3 = COLORS.Sidebar
+    end
+    if topBar and topBar.Parent then
+        topBar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency - 0.03, 0, 0.8)
+    end
+    if sidebar and sidebar.Parent then
+        sidebar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency + 0.02, 0, 0.8)
+    end
+
+    if clientModules.personalization.themeButton then
+        clientModules.personalization.themeButton.Text =
+            "INTERFACE COLOR  •  " .. theme.name
     end
 end
 
 function clientModules.personalization.setTransparency(value)
     local number = tonumber(value)
-    if not number then
-        return false
-    end
+    if not number then return false end
 
     clientModules.personalization.transparency = math.clamp(number, 0.05, 0.45)
 
     if mainFrame and mainFrame.Parent then
         mainFrame.BackgroundTransparency = clientModules.personalization.transparency
     end
+    if topBar and topBar.Parent then
+        topBar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency - 0.03, 0, 0.8)
+    end
+    if sidebar and sidebar.Parent then
+        sidebar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency + 0.02, 0, 0.8)
+    end
 
     return true
 end
+
+createSectionLabel(settingsPage, "SETTINGS  /  PERSONALIZATION", 8)
 
 clientModules.personalization.themeButton = clientModules.createActionButton(
     settingsPage,
@@ -3091,21 +3091,12 @@ clientModules.personalization.transparencyBox = createInputRow(
 
 clientModules.personalization.themeButton.Activated:Connect(function()
     local nextIndex = clientModules.personalization.themeIndex + 1
-    if nextIndex > #clientModules.personalization.themes then
-        nextIndex = 1
-    end
-
+    if nextIndex > #clientModules.personalization.themes then nextIndex = 1 end
     clientModules.personalization.applyTheme(nextIndex)
-    clientModules.personalization.themeButton.Text =
-        "INTERFACE COLOR  •  "
-        .. clientModules.personalization.themes[clientModules.personalization.themeIndex].name
 end)
 
 clientModules.personalization.transparencyBox.FocusLost:Connect(function()
     if clientModules.personalization.setTransparency(clientModules.personalization.transparencyBox.Text) then
-        clientModules.personalization.transparencyBox.Text =
-            string.format("%.2f", clientModules.personalization.transparency)
-    else
         clientModules.personalization.transparencyBox.Text =
             string.format("%.2f", clientModules.personalization.transparency)
     end
@@ -3114,7 +3105,7 @@ end)
 clientModules.personalization.applyTheme(1)
 
 
-createSectionLabel(settingsPage, "CONFIGS  /  SAVED PROFILES", 10)
+createSectionLabel(settingsPage, "CONFIGS  /  SAVED PROFILES", 11)
 
 configManager.configNameBox = createInputRow(
     settingsPage,
@@ -4272,7 +4263,6 @@ function clientModules.autoSelect.handleClientUI(payload)
 end
 
 function clientModules.autoSelect.initialize()
-setSwitchVisual(clientModules.fun.pauseButton, clientModules.fun.pauseDot, false)
     task.spawn(function()
         local replicatedStorage = game:GetService("ReplicatedStorage")
         local remotes = replicatedStorage:WaitForChild("Remotes", 15)
@@ -4316,14 +4306,7 @@ function clientModules.autoSelect.shutdown()
     end
 end
 
-clientModules.speedControl.standardMethod = "WalkSpeed"
-clientModules.boostTabs.enabled = false
-clientModules.inventoryOrder.enabled = false
-
 function clientModules.shutdown()
-    if clientModules.fun and clientModules.fun.shutdownFling then
-        clientModules.fun.shutdownFling()
-    end
     clientModules.boostTabs.shutdown()
     if clientModules.infFlight and clientModules.infFlight.shutdown then
         clientModules.infFlight.shutdown()
@@ -4545,486 +4528,6 @@ function selectTab(tabName)
 
     clientModules.tabAnimation.currentName = tabName
     clientModules.tabAnimation.currentPage = incomingPage
-end
-
-function clientModules.fun.setStatus(message, color)
-    if clientModules.fun.statusLabel then
-        clientModules.fun.statusLabel.Text = message
-        clientModules.fun.statusLabel.TextColor3 = color or COLORS.MutedText
-    end
-    logPulseCoreStatus("Fun: " .. tostring(message or ""), color)
-end
-
-function clientModules.fun.sendChatCommand(command)
-    local sent = false
-
-    pcall(function()
-        local inputConfig = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
-            or TextChatService:FindFirstChild("ChatInputBarConfiguration")
-        local targetChannel = inputConfig and inputConfig.TargetTextChannel
-        if targetChannel then
-            targetChannel:SendAsync(command)
-            sent = true
-        end
-    end)
-
-    if not sent then
-        pcall(function()
-            local textChannels = TextChatService:FindFirstChild("TextChannels")
-            local general = textChannels and textChannels:FindFirstChild("RBXGeneral")
-            if general then
-                general:SendAsync(command)
-                sent = true
-            end
-        end)
-    end
-
-    if not sent then
-        pcall(function()
-            Players:Chat(command)
-            sent = true
-        end)
-    end
-
-    if sent then
-        clientModules.fun.setStatus("Executed: " .. command, COLORS.Green)
-    else
-        clientModules.fun.setStatus("Unable to send the emote command in the current chat system.", COLORS.Red)
-    end
-end
-
-function clientModules.fun.playMarketplaceEmote(emoteId, label)
-    local character = localPlayer.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        clientModules.fun.setStatus(label .. " failed: Humanoid not found.", COLORS.Red)
-        return false
-    end
-
-    if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
-        clientModules.fun.setStatus(label .. " requires an R15 character.", COLORS.Red)
-        return false
-    end
-
-    local ok, result = pcall(function()
-        -- Use the character's actual HumanoidDescription.
-        -- GetAppliedDescription() returns a copy, which is not the description
-        -- used by PlayEmote().
-        local description = humanoid:FindFirstChildOfClass("HumanoidDescription")
-        if not description then
-            description = humanoid.HumanoidDescription
-        end
-        if not description then
-            error("HumanoidDescription not found")
-        end
-
-        local emoteName = "PulseCore_" .. tostring(emoteId)
-        description:AddEmote(emoteName, tonumber(emoteId))
-
-        -- Give the emote a chance to register on the character before playing it.
-        task.wait()
-        return humanoid:PlayEmote(emoteName)
-    end)
-
-    if ok and result == true then
-        clientModules.fun.setStatus(label .. " activated.", COLORS.Green)
-        return true
-    end
-
-    clientModules.fun.setStatus(label .. " failed to play Marketplace Emote #" .. tostring(emoteId) .. ".", COLORS.Red)
-    logPulseCoreWarning("Failed to play Marketplace Emote #" .. tostring(emoteId) .. ": " .. tostring(result))
-    warn("[PulseCore] Failed to play Marketplace Emote", emoteId, result)
-    return false
-end
-
-function clientModules.fun.playDance(index)
-    local character = localPlayer.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        clientModules.fun.setStatus("Dance failed: Humanoid not found.", COLORS.Red)
-        return
-    end
-
-    if humanoid.RigType == Enum.HumanoidRigType.R15 then
-        clientModules.fun.playMarketplaceEmote(FUN_DANCE_ANIMATION_IDS[index], "Dance " .. tostring(index))
-        return
-    end
-
-    -- R6 uses the legacy Animate emote bridge. This is equivalent to /e dance1/2/3
-    -- but avoids TextChatService's R15-only emote validation warning.
-    local legacyNames = {
-        [1] = "dance1",
-        [2] = "dance2",
-        [3] = "dance3",
-    }
-    local emoteName = legacyNames[index]
-    local played = false
-
-    local ok = pcall(function()
-        local animate = character:FindFirstChild("Animate")
-        local playEmote = animate and animate:FindFirstChild("PlayEmote")
-        if playEmote and playEmote:IsA("BindableFunction") then
-            local result = playEmote:Invoke(emoteName)
-            played = result ~= false
-        end
-    end)
-
-    if played then
-        clientModules.fun.setStatus("Executed: /e " .. emoteName, COLORS.Green)
-        return
-    end
-
-    -- Fallback for games where Animate.PlayEmote is unavailable.
-    local commands = {
-        [1] = "/e dance1",
-        [2] = "/e dance2",
-        [3] = "/e dance3",
-    }
-    clientModules.fun.sendChatCommand(commands[index])
-end
-
-function clientModules.fun.sit()
-    local character = localPlayer.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        clientModules.fun.setStatus("Sit failed: Humanoid not found.", COLORS.Red)
-        return
-    end
-
-    humanoid.Sit = true
-    clientModules.fun.setStatus("Sit activated.", COLORS.Green)
-end
-
-function clientModules.fun.refreshFlingVisuals()
-    local button = clientModules.fun.flingButton
-    if not button then
-        return
-    end
-
-    button.Text = "FLING    •    " .. clientModules.keyList.state.flingKey.Name
-        .. (clientModules.fun.flingEnabled and "    [ON]" or "    [OFF]")
-    button.BackgroundColor3 = clientModules.fun.flingEnabled and COLORS.Green or COLORS.CyanDark
-    button.TextColor3 = clientModules.fun.flingEnabled and COLORS.CyanDeep or COLORS.Text
-end
-
-function clientModules.fun.destroyFlingObjects()
-    if clientModules.fun.flingConnection then
-        clientModules.fun.flingConnection:Disconnect()
-        clientModules.fun.flingConnection = nil
-    end
-
-    if clientModules.fun.flingHeartbeatConnection then
-        clientModules.fun.flingHeartbeatConnection:Disconnect()
-        clientModules.fun.flingHeartbeatConnection = nil
-    end
-
-    if clientModules.fun.flingDeathConnection then
-        clientModules.fun.flingDeathConnection:Disconnect()
-        clientModules.fun.flingDeathConnection = nil
-    end
-
-    if clientModules.fun.flingWeld then
-        pcall(function()
-            clientModules.fun.flingWeld:Destroy()
-        end)
-        clientModules.fun.flingWeld = nil
-    end
-
-    if clientModules.fun.flingCollider then
-        pcall(function()
-            clientModules.fun.flingCollider:Destroy()
-        end)
-        clientModules.fun.flingCollider = nil
-    end
-end
-
-function clientModules.fun.setupFlingForCharacter(character, serial)
-    if not character
-        or not character.Parent
-        or not clientModules.fun.flingEnabled
-        or serial ~= clientModules.fun.flingSerial then
-        return false
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not rootPart or humanoid.Health <= 0 then
-        return false
-    end
-
-    clientModules.fun.destroyFlingObjects()
-
-    -- Non-colliding touch sensor. Fling itself must not physically move the
-    -- local character just by being enabled.
-    local collider = Instance.new("Part")
-    collider.Name = "PulseCoreFlingHitbox"
-    collider.Size = Vector3.new(4.5, 5.5, 4.5)
-    collider.CFrame = rootPart.CFrame * CFrame.new(0, 0, -2.6)
-    collider.Transparency = 1
-    collider.CanCollide = false
-    collider.CanTouch = true
-    collider.CanQuery = false
-    collider.Massless = true
-    collider.CastShadow = false
-    collider.Parent = character
-
-    local weld = Instance.new("WeldConstraint")
-    weld.Name = "PulseCoreFlingWeld"
-    weld.Part0 = rootPart
-    weld.Part1 = collider
-    weld.Parent = collider
-
-    clientModules.fun.flingCollider = collider
-    clientModules.fun.flingWeld = weld
-
-    local touchDebounce = setmetatable({}, { __mode = "k" })
-    local FLING_ANGULAR_SPEED = 12000
-    local FLING_FORWARD_SPEED = 220
-    local FLING_UPWARD_SPEED = 120
-
-    clientModules.fun.flingConnection = collider.Touched:Connect(function(hit)
-        if guiDestroyed
-            or not clientModules.fun.flingEnabled
-            or serial ~= clientModules.fun.flingSerial
-            or not hit
-            or not hit.Parent then
-            return
-        end
-
-        local model = hit:FindFirstAncestorOfClass("Model")
-        if not model or model == character then
-            return
-        end
-
-        local targetHumanoid = model:FindFirstChildOfClass("Humanoid")
-        local targetRoot = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-        local targetPlayer = Players:GetPlayerFromCharacter(model)
-
-        if not targetPlayer
-            or not targetHumanoid
-            or targetHumanoid.Health <= 0
-            or not targetRoot
-            or not targetRoot:IsA("BasePart") then
-            return
-        end
-
-        local now = os.clock()
-        if touchDebounce[model] and now - touchDebounce[model] < 0.10 then
-            return
-        end
-        touchDebounce[model] = now
-
-        if targetRoot.Anchored then
-            return
-        end
-
-        local away = targetRoot.Position - rootPart.Position
-        away = away.Magnitude >= 0.05 and away.Unit or rootPart.CFrame.LookVector
-
-        local launchVelocity = away * FLING_FORWARD_SPEED
-            + Vector3.new(0, FLING_UPWARD_SPEED, 0)
-
-        -- Do NOT change the local player's velocity. The contacted player's
-        -- assembly is the only assembly we attempt to launch.
-        pcall(function()
-            targetRoot.AssemblyLinearVelocity = launchVelocity
-            targetRoot.AssemblyAngularVelocity = Vector3.new(0, FLING_ANGULAR_SPEED, 0)
-            targetRoot:ApplyImpulse(launchVelocity * targetRoot.AssemblyMass)
-        end)
-
-        clientModules.fun.setStatus("Fling hit " .. targetPlayer.Name .. ".", COLORS.Green)
-    end)
-
-    clientModules.fun.flingDeathConnection = humanoid.Died:Connect(function()
-        local deathConnection = clientModules.fun.flingDeathConnection
-        clientModules.fun.flingDeathConnection = nil
-        if deathConnection then
-            deathConnection:Disconnect()
-        end
-        if serial == clientModules.fun.flingSerial then
-            clientModules.fun.flingEnabled = false
-            clientModules.fun.flingSerial = clientModules.fun.flingSerial + 1
-            clientModules.fun.destroyFlingObjects()
-            clientModules.fun.refreshFlingVisuals()
-            clientModules.fun.setStatus("Fling disabled after death.", COLORS.MutedText)
-        end
-    end)
-
-    return true
-end
-
-function clientModules.fun.fling()
-    local enabled = not clientModules.fun.flingEnabled
-    clientModules.fun.flingSerial = clientModules.fun.flingSerial + 1
-    local serial = clientModules.fun.flingSerial
-
-    clientModules.fun.flingEnabled = enabled
-    clientModules.fun.destroyFlingObjects()
-    clientModules.fun.refreshFlingVisuals()
-
-    if not enabled then
-        local character = localPlayer.Character
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-        if rootPart and rootPart:IsA("BasePart") then
-            pcall(function()
-                rootPart.AssemblyAngularVelocity = Vector3.zero
-            end)
-        end
-        clientModules.fun.setStatus("Fling disabled.", COLORS.MutedText)
-        return false
-    end
-
-    local character = localPlayer.Character
-    if not character then
-        clientModules.fun.flingEnabled = false
-        clientModules.fun.refreshFlingVisuals()
-        clientModules.fun.setStatus("Fling failed: character is not ready.", COLORS.Red)
-        return false
-    end
-
-    local ready = clientModules.fun.setupFlingForCharacter(character, serial)
-    if not ready then
-        clientModules.fun.flingEnabled = false
-        clientModules.fun.flingSerial = clientModules.fun.flingSerial + 1
-        clientModules.fun.destroyFlingObjects()
-        clientModules.fun.refreshFlingVisuals()
-        clientModules.fun.setStatus("Fling failed: character is not ready.", COLORS.Red)
-        return false
-    end
-
-    if not clientModules.fun.flingCharacterConnection then
-        clientModules.fun.flingCharacterConnection = localPlayer.CharacterAdded:Connect(function(newCharacter)
-            if not clientModules.fun.flingEnabled then
-                return
-            end
-
-            clientModules.fun.flingSerial = clientModules.fun.flingSerial + 1
-            local newSerial = clientModules.fun.flingSerial
-            task.defer(function()
-                if clientModules.fun.flingEnabled then
-                    clientModules.fun.setupFlingForCharacter(newCharacter, newSerial)
-                end
-            end)
-        end)
-    end
-
-    clientModules.fun.setStatus("Fling enabled. Touch another player to launch them.", COLORS.Green)
-    clientModules.fun.refreshFlingVisuals()
-    return true
-end
-
-function clientModules.fun.shutdownFling()
-    clientModules.fun.flingEnabled = false
-    clientModules.fun.flingSerial = clientModules.fun.flingSerial + 1
-    clientModules.fun.destroyFlingObjects()
-
-    if clientModules.fun.flingCharacterConnection then
-        clientModules.fun.flingCharacterConnection:Disconnect()
-        clientModules.fun.flingCharacterConnection = nil
-    end
-
-    clientModules.fun.refreshFlingVisuals()
-end
-
-function clientModules.fun.disconnectPauseConnections()
-    if clientModules.fun.pauseRenderConnection then
-        clientModules.fun.pauseRenderConnection:Disconnect()
-        clientModules.fun.pauseRenderConnection = nil
-    end
-
-    if clientModules.fun.animationPlayedConnection then
-        clientModules.fun.animationPlayedConnection:Disconnect()
-        clientModules.fun.animationPlayedConnection = nil
-    end
-end
-
-function clientModules.fun.captureAndPauseTrack(track)
-    if not track or clientModules.fun.pausedTracks[track] ~= nil then
-        return
-    end
-
-    local speed = tonumber(track.Speed) or 1
-    if speed <= 0.001 then
-        speed = 1
-    end
-    clientModules.fun.pausedTracks[track] = speed
-
-    pcall(function()
-        track:AdjustSpeed(0)
-    end)
-end
-
-function clientModules.fun.setPauseAnimations(enabled)
-    enabled = enabled == true
-    clientModules.fun.pauseAnimationsEnabled = enabled
-    clientModules.fun.disconnectPauseConnections()
-
-    if not enabled then
-        for track, originalSpeed in pairs(clientModules.fun.pausedTracks) do
-            if track and track.IsPlaying then
-                pcall(function()
-                    -- If Speed Boost is active, resume movement tracks at the boosted playback rate.
-                    if boostActive and clientModules.animationLock.isMovementTrack(track) then
-                        clientModules.animationLock.captureTrack(track, originalSpeed)
-                        track:AdjustSpeed(
-                            clientModules.animationLock.getTrackBoostedSpeed(track, originalSpeed)
-                        )
-                    else
-                        track:AdjustSpeed(originalSpeed or 1)
-                    end
-                end)
-            end
-        end
-        clientModules.fun.pausedTracks = setmetatable({}, { __mode = "k" })
-        setSwitchVisual(clientModules.fun.pauseButton, clientModules.fun.pauseDot, false)
-        clientModules.fun.setStatus("Pause Animation disabled.", COLORS.Green)
-        return
-    end
-
-    local character = localPlayer.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
-    if not animator then
-        clientModules.fun.pauseAnimationsEnabled = false
-        setSwitchVisual(clientModules.fun.pauseButton, clientModules.fun.pauseDot, false)
-        clientModules.fun.setStatus("Pause Animation failed: Animator not found.", COLORS.Red)
-        return
-    end
-
-    clientModules.fun.pausedTracks = setmetatable({}, { __mode = "k" })
-    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-        clientModules.fun.captureAndPauseTrack(track)
-    end
-
-    clientModules.fun.animationPlayedConnection = animator.AnimationPlayed:Connect(function(track)
-        task.defer(function()
-            if clientModules.fun.pauseAnimationsEnabled and not guiDestroyed then
-                clientModules.fun.captureAndPauseTrack(track)
-            end
-        end)
-    end)
-
-    clientModules.fun.pauseRenderConnection = RunService.RenderStepped:Connect(function()
-        if guiDestroyed or not clientModules.fun.pauseAnimationsEnabled then
-            return
-        end
-
-        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-            clientModules.fun.captureAndPauseTrack(track)
-            pcall(function()
-                if math.abs(tonumber(track.Speed) or 0) > 0.001 then
-                    track:AdjustSpeed(0)
-                end
-            end)
-        end
-    end)
-
-    setSwitchVisual(clientModules.fun.pauseButton, clientModules.fun.pauseDot, true)
-    clientModules.fun.setStatus("Pause Animation enabled. All character animations are frozen.", COLORS.Green)
-end
-
-function clientModules.fun.togglePauseAnimations()
-    clientModules.fun.setPauseAnimations(not clientModules.fun.pauseAnimationsEnabled)
 end
 
 function normalizeCharacterName(value)
@@ -6562,16 +6065,11 @@ function clientModules.animationLock.disconnect()
         clientModules.animationLock.animationPlayedConnection = nil
     end
 
-    -- Restore the exact playback speed that existed before the Boost touched
-    -- the track. If animations are paused, update Pause Animation's snapshot
-    -- instead and leave the live track frozen at zero.
+    -- Restore the exact playback speed that existed before the Boost touched the track.
     for track, record in pairs(clientModules.animationLock.tracks) do
         local neutralSpeed = record and tonumber(record.neutralSpeed) or 1
 
-        if clientModules.fun.pauseAnimationsEnabled
-            and clientModules.fun.pausedTracks[track] ~= nil then
-            clientModules.fun.pausedTracks[track] = neutralSpeed
-        elseif track and track.IsPlaying then
+        if track and track.IsPlaying then
             pcall(function()
                 track:AdjustSpeed(neutralSpeed)
             end)
@@ -6661,7 +6159,6 @@ function clientModules.animationLock.attach(humanoid)
         task.defer(function()
             if guiDestroyed
                 or not boostActive
-                or clientModules.fun.pauseAnimationsEnabled
                 or humanoid ~= clientModules.animationLock.humanoid
                 or not track then
                 return
@@ -6674,7 +6171,6 @@ function clientModules.animationLock.attach(humanoid)
     clientModules.animationLock.renderConnection = RunService.RenderStepped:Connect(function()
         if guiDestroyed
             or not boostActive
-            or clientModules.fun.pauseAnimationsEnabled
             or humanoid ~= boostedHumanoid
             or animator ~= clientModules.animationLock.animator then
             return
@@ -7775,14 +7271,6 @@ function getBindingButton(target)
 
     if target == "Noclip" then return clientModules.keyList.buttons.Noclip end
     if target == "Flight" then return clientModules.keyList.buttons.Flight end
-    if target == "Dance1" then return clientModules.keyList.buttons.Dance1 end
-    if target == "Dance2" then return clientModules.keyList.buttons.Dance2 end
-    if target == "Dance3" then return clientModules.keyList.buttons.Dance3 end
-    if target == "Sit" then return clientModules.keyList.buttons.Sit end
-    if target == "WallHack" then return clientModules.keyList.buttons.WallHack end
-    if target == "PauseAnimation" then return clientModules.keyList.buttons.PauseAnimation end
-    if target == "Fling" then return clientModules.keyList.buttons.Fling end
-
     if isAbilityOwner(target) then
         return clientModules.keyList.abilityButtons[target.index] or target.keyButton
     end
@@ -7795,14 +7283,6 @@ function getBindingKey(target)
     if target == "Interface" then return clientModules.keyList.state.interfaceKey end
     if target == "Noclip" then return clientModules.keyList.state.noclipKey end
     if target == "Flight" then return clientModules.keyList.state.flightKey end
-    if target == "Dance1" then return clientModules.keyList.state.dance1Key end
-    if target == "Dance2" then return clientModules.keyList.state.dance2Key end
-    if target == "Dance3" then return clientModules.keyList.state.dance3Key end
-    if target == "Sit" then return clientModules.keyList.state.sitKey end
-    if target == "WallHack" then return clientModules.keyList.state.wallHackKey end
-    if target == "PauseAnimation" then return clientModules.keyList.state.pauseAnimationKey end
-    if target == "Fling" then return clientModules.keyList.state.flingKey end
-
     if isAbilityOwner(target) then
         return target.key
     end
@@ -7816,13 +7296,6 @@ function keyIsUsedByOther(newKey, target)
         {"Interface", clientModules.keyList.state.interfaceKey},
         {"Noclip", clientModules.keyList.state.noclipKey},
         {"Flight", clientModules.keyList.state.flightKey},
-        {"Dance1", clientModules.keyList.state.dance1Key},
-        {"Dance2", clientModules.keyList.state.dance2Key},
-        {"Dance3", clientModules.keyList.state.dance3Key},
-        {"Sit", clientModules.keyList.state.sitKey},
-        {"WallHack", clientModules.keyList.state.wallHackKey},
-        {"PauseAnimation", clientModules.keyList.state.pauseAnimationKey},
-        {"Fling", clientModules.keyList.state.flingKey},
     }
 
     for _, entry in ipairs(entries) do
@@ -7895,33 +7368,6 @@ function finishBinding(newKey)
         clientModules.keyList.buttons.Flight.Text = newKey.Name
         clientModules.flight.refreshVisuals()
         setStatus("Flight key changed to " .. newKey.Name .. ".", COLORS.Green)
-    elseif target == "Dance1" then
-        clientModules.keyList.state.dance1Key = newKey
-        clientModules.keyList.buttons.Dance1.Text = newKey.Name
-        clientModules.fun.dance1Button.Text = "DANCE 1    •    " .. newKey.Name
-    elseif target == "Dance2" then
-        clientModules.keyList.state.dance2Key = newKey
-        clientModules.keyList.buttons.Dance2.Text = newKey.Name
-        clientModules.fun.dance2Button.Text = "DANCE 2    •    " .. newKey.Name
-    elseif target == "Dance3" then
-        clientModules.keyList.state.dance3Key = newKey
-        clientModules.keyList.buttons.Dance3.Text = newKey.Name
-        clientModules.fun.dance3Button.Text = "DANCE 3    •    " .. newKey.Name
-    elseif target == "Sit" then
-        clientModules.keyList.state.sitKey = newKey
-        clientModules.keyList.buttons.Sit.Text = newKey.Name
-        clientModules.fun.sitButton.Text = "SIT    •    " .. newKey.Name
-    elseif target == "WallHack" then
-        clientModules.keyList.state.wallHackKey = newKey
-        clientModules.keyList.buttons.WallHack.Text = newKey.Name
-        clientModules.fun.wallHackButton.Text = "WALL HACK    •    " .. newKey.Name
-    elseif target == "PauseAnimation" then
-        clientModules.keyList.state.pauseAnimationKey = newKey
-        clientModules.keyList.buttons.PauseAnimation.Text = newKey.Name
-    elseif target == "Fling" then
-        clientModules.keyList.state.flingKey = newKey
-        clientModules.keyList.buttons.Fling.Text = newKey.Name
-        clientModules.fun.refreshFlingVisuals()
     elseif isAbilityOwner(target) then
         target.key = newKey
         target.keyButton.Text = newKey.Name
@@ -8212,7 +7658,7 @@ clientModules.abilityUI.addNewAbility = function(configData, options)
         slot = slot,
         name = defaultName,
         key = configuredKey,
-        speedMethod = clientModules.speedControl.normalizeMethod(configData.speedMethod),
+        speedMethod = "WalkSpeed",
         speedMode = clientModules.speedControl.normalizeMode(configData.speedMode),
         delayEnabled = configData.delayEnabled == true,
         cooldownEnabled = configData.cooldownEnabled == true,
@@ -8395,9 +7841,13 @@ clientModules.abilityUI.addNewAbility = function(configData, options)
         clientModules.abilityUI.deleteAbility(ability)
     end)
 
+    ability.speedMethod = "WalkSpeed"
+    ability.speedMethodButton.Text = "WalkSpeed"
+    ability.speedMethodButton.Parent.Visible = false
+
     ability.speedMethodButton.Activated:Connect(function()
-        ability.speedMethod = ability.speedMethod == "WalkSpeed" and "Velocity" or "WalkSpeed"
-        ability.speedMethodButton.Text = clientModules.speedControl.getMethodLabel(ability.speedMethod)
+        ability.speedMethod = "WalkSpeed"
+        ability.speedMethodButton.Text = "WalkSpeed"
     end)
 
     ability.speedModeButton.Activated:Connect(function()
@@ -8711,7 +8161,7 @@ function configManager.captureCurrentConfig()
             name = ability.name,
             key = ability.key.Name,
             speed = ability.speedBox.Text,
-            speedMethod = ability.speedMethod,
+            speedMethod = "WalkSpeed",
             speedMode = ability.speedMode,
             jump = ability.jumpBox.Text,
             jumpBoostEnabled = ability.jumpBoostEnabled == true,
@@ -8734,7 +8184,7 @@ function configManager.captureCurrentConfig()
         version = 13,
         standard = {
             speed = speedBox.Text,
-            speedMethod = clientModules.speedControl.standardMethod,
+            speedMethod = "WalkSpeed",
             speedMode = clientModules.speedControl.standardMode,
             jump = jumpBox.Text,
             jumpBoostEnabled = clientModules.jumpBoost.standardEnabled == true,
@@ -8752,7 +8202,6 @@ function configManager.captureCurrentConfig()
             infinityJump = clientModules.characterTools.infinityJumpEnabled,
             flightSpeed = clientModules.flight.getSpeed(),
             flightKey = clientModules.keyList.state.flightKey.Name,
-            flingKey = clientModules.keyList.state.flingKey.Name,
         },
         visuals = {
             survivors = espSurvivorsEnabled,
@@ -8873,13 +8322,6 @@ function configManager.loadConfigByName(configName, options)
             DEFAULT_FLIGHT_KEY
         )
     clientModules.keyList.buttons.Flight.Text = clientModules.keyList.state.flightKey.Name
-    clientModules.keyList.state.flingKey =
-        clientModules.abilityUI.keyCodeFromName(
-            localToolsConfig.flingKey,
-            Enum.KeyCode.X
-        )
-    clientModules.keyList.buttons.Fling.Text = clientModules.keyList.state.flingKey.Name
-    clientModules.fun.refreshFlingVisuals()
     clientModules.flight.refreshVisuals()
 
     local visuals = type(configData.visuals) == "table" and configData.visuals or {}
@@ -8901,6 +8343,12 @@ function configManager.loadConfigByName(configName, options)
         end
 
         clientModules.abilityUI.addNewAbility(abilityConfig, { silent = true })
+        local latestAbility = abilities[#abilities]
+        if latestAbility then
+            latestAbility.speedMethod = "WalkSpeed"
+            latestAbility.speedMethodButton.Text = "WalkSpeed"
+            latestAbility.speedMethodButton.Parent.Visible = false
+        end
     end
 
     clientModules.cooldown.resetAll()
@@ -9076,45 +8524,10 @@ settingsTab.Activated:Connect(function()
     selectTab("Settings")
 end)
 
-clientModules.fun.dance1Button.Activated:Connect(function()
-    clientModules.fun.playDance(1)
-end)
-
-clientModules.fun.dance2Button.Activated:Connect(function()
-    clientModules.fun.playDance(2)
-end)
-
-clientModules.fun.dance3Button.Activated:Connect(function()
-    clientModules.fun.playDance(3)
-end)
-
-clientModules.fun.wallHackButton.Activated:Connect(function()
-    clientModules.fun.playMarketplaceEmote(FUN_WALL_HACK_EMOTE_ID, "Wall Hack")
-end)
-
-clientModules.fun.sitButton.Activated:Connect(function()
-    clientModules.fun.sit()
-end)
-
-clientModules.fun.flingButton.Activated:Connect(function()
-    clientModules.fun.fling()
-end)
-
-clientModules.fun.pauseButton.Activated:Connect(function()
-    clientModules.fun.togglePauseAnimations()
-end)
-
 clientModules.keyList.buttons.Boost.Activated:Connect(function() beginBinding("Boost") end)
 clientModules.keyList.buttons.Interface.Activated:Connect(function() beginBinding("Interface") end)
 clientModules.keyList.buttons.Noclip.Activated:Connect(function() beginBinding("Noclip") end)
 clientModules.keyList.buttons.Flight.Activated:Connect(function() beginBinding("Flight") end)
-clientModules.keyList.buttons.Dance1.Activated:Connect(function() beginBinding("Dance1") end)
-clientModules.keyList.buttons.Dance2.Activated:Connect(function() beginBinding("Dance2") end)
-clientModules.keyList.buttons.Dance3.Activated:Connect(function() beginBinding("Dance3") end)
-clientModules.keyList.buttons.Sit.Activated:Connect(function() beginBinding("Sit") end)
-clientModules.keyList.buttons.WallHack.Activated:Connect(function() beginBinding("WallHack") end)
-clientModules.keyList.buttons.PauseAnimation.Activated:Connect(function() beginBinding("PauseAnimation") end)
-clientModules.keyList.buttons.Fling.Activated:Connect(function() beginBinding("Fling") end)
 for index = 1, MAX_ABILITIES do
     clientModules.keyList.abilityButtons[index].Activated:Connect(function()
         for _, ability in ipairs(abilities) do
@@ -9127,6 +8540,11 @@ for index = 1, MAX_ABILITIES do
         clientModules.keyList.status.TextColor3 = COLORS.MutedText
     end)
 end
+
+clientModules.speedControl.standardMethodButton.Activated:Connect(function()
+    clientModules.speedControl.standardMethod = "WalkSpeed"
+    clientModules.speedControl.standardMethodButton.Text = "WalkSpeed"
+end)
 
 clientModules.speedControl.standardModeButton.Activated:Connect(function()
     clientModules.speedControl.standardMode =
@@ -9182,6 +8600,11 @@ clientModules.characterTools.infinityJumpButton.Activated:Connect(function()
         not clientModules.characterTools.infinityJumpEnabled,
         false
     )
+end)
+
+clientModules.inventoryOrder.toggleButton.Activated:Connect(function()
+    clientModules.inventoryOrder.enabled = false
+    clientModules.inventoryOrder.setEnabled(false, true)
 end)
 
 clientModules.infFlight.button.Activated:Connect(function()
@@ -9305,6 +8728,11 @@ espSurvivorsButton.Activated:Connect(function()
     refreshAllTrackedModels()
 end)
 
+clientModules.boostTabs.toggleButton.Activated:Connect(function()
+    clientModules.boostTabs.enabled = false
+    clientModules.boostTabs.setEnabled(false, true)
+end)
+
 espExecutionersButton.Activated:Connect(function()
     espExecutionersEnabled = not espExecutionersEnabled
     -- Сама подсветка Executioners остаётся красной, но активный переключатель зелёный.
@@ -9354,9 +8782,6 @@ configManager.autoLoadConfigButton.Activated:Connect(configManager.enableSelecte
 configManager.disableAutoLoadButton.Activated:Connect(configManager.disableSelectedConfigAutoLoad)
 
 function shutdownMainScript(reason)
-    if clientModules.fun and clientModules.fun.pauseAnimationsEnabled then
-        clientModules.fun.setPauseAnimations(false)
-    end
     if guiDestroyed and not criticalStopInProgress then
         return
     end
@@ -9562,26 +8987,6 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
     if input.KeyCode == clientModules.keyList.state.interfaceKey then
         screenGui.Enabled = not screenGui.Enabled
         return
-    end
-
-    if input.KeyCode == clientModules.keyList.state.dance1Key then
-        clientModules.fun.playDance(1)
-        return
-    elseif input.KeyCode == clientModules.keyList.state.dance2Key then
-        clientModules.fun.playDance(2)
-        return
-    elseif input.KeyCode == clientModules.keyList.state.dance3Key then
-        clientModules.fun.playDance(3)
-        return
-    elseif input.KeyCode == clientModules.keyList.state.sitKey then
-        clientModules.fun.sit()
-        return
-    elseif input.KeyCode == clientModules.keyList.state.wallHackKey then
-        clientModules.fun.playMarketplaceEmote(FUN_WALL_HACK_EMOTE_ID, "Wall Hack")
-        return
-    elseif input.KeyCode == clientModules.keyList.state.pauseAnimationKey then
-        clientModules.fun.togglePauseAnimations()
-        return
     elseif input.KeyCode == clientModules.keyList.state.noclipKey then
         clientModules.characterTools.setNoclipEnabled(
             not clientModules.characterTools.noclipEnabled,
@@ -9590,9 +8995,6 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
         return
     elseif input.KeyCode == clientModules.keyList.state.flightKey then
         clientModules.flight.setEnabled(not clientModules.flight.enabled, false)
-        return
-    elseif input.KeyCode == clientModules.keyList.state.flingKey then
-        clientModules.fun.fling()
         return
     end
 
@@ -9639,6 +9041,13 @@ end
 
 interfaceInitialized = false
 
+clientModules.speedControl.standardMethod = "WalkSpeed"
+clientModules.inventoryOrder.enabled = false
+clientModules.boostTabs.enabled = false
+if clientModules.boostTabs.window then
+    clientModules.boostTabs.window.Visible = false
+end
+
 function initializeMainInterface()
     if interfaceInitialized or guiDestroyed then
         return
@@ -9648,6 +9057,9 @@ function initializeMainInterface()
     currentCameraChangedConnection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(connectCameraScale)
     connectCameraScale()
     configManager.loadStoredConfigs()
+    clientModules.speedControl.standardMethod = "WalkSpeed"
+    clientModules.inventoryOrder.setEnabled(false, true)
+    clientModules.boostTabs.setEnabled(false, true)
     configManager.refreshConfigList()
     if configManager.autoLoadConfigName and configManager.savedConfigs[configManager.autoLoadConfigName] then
         configManager.loadConfigByName(configManager.autoLoadConfigName, { auto = true })
@@ -9673,7 +9085,6 @@ function initializeMainInterface()
     clientModules.flight.setSpeed(clientModules.flight.speed or DEFAULT_FLIGHT_SPEED, true)
     clientModules.flight.updateSliderVisual()
     clientModules.flight.refreshVisuals()
-    clientModules.fun.refreshFlingVisuals()
     clientModules.characterTools.refreshVisuals()
     clientModules.characterTools.initialize()
     clientModules.characterTools.setSharpMovementEnabled(
@@ -9703,7 +9114,12 @@ task.defer(function()
         if not ok then
             logPulseCoreError("Initialization error: " .. tostring(err))
             warn("[PulseCore] Initialization error: " .. tostring(err))
-            criticalShutdown("INIT_FAILURE", tostring(err))
+            pcall(function()
+                if clientModules and clientModules.header and clientModules.header.subtitle then
+                    clientModules.header.subtitle.Text = "Initialization error: " .. tostring(err)
+                    clientModules.header.subtitle.TextColor3 = COLORS.Red
+                end
+            end)
         end
     end
 end)
