@@ -1776,7 +1776,7 @@ function createToggleRow(parent, labelText, layoutOrder)
 end
 
 function clientModules.speedControl.normalizeMethod(value)
-    return value == "Velocity" and "Velocity" or "WalkSpeed"
+    return "WalkSpeed"
 end
 
 function clientModules.speedControl.normalizeMode(value)
@@ -7658,7 +7658,7 @@ clientModules.abilityUI.addNewAbility = function(configData, options)
         slot = slot,
         name = defaultName,
         key = configuredKey,
-        speedMethod = clientModules.speedControl.normalizeMethod(configData.speedMethod),
+        speedMethod = "WalkSpeed",
         speedMode = clientModules.speedControl.normalizeMode(configData.speedMode),
         delayEnabled = configData.delayEnabled == true,
         cooldownEnabled = configData.cooldownEnabled == true,
@@ -7841,9 +7841,13 @@ clientModules.abilityUI.addNewAbility = function(configData, options)
         clientModules.abilityUI.deleteAbility(ability)
     end)
 
+    ability.speedMethod = "WalkSpeed"
+    ability.speedMethodButton.Text = "WalkSpeed"
+    ability.speedMethodButton.Parent.Visible = false
+
     ability.speedMethodButton.Activated:Connect(function()
-        ability.speedMethod = ability.speedMethod == "WalkSpeed" and "Velocity" or "WalkSpeed"
-        ability.speedMethodButton.Text = clientModules.speedControl.getMethodLabel(ability.speedMethod)
+        ability.speedMethod = "WalkSpeed"
+        ability.speedMethodButton.Text = "WalkSpeed"
     end)
 
     ability.speedModeButton.Activated:Connect(function()
@@ -8157,7 +8161,7 @@ function configManager.captureCurrentConfig()
             name = ability.name,
             key = ability.key.Name,
             speed = ability.speedBox.Text,
-            speedMethod = ability.speedMethod,
+            speedMethod = "WalkSpeed",
             speedMode = ability.speedMode,
             jump = ability.jumpBox.Text,
             jumpBoostEnabled = ability.jumpBoostEnabled == true,
@@ -8180,7 +8184,7 @@ function configManager.captureCurrentConfig()
         version = 13,
         standard = {
             speed = speedBox.Text,
-            speedMethod = clientModules.speedControl.standardMethod,
+            speedMethod = "WalkSpeed",
             speedMode = clientModules.speedControl.standardMode,
             jump = jumpBox.Text,
             jumpBoostEnabled = clientModules.jumpBoost.standardEnabled == true,
@@ -8198,7 +8202,6 @@ function configManager.captureCurrentConfig()
             infinityJump = clientModules.characterTools.infinityJumpEnabled,
             flightSpeed = clientModules.flight.getSpeed(),
             flightKey = clientModules.keyList.state.flightKey.Name,
-            flingKey = clientModules.keyList.state.flingKey.Name,
         },
         visuals = {
             survivors = espSurvivorsEnabled,
@@ -8978,8 +8981,6 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
     if input.KeyCode == clientModules.keyList.state.interfaceKey then
         screenGui.Enabled = not screenGui.Enabled
         return
-    end
-
     elseif input.KeyCode == clientModules.keyList.state.noclipKey then
         clientModules.characterTools.setNoclipEnabled(
             not clientModules.characterTools.noclipEnabled,
@@ -8989,8 +8990,6 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
     elseif input.KeyCode == clientModules.keyList.state.flightKey then
         clientModules.flight.setEnabled(not clientModules.flight.enabled, false)
         return
-    elseif input.KeyCode == clientModules.keyList.state.flingKey then
-            return
     end
 
     if input.KeyCode == clientModules.keyList.state.boostKey then
