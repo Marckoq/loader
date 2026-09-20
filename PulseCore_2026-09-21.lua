@@ -116,386 +116,6 @@ function addStroke(parent, color, transparency, thickness)
     }, parent)
 end
 
--- Fatal-error safety system. The notification is created BEFORE the main
--- interface starts so it can still be displayed when the main runtime is
--- already in a broken state.  It lives in a separate GUI container.
-criticalState = {
-    active = false,
-    notificationGui = nil,
-    notificationFrame = nil,
-    notificationSerial = 0,
-    errorConnection = nil,
-}
-
-criticalStopCodes = {
-    INIT_FAILURE = true,
-    RUNTIME_FAILURE = true,
-    UI_FAILURE = true,
-    EVENT_FAILURE = true,
-    STATE_FAILURE = true,
-    DATA_FAILURE = true,
-    MODULE_FAILURE = true,
-    TEST_FAILURE = true,
-}
-
-function normalizeCriticalStopCode(code)
-    code = tostring(code or "RUNTIME_FAILURE"):upper():gsub("[^A-Z0-9_%-]", "_")
-    if not criticalStopCodes[code] then
-        return "RUNTIME_FAILURE"
-    end
-    return code
-end
-
-function getCriticalGuiParent()
-    -- Prefer executor GUI root when available.  In normal LocalScript/Studio
-    -- environments we safely fall back to PlayerGui.
-    local ok, hui = pcall(function()
-        if type(gethui) == "function" then
-            return gethui()
-        end
-        return nil
-    end)
-    if ok and hui then
-        return hui
-    end
-    return playerGui
-end
-
-function buildCriticalNotification()
-    if criticalState.notificationGui and criticalState.notificationGui.Parent
-        and criticalState.notificationFrame and criticalState.notificationFrame.Parent then
-        return
-    end
-
-    pcall(function()
-        if criticalState.notificationGui then
-            criticalState.notificationGui:Destroy()
-        end
-    end)
-
-    local parent = getCriticalGuiParent()
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "PulseCoreCriticalNotificationUI"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = false
-    gui.DisplayOrder = 1000000
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.Enabled = true
-    gui.Parent = parent
-    criticalState.notificationGui = gui
-
-    local frame = Instance.new("Frame")
-    frame.Name = "CriticalError"
-    frame.AnchorPoint = Vector2.new(1, 1)
-    frame.Position = UDim2.new(1, 430, 1, -18)
-    frame.Size = UDim2.fromOffset(410, 126)
-    frame.BackgroundColor3 = COLORS.Panel
-    frame.BackgroundTransparency = 0.06
-    frame.BorderSizePixel = 0
-    frame.Active = true
-    frame.Visible = false
-    frame.Parent = gui
-    criticalState.notificationFrame = frame
-    addCorner(frame, 14)
-    addStroke(frame, COLORS.Red, 0.10, 1.4)
-
-    create("UIGradient", {
-        Rotation = 18,
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 18, 18)),
-            ColorSequenceKeypoint.new(0.55, Color3.fromRGB(14, 14, 14)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 8)),
-        }),
-    }, frame)
-
-    create("TextLabel", {
-        Position = UDim2.fromOffset(18, 13),
-        Size = UDim2.new(1, -36, 0, 27),
-        BackgroundTransparency = 1,
-        Text = "PULSECORE  /  CRITICAL ERROR",
-        Font = Enum.Font.GothamBold,
-        TextSize = 14,
-        TextColor3 = COLORS.Red,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 3,
-    }, frame)
-
-    create("TextLabel", {
-        Position = UDim2.fromOffset(18, 40),
-        Size = UDim2.new(1, -36, 0, 43),
-        BackgroundTransparency = 1,
-        Text = "A critical error occurred while PulseCore was running.\nPulseCore cannot safely continue and has been stopped.",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 12,
-        TextColor3 = COLORS.Text,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = 3,
-    }, frame)
-
-    create("TextLabel", {
-        Position = UDim2.fromOffset(18, 88),
-        Size = UDim2.new(1, -36, 0, 24),
-        BackgroundTransparency = 1,
-        Name = "StopCode",
-        Text = "Stop Code: RUNTIME_FAILURE",
-        Font = Enum.Font.Code,
-        TextSize = 12,
-        TextColor3 = COLORS.MutedText,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 3,
-    }, frame)
-end
-
-function destroyCriticalNotification()
-    if criticalState.notificationGui and criticalState.notificationGui.Parent then
-        pcall(function()
-            criticalState.notificationGui:Destroy()
-        end)
-    end
-    criticalState.notificationGui = nil
-    criticalState.notificationFrame = nil
-end
-
-function showCriticalNotification(stopCode)
-    stopCode = normalizeCriticalStopCode(stopCode)
-    buildCriticalNotification()
-
-    local gui = criticalState.notificationGui
-    local frame = criticalState.notificationFrame
-    if not gui or not frame or not gui.Parent or not frame.Parent then
-        return false
-    end
-
-    criticalState.notificationSerial = criticalState.notificationSerial + 1
-    local serial = criticalState.notificationSerial
-
-    local stopLabel = frame:FindFirstChild("StopCode")
-    if stopLabel then
-        stopLabel.Text = "Stop Code: " .. stopCode
-    end
-
-    pcall(function()
-        frame.Visible = false
-        frame.Position = UDim2.new(1, 430, 1, -18)
-    end)
-
-    frame.Visible = true
-
-    -- Do not use a timer that starts before the entrance animation finishes.
-    -- Five seconds are counted only after the notification is fully visible.
-    local tweenIn = TweenService:Create(
-        frame,
-        TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-        { Position = UDim2.new(1, -18, 1, -18) }
-    )
-    tweenIn:Play()
-
-    tweenIn.Completed:Connect(function()
-        if serial ~= criticalState.notificationSerial
-            or frame ~= criticalState.notificationFrame
-            or not frame.Parent then
-            return
-        end
-
-        task.delay(5, function()
-            if serial ~= criticalState.notificationSerial
-                or frame ~= criticalState.notificationFrame
-                or not frame.Parent then
-                return
-            end
-
-            local tweenOut = TweenService:Create(
-                frame,
-                TweenInfo.new(0.48, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-                { Position = UDim2.new(1, 430, 1, -18) }
-            )
-            tweenOut:Play()
-            tweenOut.Completed:Connect(function()
-                if serial ~= criticalState.notificationSerial
-                    or frame ~= criticalState.notificationFrame then
-                    return
-                end
-                frame.Visible = false
-            end)
-        end)
-    end)
-
-    return true
-end
-
--- Prepare the notification while PulseCore is healthy. If a later function
--- crashes, the error handler only has to reveal this already-created GUI.
-buildCriticalNotification()
-
-function freezeCriticalInterface()
-    -- The interface must become completely non-interactive during the fatal
-    -- 2-second safety window: no scrolling, buttons, toggles, dragging, or
-    -- hotkeys may be able to change state.
-    if not screenGui or not screenGui.Parent then
-        return
-    end
-
-    local overlay = screenGui:FindFirstChild("CriticalFreezeOverlay")
-    if not overlay then
-        overlay = Instance.new("TextButton")
-        overlay.Name = "CriticalFreezeOverlay"
-        overlay.Size = UDim2.fromScale(1, 1)
-        overlay.Position = UDim2.fromScale(0, 0)
-        overlay.BackgroundTransparency = 1
-        overlay.BorderSizePixel = 0
-        overlay.Text = ""
-        overlay.AutoButtonColor = false
-        overlay.Active = true
-        overlay.Selectable = false
-        overlay.ZIndex = 100000
-        overlay.Modal = true
-        overlay.Parent = screenGui
-    end
-    overlay.Visible = true
-
-    -- Disable scrolling and direct interaction on every existing control.
-    pcall(function()
-        for _, obj in ipairs(screenGui:GetDescendants()) do
-            if obj ~= overlay and obj:IsA("ScrollingFrame") then
-                obj.ScrollingEnabled = false
-            end
-            if obj ~= overlay and obj:IsA("GuiButton") then
-                obj.Active = false
-                obj.Selectable = false
-            elseif obj ~= overlay and obj:IsA("TextBox") then
-                obj.Active = false
-                obj.Selectable = false
-            end
-        end
-    end)
-end
-
-function criticalShutdown(stopCode, reason)
-    if criticalState.active then
-        return
-    end
-
-    criticalState.active = true
-    stopCode = normalizeCriticalStopCode(stopCode)
-    reason = tostring(reason or "Critical runtime failure.")
-
-    -- Freeze all UI interaction immediately. The main interface remains visible
-    -- but becomes completely non-interactive for the full 2-second fatal window.
-    freezeCriticalInterface()
-
-    -- Freeze the PulseCore shutdown transition briefly so the failure state is
-    -- visible/consistent for 2 seconds before anything is removed.
-    task.wait(2)
-
-    -- Stop accepting further critical callbacks before shutting down modules.
-    if criticalState.errorConnection then
-        pcall(function()
-            criticalState.errorConnection:Disconnect()
-        end)
-        criticalState.errorConnection = nil
-    end
-
-    -- Let the regular shutdown path perform its normal cleanup. If something
-    -- inside that cleanup is itself broken, the fallback still tears down the
-    -- visible GUI and the main event connections.
-    criticalStopInProgress = true
-    local shutdownOk, shutdownError = pcall(function()
-        if shutdownMainScript then
-            shutdownMainScript("Critical error: " .. stopCode)
-        end
-    end)
-
-    if not shutdownOk then
-        warn("[PulseCore] Critical shutdown fallback: " .. tostring(shutdownError))
-    end
-
-    guiDestroyed = true
-
-    if globalInputConnection then
-        pcall(function() globalInputConnection:Disconnect() end)
-        globalInputConnection = nil
-    end
-    if dragInputChangedConnection then
-        pcall(function() dragInputChangedConnection:Disconnect() end)
-        dragInputChangedConnection = nil
-    end
-    if cameraConnection then
-        pcall(function() cameraConnection:Disconnect() end)
-        cameraConnection = nil
-    end
-    if currentCameraChangedConnection then
-        pcall(function() currentCameraChangedConnection:Disconnect() end)
-        currentCameraChangedConnection = nil
-    end
-    if screenGui and screenGui.Parent then
-        pcall(function() screenGui:Destroy() end)
-    end
-
-    print("[PulseCore] CRITICAL STOP: " .. stopCode .. " | " .. reason)
-
-    -- The main script has now been destroyed. Wait another 1 second so the
-    -- notification starts exactly 3 seconds after the critical error begins.
-    task.wait(1)
-
-    -- Rebuild the independent notification if PlayerGui/gethui was touched by
-    -- the shutdown path.
-    pcall(buildCriticalNotification)
-    local shown = false
-    local ok = pcall(function()
-        shown = showCriticalNotification(stopCode)
-    end)
-    if not ok or not shown then
-        -- Last-resort retry outside the main shutdown stack.
-        task.defer(function()
-            pcall(buildCriticalNotification)
-            pcall(showCriticalNotification, stopCode)
-        end)
-    end
-end
-
-function installCriticalErrorMonitor()
-    local ok, context = pcall(function()
-        return game:GetService("ScriptContext")
-    end)
-    if not ok or not context then
-        return
-    end
-
-    local sourceScript = nil
-    pcall(function()
-        if typeof(script) == "Instance" then
-            sourceScript = script
-        end
-    end)
-
-    criticalState.errorConnection = context.Error:Connect(function(message, stackTrace, erroredScript)
-        if criticalState.active then
-            return
-        end
-
-        local text = tostring(message or "")
-        local trace = tostring(stackTrace or "")
-        local belongsToPulseCore = false
-
-        if sourceScript and erroredScript == sourceScript then
-            belongsToPulseCore = true
-        elseif string.find(text, "[PulseCore", 1, true)
-            or string.find(text, "PulseCore", 1, true)
-            or string.find(trace, "PulseCore", 1, true) then
-            belongsToPulseCore = true
-        end
-
-        if belongsToPulseCore then
-            criticalShutdown("RUNTIME_FAILURE", text)
-        end
-    end)
-end
-
-installCriticalErrorMonitor()
-
 liveConsoleState = {
     gui = nil,
     frame = nil,
@@ -2919,204 +2539,20 @@ create("UIPadding", {
     PaddingRight = UDim.new(0, 14),
 }, clientModules.console.hintLabel)
 
-clientModules.criticalTest = {}
-clientModules.criticalTest.button = create("TextButton", {
-    LayoutOrder = 6,
-    Size = UDim2.new(1, 0, 0, 42),
-    BackgroundColor3 = Color3.fromRGB(55, 24, 28),
-    BackgroundTransparency = 0.05,
-    BorderSizePixel = 0,
-    Text = "TEST CRITICAL ERROR",
-    Font = Enum.Font.GothamBold,
-    TextSize = 12,
-    TextColor3 = COLORS.Text,
-    AutoButtonColor = true,
-    Active = true,
-    Selectable = true,
-}, settingsPage)
-addCorner(clientModules.criticalTest.button, 10)
-addStroke(clientModules.criticalTest.button, COLORS.Red, 0.18, 1)
-
-clientModules.criticalTest.hint = create("TextLabel", {
-    LayoutOrder = 7,
-    Size = UDim2.new(1, 0, 0, 50),
-    BackgroundColor3 = COLORS.CyanDeep,
-    BackgroundTransparency = 0.32,
-    BorderSizePixel = 0,
-    Text = "Test only: intentionally raises a critical error and immediately disables PulseCore. The notification remains visible for 5 seconds.",
-    Font = Enum.Font.GothamMedium,
-    TextSize = 11,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-}, settingsPage)
-addCorner(clientModules.criticalTest.hint, 12)
-create("UIPadding", {
-    PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 14),
-}, clientModules.criticalTest.hint)
-
 configManager = {}
 
---==================================================
--- PERSONALIZATION
---==================================================
-
-clientModules.personalization = clientModules.personalization or {}
-
-clientModules.personalization.themes = {
-    { name = "Graphite", accent = Color3.fromRGB(210, 210, 210), dark = Color3.fromRGB(68, 68, 68), deep = Color3.fromRGB(18, 18, 18) },
-    { name = "Purple", accent = Color3.fromRGB(190, 145, 255), dark = Color3.fromRGB(86, 48, 125), deep = Color3.fromRGB(30, 18, 43) },
-    { name = "Blue", accent = Color3.fromRGB(120, 180, 255), dark = Color3.fromRGB(36, 78, 125), deep = Color3.fromRGB(13, 24, 40) },
-    { name = "Red", accent = Color3.fromRGB(255, 120, 130), dark = Color3.fromRGB(126, 43, 53), deep = Color3.fromRGB(39, 12, 16) },
-    { name = "Green", accent = Color3.fromRGB(120, 225, 170), dark = Color3.fromRGB(39, 111, 75), deep = Color3.fromRGB(12, 36, 24) },
-}
-
-clientModules.personalization.themeIndex = 1
-clientModules.personalization.transparency = 0.16
-clientModules.personalization.baseColors = {}
-for key, value in pairs(COLORS) do
-    clientModules.personalization.baseColors[key] = value
-end
-
-local function personalizationColorEqual(a, b)
-    return typeof(a) == "Color3"
-        and typeof(b) == "Color3"
-        and math.abs(a.R - b.R) < 0.002
-        and math.abs(a.G - b.G) < 0.002
-        and math.abs(a.B - b.B) < 0.002
-end
-
-function clientModules.personalization.applyTheme(index)
-    local theme = clientModules.personalization.themes[index]
-    if not theme then return end
-
-    clientModules.personalization.themeIndex = index
-    COLORS.Cyan = theme.accent
-    COLORS.CyanDark = theme.dark
-    COLORS.CyanDeep = theme.deep
-    COLORS.Panel = theme.deep
-    COLORS.Sidebar = theme.deep
-    COLORS.Topbar = theme.deep
-    COLORS.Card = theme.deep:Lerp(Color3.new(1, 1, 1), 0.025)
-    COLORS.Input = theme.deep:Lerp(Color3.new(0, 0, 0), 0.16)
-    COLORS.Border = theme.dark:Lerp(Color3.new(1, 1, 1), 0.08)
-
-    if screenGui and screenGui.Parent then
-        for _, object in ipairs(screenGui:GetDescendants()) do
-            if object:IsA("GuiObject") then
-                local background = object.BackgroundColor3
-                for key, base in pairs(clientModules.personalization.baseColors) do
-                    if personalizationColorEqual(background, base) then
-                        if COLORS[key] then
-                            object.BackgroundColor3 = COLORS[key]
-                        end
-                        break
-                    end
-                end
-
-                if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
-                    if personalizationColorEqual(object.TextColor3, clientModules.personalization.baseColors.Cyan) then
-                        object.TextColor3 = COLORS.Cyan
-                    elseif personalizationColorEqual(object.TextColor3, clientModules.personalization.baseColors.Text) then
-                        object.TextColor3 = COLORS.Text
-                    elseif personalizationColorEqual(object.TextColor3, clientModules.personalization.baseColors.MutedText) then
-                        object.TextColor3 = COLORS.MutedText
-                    end
-                end
-            elseif object:IsA("UIStroke") then
-                if personalizationColorEqual(object.Color, clientModules.personalization.baseColors.Cyan) then
-                    object.Color = COLORS.Cyan
-                elseif personalizationColorEqual(object.Color, clientModules.personalization.baseColors.Border) then
-                    object.Color = COLORS.Border
-                end
-            end
-        end
-    end
-
-    if mainFrame and mainFrame.Parent then
-        mainFrame.BackgroundTransparency = clientModules.personalization.transparency
-    end
-    if topBar and topBar.Parent then
-        topBar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency - 0.03, 0, 0.8)
-    end
-    if sidebar and sidebar.Parent then
-        sidebar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency + 0.02, 0, 0.8)
-    end
-
-    if clientModules.personalization.themeButton then
-        clientModules.personalization.themeButton.Text =
-            "INTERFACE COLOR  •  " .. theme.name
-    end
-end
-
-function clientModules.personalization.setTransparency(value)
-    local number = tonumber(value)
-    if not number then return false end
-
-    clientModules.personalization.transparency = math.clamp(number, 0.05, 0.45)
-
-    if mainFrame and mainFrame.Parent then
-        mainFrame.BackgroundTransparency = clientModules.personalization.transparency
-    end
-    if topBar and topBar.Parent then
-        topBar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency - 0.03, 0, 0.8)
-    end
-    if sidebar and sidebar.Parent then
-        sidebar.BackgroundTransparency = math.clamp(clientModules.personalization.transparency + 0.02, 0, 0.8)
-    end
-
-    return true
-end
-
-createSectionLabel(settingsPage, "SETTINGS  /  PERSONALIZATION", 8)
-
-clientModules.personalization.themeButton = clientModules.createActionButton(
-    settingsPage,
-    "INTERFACE COLOR  •  Graphite",
-    UDim2.new(),
-    UDim2.new(1, 0, 0, 40),
-    COLORS.CyanDark
-)
-clientModules.personalization.themeButton.LayoutOrder = 8
-
-clientModules.personalization.transparencyBox = createInputRow(
-    settingsPage,
-    "Interface transparency (0.05–0.45)",
-    "0.16",
-    "Example: 0.16",
-    9
-)
-
-clientModules.personalization.themeButton.Activated:Connect(function()
-    local nextIndex = clientModules.personalization.themeIndex + 1
-    if nextIndex > #clientModules.personalization.themes then nextIndex = 1 end
-    clientModules.personalization.applyTheme(nextIndex)
-end)
-
-clientModules.personalization.transparencyBox.FocusLost:Connect(function()
-    if clientModules.personalization.setTransparency(clientModules.personalization.transparencyBox.Text) then
-        clientModules.personalization.transparencyBox.Text =
-            string.format("%.2f", clientModules.personalization.transparency)
-    end
-end)
-
-clientModules.personalization.applyTheme(1)
-
-
-createSectionLabel(settingsPage, "CONFIGS  /  SAVED PROFILES", 11)
+createSectionLabel(settingsPage, "CONFIGS  /  SAVED PROFILES", 6)
 
 configManager.configNameBox = createInputRow(
     settingsPage,
     "New config name",
     "Default",
     "Example: Main",
-    11
+    7
 )
 
 configManager.configButtonsRow = create("Frame", {
-    LayoutOrder = 12,
+    LayoutOrder = 8,
     Size = UDim2.new(1, 0, 0, 38),
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
@@ -3159,7 +2595,7 @@ configManager.listConfigsButton = configManager.createConfigButton(
 )
 
 configManager.configStatusLabel = create("TextLabel", {
-    LayoutOrder = 13,
+    LayoutOrder = 9,
     Size = UDim2.new(1, 0, 0, 76),
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.32,
@@ -3179,7 +2615,7 @@ create("UIPadding", {
 }, configManager.configStatusLabel)
 
 configManager.configManagerFrame = create("Frame", {
-    LayoutOrder = 14,
+    LayoutOrder = 10,
     Size = UDim2.new(1, 0, 0, 0),
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.18,
@@ -3332,7 +2768,6 @@ expectedWalkSpeed = nil
 walkSpeedConnection = nil
 applyingWalkSpeed = false
 guiDestroyed = false
-criticalStopInProgress = false
 dragInputChangedConnection = nil
 cameraConnection = nil
 currentCameraChangedConnection = nil
@@ -8756,21 +8191,6 @@ addAbilityButton.Activated:Connect(function()
     clientModules.abilityUI.addNewAbility()
 end)
 
-clientModules.criticalTest.button.Activated:Connect(function()
-    if criticalState.active then
-        return
-    end
-
-    -- The intentional error is caught by the ScriptContext monitor. A pcall
-    -- fallback keeps the test functional in executors that do not expose it.
-    local ok = pcall(function()
-        error("[PulseCore TEST] Intentional critical failure.")
-    end)
-    if not ok and not criticalState.active then
-        criticalShutdown("TEST_FAILURE", "Intentional critical failure requested from Settings.")
-    end
-end)
-
 configManager.saveConfigButton.Activated:Connect(configManager.saveCurrentConfig)
 configManager.listConfigsButton.Activated:Connect(function()
     configManager.setConfigListVisible(not configManager.configListVisible)
@@ -8782,7 +8202,7 @@ configManager.autoLoadConfigButton.Activated:Connect(configManager.enableSelecte
 configManager.disableAutoLoadButton.Activated:Connect(configManager.disableSelectedConfigAutoLoad)
 
 function shutdownMainScript(reason)
-    if guiDestroyed and not criticalStopInProgress then
+    if guiDestroyed then
         return
     end
 
@@ -8863,7 +8283,6 @@ function clientModules.console.refreshModeState()
 end
 
 clientModules.console.toggleButton.Activated:Connect(function()
-    if criticalState.active then return end
     local enabled = localPlayer:GetAttribute(CONSOLE_MODE_ATTRIBUTE_NAME) == true
     localPlayer:SetAttribute(CONSOLE_MODE_ATTRIBUTE_NAME, not enabled)
 end)
@@ -8876,7 +8295,6 @@ clientModules.console.attributeConnection =
     end)
 
 minimizeButton.Activated:Connect(function()
-    if criticalState.active then return end
     minimized = not minimized
     minimizeButton.Text = minimized and "+" or "−"
 
@@ -8905,7 +8323,6 @@ minimizeButton.Activated:Connect(function()
 end)
 
 closeButton.Activated:Connect(function()
-    if criticalState.active then return end
     shutdownMainScript("Interface closed.")
 end)
 
@@ -8917,7 +8334,6 @@ do
     local startPosition = nil
 
     topBar.InputBegan:Connect(function(input)
-        if criticalState.active then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -8933,7 +8349,6 @@ do
     end)
 
     topBar.InputChanged:Connect(function(input)
-        if criticalState.active then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
@@ -8941,7 +8356,6 @@ do
     end)
 
     dragInputChangedConnection = UserInputService.InputChanged:Connect(function(input)
-        if criticalState.active then return end
         if input == dragInput and dragging and dragStart and startPosition then
             local delta = input.Position - dragStart
 
@@ -8957,9 +8371,6 @@ end
 
 -- Глобальные горячие клавиши продолжают работать, даже когда ScreenGui скрыт.
 globalInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    if criticalState.active then
-        return
-    end
     if guiDestroyed or input.UserInputType ~= Enum.UserInputType.Keyboard then
         return
     end
