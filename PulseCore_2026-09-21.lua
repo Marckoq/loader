@@ -59,8 +59,24 @@ end
 function isSpecialTabsAllowed()
     local allowed = {}
 
-    for _, nickname in ipairs(SPECIAL_TAB_NICKNAMES) do
-        allowed[normalizeSpecialTabNickname(nickname)] = true
+    -- Accept both list syntax:
+    -- { "Nickname" }
+    -- and dictionary syntax:
+    -- { ["Nickname"] = true } / { Nickname = true }
+    for key, nickname in pairs(SPECIAL_TAB_NICKNAMES) do
+        local value = nil
+
+        if type(key) == "number" then
+            value = nickname
+        elseif nickname == true or nickname == 1 then
+            value = key
+        elseif type(nickname) == "string" then
+            value = nickname
+        end
+
+        if type(value) == "string" and value ~= "" then
+            allowed[normalizeSpecialTabNickname(value)] = true
+        end
     end
 
     local candidates = {
@@ -72,14 +88,27 @@ function isSpecialTabsAllowed()
     if character then
         table.insert(candidates, character.Name)
 
-        local nicknameAttribute = character:GetAttribute("Nickname")
-        if type(nicknameAttribute) == "string" then
-            table.insert(candidates, nicknameAttribute)
+        local attributeNames = {
+            "Nickname",
+            "PlayerName",
+            "Username",
+            "DisplayName",
+            "Character",
+        }
+
+        for _, attributeName in ipairs(attributeNames) do
+            local attributeValue = character:GetAttribute(attributeName)
+
+            if type(attributeValue) == "string" and attributeValue ~= "" then
+                table.insert(candidates, attributeValue)
+            end
         end
     end
 
     for _, candidate in ipairs(candidates) do
-        if allowed[normalizeSpecialTabNickname(candidate)] then
+        local normalizedCandidate = normalizeSpecialTabNickname(candidate)
+
+        if normalizedCandidate ~= "" and allowed[normalizedCandidate] then
             return true
         end
     end
