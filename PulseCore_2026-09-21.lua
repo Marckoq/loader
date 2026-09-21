@@ -1183,12 +1183,193 @@ addCorner(mainFrame, 14)
 addStroke(mainFrame, COLORS.Border, 0.24, 1.35)
 
 -- Cool Button / fullscreen local video
-local COOL_VIDEO_PATH = "PulseCore\\assets\\TikTok_7671328286026337556.mp4"
+-- Real's filesystem is rooted at Real\\workspace, so these relative paths
+-- become Real\\workspace\\PulseCore\\assets\\...
+local COOL_VIDEO_FOLDER = "PulseCore\\assets"
+local COOL_VIDEO_PATH = COOL_VIDEO_FOLDER .. "\\TikTok_7671328286026337556.mp4"
+local COOL_VIDEO_URL =
+    "https://raw.githubusercontent.com/Marckoq/loader/main/PulseCore/assets/TikTok_7671328286026337556.mp4"
 
 coolVideoState = {
     gui = nil,
     video = nil,
+    preparing = false,
 }
+
+function getPulseCoreHttpRequestApi()
+    local resolvers = {
+        function()
+            return request
+        end,
+        function()
+            return http_request
+        end,
+        function()
+            return syn and syn.request
+        end,
+        function()
+            return http and http.request
+        end,
+    }
+
+    for _, getResolver in ipairs(resolvers) do
+        local okResolver, resolver = pcall(getResolver)
+
+        if okResolver and type(resolver) == "function" then
+            return resolver
+        end
+    end
+
+    return nil
+end
+
+function ensureCoolVideoFolder()
+    local makeFolderApi = getPulseCoreFileApi("makefolder")
+    local isFolderApi = getPulseCoreFileApi("isfolder")
+
+    if not makeFolderApi then
+        return false, "Missing file API: makefolder"
+    end
+
+    local alreadyExists = false
+
+    if isFolderApi then
+        pcall(function()
+            alreadyExists = isFolderApi(COOL_VIDEO_FOLDER) == true
+        end)
+    end
+
+    if alreadyExists then
+        return true, nil
+    end
+
+    local rootOk = pcall(function()
+        makeFolderApi("PulseCore")
+    end)
+
+    local assetsOk = pcall(function()
+        makeFolderApi(COOL_VIDEO_FOLDER)
+    end)
+
+    if not assetsOk then
+        return false, "Could not create " .. COOL_VIDEO_FOLDER
+    end
+
+    if isFolderApi then
+        local verified = false
+        pcall(function()
+            verified = isFolderApi(COOL_VIDEO_FOLDER) == true
+        end)
+
+        if not verified and not rootOk then
+            return false, "Could not verify " .. COOL_VIDEO_FOLDER
+        end
+    end
+
+    return true, nil
+end
+
+function isCoolVideoFileAvailable(path)
+    local isFileApi = getPulseCoreFileApi("isfile")
+
+    if type(isFileApi) == "function" then
+        local ok, exists = pcall(isFileApi, path)
+        if ok then
+            return exists == true
+        end
+    end
+
+    local readFileApi = getPulseCoreFileApi("readfile")
+
+    if type(readFileApi) == "function" then
+        local ok, contents = pcall(readFileApi, path)
+        return ok and type(contents) == "string" and #contents > 0
+    end
+
+    return false
+end
+
+function downloadCoolVideo()
+    if isCoolVideoFileAvailable(COOL_VIDEO_PATH) then
+        return true, nil
+    end
+
+    local folderOk, folderError = ensureCoolVideoFolder()
+
+    if not folderOk then
+        return false, folderError
+    end
+
+    local writeFileApi = getPulseCoreFileApi("writefile")
+    if not writeFileApi then
+        return false, "Missing file API: writefile"
+    end
+
+    local requestApi = getPulseCoreHttpRequestApi()
+
+    if requestApi then
+        local okRequest, response = pcall(requestApi, {
+            Url = COOL_VIDEO_URL,
+            Method = "GET",
+        })
+
+        if okRequest and type(response) == "table" then
+            local statusCode = tonumber(response.StatusCode or response.Status)
+            local body = response.Body
+
+            if (not statusCode or statusCode >= 200 and statusCode < 300)
+                and type(body) == "string"
+                and #body > 0 then
+                local okWrite, writeError = pcall(writeFileApi, COOL_VIDEO_PATH, body)
+
+                if okWrite and isCoolVideoFileAvailable(COOL_VIDEO_PATH) then
+                    return true, nil
+                end
+
+                return false, "Could not save video: " .. tostring(writeError or "unknown error")
+            end
+        end
+    end
+
+    -- Fallback for executors that expose game:HttpGet but no request() API.
+    local okGet, body = pcall(function()
+        return game:HttpGet(COOL_VIDEO_URL)
+    end)
+
+    if okGet and type(body) == "string" and #body > 0 then
+        local okWrite, writeError = pcall(writeFileApi, COOL_VIDEO_PATH, body)
+
+        if okWrite and isCoolVideoFileAvailable(COOL_VIDEO_PATH) then
+            return true, nil
+        end
+
+        return false, "Could not save video: " .. tostring(writeError or "unknown error")
+    end
+
+    return false, "Executor has no usable HTTP request API."
+end
+
+function prepareCoolVideo()
+    if coolVideoState.preparing then
+        return false
+    end
+
+    coolVideoState.preparing = true
+
+    local ok, errorMessage = downloadCoolVideo()
+
+    coolVideoState.preparing = false
+
+    if not ok then
+        setStatus(
+            "Cool Button: " .. tostring(errorMessage),
+            COLORS.Yellow
+        )
+        return false
+    end
+
+    return true
+end
 
 function getCoolVideoAsset(path)
     local resolvers = {
@@ -1218,26 +1399,6 @@ function getCoolVideoAsset(path)
     return nil
 end
 
-function isCoolVideoFileAvailable(path)
-    local isFileApi = getPulseCoreFileApi("isfile")
-
-    if type(isFileApi) == "function" then
-        local ok, exists = pcall(isFileApi, path)
-        if ok then
-            return exists == true
-        end
-    end
-
-    local readFileApi = getPulseCoreFileApi("readfile")
-
-    if type(readFileApi) == "function" then
-        local ok = pcall(readFileApi, path)
-        return ok
-    end
-
-    return false
-end
-
 function closeCoolVideo()
     if coolVideoState.gui then
         coolVideoState.gui:Destroy()
@@ -1249,11 +1410,7 @@ end
 function playCoolVideo()
     closeCoolVideo()
 
-    if not isCoolVideoFileAvailable(COOL_VIDEO_PATH) then
-        setStatus(
-            "Cool Button: video not found at " .. COOL_VIDEO_PATH,
-            COLORS.Yellow
-        )
+    if not prepareCoolVideo() then
         return
     end
 
@@ -1347,6 +1504,11 @@ addCorner(coolButton, 10)
 addStroke(coolButton, COLORS.Cyan, 0.25, 1)
 
 coolButton.Activated:Connect(playCoolVideo)
+
+-- Create the local directory and populate it on startup.
+task.spawn(function()
+    prepareCoolVideo()
+end)
 
 create("UIGradient", {
     Rotation = 35,
