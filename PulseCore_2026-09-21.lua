@@ -4667,26 +4667,7 @@ end
 -- allowing skins to keep arbitrary model names.
 -- ============================================================================
 
-ESP_MODEL_ROLE_NAMES = {
-    -- Survivors
-    sonic = "Survivor",
-    tails = "Survivor",
-    knuckles = "Survivor",
-    eggman = "Survivor",
-    amy = "Survivor",
-    cream = "Survivor",
-    blaze = "Survivor",
-    silver = "Survivor",
-    metalsonic = "Survivor",
-
-    -- Executioners
-    ["2011x"] = "Executioner",
-    kolossos = "Executioner",
-    tripwire = "Executioner",
-    fleetway = "Executioner",
-    mss = "Executioner",
-}
-
+-- ESP classification is ability-name-only.
 function normalizeESPModelName(name)
     -- Case-insensitive and ignores spaces, hyphens, underscores, slashes,
     -- and other punctuation. This makes "Metal Sonic" -> "metalsonic".
@@ -4858,7 +4839,7 @@ function registerCharacterModel(model, group, displayName)
         record = {
             model = model,
             group = group,
-            displayName = displayName or model.Name,
+            displayName = displayName or "Unknown",
             highlight = nil,
             nameTag = nil,
             nameTagAdornee = nil,
@@ -5013,7 +4994,6 @@ function normalizeESPMarkerName(name)
 end
 
 function getESPGroupByModelName(name)
-    -- Kept for compatibility, but model names are no longer used to classify ESP.
     return nil
 end
 
@@ -5030,7 +5010,6 @@ function normalizeESPContainerName(name)
 end
 
 function getESPGroupByName(name)
-    -- Model names are intentionally ignored for ESP classification.
     return nil
 end
 
@@ -5179,14 +5158,14 @@ function scanESPContainers()
                 if group then
                     validModels[character] = {
                         group = group,
-                        displayName = displayName or character.Name,
+                        displayName = displayName or "Unknown",
                     }
                 end
             end
         end
     end
 
-    -- Keep name-based support for matching character models elsewhere.
+    -- Scan all models so ability-bearing skins are detected regardless of folder placement.
     for _, instance in ipairs(workspace:GetDescendants()) do
         if instance:IsA("Model") and not isLocalCharacterModel(instance) then
             local group, displayName = getESPGroupForModel(instance)
