@@ -4667,6 +4667,26 @@ end
 -- names and structural markers do not affect the ESP role.
 -- ============================================================================
 
+-- Temporary ESP mode: classify characters strictly by model name.
+-- Known survivor and executioner names are normalized case-insensitively.
+ESP_MODEL_ROLE_NAMES = {
+    sonic = "Survivor",
+    tails = "Survivor",
+    knuckles = "Survivor",
+    eggman = "Survivor",
+    amy = "Survivor",
+    cream = "Survivor",
+    blaze = "Survivor",
+    silver = "Survivor",
+    metalsonic = "Survivor",
+
+    ["2011x"] = "Executioner",
+    kolossos = "Executioner",
+    tripwire = "Executioner",
+    fleetway = "Executioner",
+    mss = "Executioner",
+}
+
 -- ESP classification is ability-name-only.
 function normalizeESPModelName(name)
     -- Normalize ability/object names for ability-only ESP matching.
@@ -5109,7 +5129,7 @@ function normalizeESPMarkerName(name)
 end
 
 function getESPGroupByModelName(name)
-    return nil
+    return ESP_MODEL_ROLE_NAMES[normalizeESPModelName(name)]
 end
 
 function getESPGroupByAbilityName(name)
@@ -5125,7 +5145,7 @@ function normalizeESPContainerName(name)
 end
 
 function getESPGroupByName(name)
-    return nil
+    return getESPGroupByModelName(name)
 end
 
 function isLocalCharacterModel(model)
@@ -5284,7 +5304,6 @@ function getESPGroupForModel(model)
     end
 
     local group = getESPGroupByModelName(model.Name)
-
     if not group then
         return nil, nil
     end
