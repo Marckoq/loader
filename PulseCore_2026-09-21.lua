@@ -4674,8 +4674,7 @@ function normalizeESPModelName(name)
 end
 
 function getESPGroupByModelName(name)
-    -- Model names are intentionally ignored by ESP.
-    return nil
+    return ESP_MODEL_ROLE_NAMES[normalizeESPModelName(name)]
 end
 
 -- Keep the old function name for compatibility with any existing PulseCore
@@ -4685,7 +4684,7 @@ function normalizeESPContainerName(name)
 end
 
 function getESPGroupByName(name)
-    return nil
+    return getESPGroupByModelName(name)
 end
 
 function isLocalCharacterModel(model)
@@ -5284,10 +5283,14 @@ function getESPGroupForModel(model)
         return nil, nil
     end
 
-    -- ESP classification is based ONLY on recognized ability names.
-    return getESPAbilityClassification(model)
-end
+    local group = getESPGroupByModelName(model.Name)
 
+    if not group then
+        return nil, nil
+    end
+
+    return group, model.Name
+end
 function scanESPContainers()
     if guiDestroyed then
         return
@@ -5333,9 +5336,20 @@ function scanESPContainers()
         end
     end
 
-    -- Do not scan every nested Workspace Model: ability folders and other
-    -- internal models are not separate characters. Only actual player
-    -- characters and direct Workspace.Players models are eligible.
+    -- Also scan Workspace for top-level character models that are not
+    -- exposed through Player.Character or Workspace.Players.
+    for _, instance in ipairs(workspace:GetChildren()) do
+        if instance:IsA("Model") and not isLocalCharacterModel(instance) then
+            local group, displayName = getESPGroupForModel(instance)
+
+            if group then
+                validModels[instance] = {
+                    group = group,
+                    displayName = displayName or instance.Name,
+                }
+            end
+        end
+    end
 
     for model, info in pairs(validModels) do
         registerCharacterModel(
