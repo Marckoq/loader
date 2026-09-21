@@ -1311,8 +1311,6 @@ clientModules = {
         showTarget = true,
         aimPriority = "Weakest",
         aimSmoothness = 0.28,
-        mouseAimGain = 1.0,
-        mouseAimMaxStep = 120,
         defenseKey = Enum.KeyCode.E,
         aimActiveUntil = 0,
         renderBindName = "PulseCoreAutoAim",
@@ -2243,103 +2241,6 @@ function clientModules.combat.refreshTarget()
     return target
 end
 
-function clientModules.combat.moveCursorToTarget(targetModel)
-    local camera = workspace.CurrentCamera
-    local root = targetModel and clientModules.combat.getRoot(targetModel)
-
-    if not camera or not root then
-        return false
-    end
-
-    local screenPoint, onScreen = camera:WorldToViewportPoint(root.Position)
-
-    if not onScreen or screenPoint.Z <= 0 then
-        return false
-    end
-
-    local viewport = camera.ViewportSize
-    local mouseBehavior = UserInputService.MouseBehavior
-
-    local currentPoint
-    local targetPoint
-
-    if mouseBehavior == Enum.MouseBehavior.LockCenter then
-        -- Roblox keeps the physical cursor centered while the game consumes
-        -- mouse delta. Use viewport center as the virtual cursor position.
-        currentPoint = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
-        targetPoint = Vector2.new(screenPoint.X, screenPoint.Y)
-    else
-        local mouseLocation = UserInputService:GetMouseLocation()
-        local inset = Vector2.new(0, 0)
-
-        pcall(function()
-            local topLeftInset = game:GetService("GuiService"):GetGuiInset()
-            inset = topLeftInset
-        end)
-
-        currentPoint = mouseLocation - inset
-        targetPoint = Vector2.new(screenPoint.X, screenPoint.Y)
-    end
-
-    local delta = targetPoint - currentPoint
-    local distance = delta.Magnitude
-
-    if distance < 0.5 then
-        return true
-    end
-
-    local gain = math.clamp(
-        tonumber(clientModules.combat.mouseAimGain) or 1.0,
-        0.05,
-        3
-    )
-
-    local maxStep = math.clamp(
-        tonumber(clientModules.combat.mouseAimMaxStep) or 120,
-        8,
-        400
-    )
-
-    if distance > maxStep then
-        delta = delta.Unit * maxStep
-    end
-
-    delta = delta * gain
-
-    local moved = false
-
-    pcall(function()
-        local moverel = mousemoverel
-
-        if type(moverel) == "function" then
-            moverel(delta.X, delta.Y)
-            moved = true
-        end
-    end)
-
-    if not moved and mouseBehavior ~= Enum.MouseBehavior.LockCenter then
-        pcall(function()
-            local moveabs = mousemoveabs
-
-            if type(moveabs) == "function" then
-                local inset = Vector2.new(0, 0)
-
-                pcall(function()
-                    inset = game:GetService("GuiService"):GetGuiInset()
-                end)
-
-                moveabs(
-                    targetPoint.X + inset.X,
-                    targetPoint.Y + inset.Y
-                )
-                moved = true
-            end
-        end)
-    end
-
-    return moved
-end
-
 function clientModules.combat.setPriority(priority)
     local priorities = {
         Weakest = true,
@@ -2493,9 +2394,32 @@ function clientModules.combat.refreshCharacterHooks()
                 }
 
                 if allowed[animationName] then
+                    -- The attack aim is intentionally short: enough to steer
+                    -- the attack at activation without taking over the camera.
+                    local duration = 0.16
+
+                    if animationName == "lasercanon"
+                        or animationName == "lasercannon"
+                        or animationName == "canon"
+                        or animationName == "brighterday"
+                        or animationName == "lasersofdestrucation"
+                        or animationName == "lasersofdestruction"
+                    then
+                        duration = 0.28
+                    elseif animationName == "charge"
+                        or animationName == "chargedash"
+                        or animationName == "missdash"
+                        or animationName == "throw"
+                        or animationName == "throwhold"
+                        or animationName == "rockaim"
+                        or animationName == "suspension"
+                    then
+                        duration = 0.20
+                    end
+
                     clientModules.combat.aimActiveUntil = math.max(
                         clientModules.combat.aimActiveUntil,
-                        time() + 0.18
+                        time() + duration
                     )
                 end
             end)
@@ -2797,14 +2721,25 @@ function clientModules.combat.initialize()
                 return
             end
 
-            if clientModules.combat.autoAimEnabled then
-                -- Auto Aim continuously keeps the cursor on the selected target.
-                -- The old aimActiveUntil timer caused the mouse to stop after
-                -- the first ability signal, even though Auto Aim was still on.
+            if clientModules.combat.autoAimEnabled
+                and time() <= clientModules.combat.aimActiveUntil then
+                -- Aim only during the short attack window. This changes the
+                -- camera direction used by the attack, but never moves or
+                -- locks the physical cursor.
                 local target = clientModules.combat.refreshTarget()
+                local camera = workspace.CurrentCamera
+                local root = target and clientModules.combat.getRoot(target.model)
 
-                if target and target.model then
-                    clientModules.combat.moveCursorToTarget(target.model)
+                if camera and root then
+                    local cameraPosition = camera.CFrame.Position
+                    local desired = CFrame.lookAt(cameraPosition, root.Position)
+                    local smoothness = math.clamp(
+                        tonumber(clientModules.combat.aimSmoothness) or 0.28,
+                        0.02,
+                        1
+                    )
+
+                    camera.CFrame = camera.CFrame:Lerp(desired, smoothness)
                 end
             elseif clientModules.combat.showTarget then
                 clientModules.combat.refreshTarget()
