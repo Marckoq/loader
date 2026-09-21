@@ -2283,10 +2283,6 @@ function clientModules.combat.clearConnections()
         clientModules.combat.animationConnection = nil
     end
 
-    if clientModules.combat.characterConnection then
-        clientModules.combat.characterConnection:Disconnect()
-        clientModules.combat.characterConnection = nil
-    end
 end
 
 function clientModules.combat.refreshCharacterHooks()
