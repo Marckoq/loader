@@ -1183,7 +1183,7 @@ addCorner(mainFrame, 14)
 addStroke(mainFrame, COLORS.Border, 0.24, 1.35)
 
 -- Cool Button / fullscreen local video
-local COOL_VIDEO_PATH = "PulseCore/assets/TikTok_7671328286026337556.mp4"
+local COOL_VIDEO_PATH = "PulseCore\\assets\\TikTok_7671328286026337556.mp4"
 
 coolVideoState = {
     gui = nil,
