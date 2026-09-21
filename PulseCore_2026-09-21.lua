@@ -4669,13 +4669,13 @@ end
 
 -- ESP classification is ability-name-only.
 function normalizeESPModelName(name)
-    -- Case-insensitive and ignores spaces, hyphens, underscores, slashes,
-    -- and other punctuation. This makes "Metal Sonic" -> "metalsonic".
+    -- Normalize ability/object names for ability-only ESP matching.
     return string.lower(tostring(name or "")):gsub("[^%w]+", "")
 end
 
 function getESPGroupByModelName(name)
-    return ESP_MODEL_ROLE_NAMES[normalizeESPModelName(name)]
+    -- Model names are intentionally ignored by ESP.
+    return nil
 end
 
 -- Keep the old function name for compatibility with any existing PulseCore
@@ -4685,7 +4685,7 @@ function normalizeESPContainerName(name)
 end
 
 function getESPGroupByName(name)
-    return getESPGroupByModelName(name)
+    return nil
 end
 
 function isLocalCharacterModel(model)
