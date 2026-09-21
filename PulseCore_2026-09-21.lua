@@ -4899,7 +4899,16 @@ function getESPGroupForModel(model)
         return nil
     end
 
-    -- Player models are classified structurally so skins can use any name.
+    -- Explicit character names always take priority. This prevents known
+    -- Executioners such as Fleetway from being misclassified as Survivors
+    -- when a skin does not contain the structural EXE markers.
+    local namedGroup = getESPGroupByModelName(model.Name)
+    if namedGroup then
+        return namedGroup
+    end
+
+    -- Player models can use arbitrary skin names, so unknown names inside
+    -- Workspace.Players fall back to structural EXE detection.
     if isDirectWorkspacePlayersModel(model) then
         if isESPExecutionerModel(model) then
             return "Executioner"
@@ -4908,8 +4917,7 @@ function getESPGroupForModel(model)
         return "Survivor"
     end
 
-    -- Keep the configured name list for models outside Workspace.Players.
-    return getESPGroupByModelName(model.Name)
+    return nil
 end
 
 function scanESPContainers()
