@@ -5366,17 +5366,8 @@ function getESPAbilityClassification(model)
         found[genericName] = nil
     end
 
-    -- If an executioner-specific marker is present, it must outrank survivor
-    -- animation sets inherited by skins.
-    local executionerMarkerFound = false
-    for abilityName, role in pairs(ESP_ABILITY_ROLE_NAMES) do
-        if role == "Executioner" and found[abilityName] then
-            executionerMarkerFound = true
-            break
-        end
-    end
-
     local scores = {}
+    local hasExecutionerEvidence = false
 
     for characterName, abilities in pairs(ESP_CHARACTER_ABILITY_SETS) do
         local score = 0
@@ -5388,6 +5379,29 @@ function getESPAbilityClassification(model)
         end
 
         scores[characterName] = score
+
+        if (
+            characterName == "Tripwire"
+            or characterName == "Fleetway"
+            or characterName == "2011x"
+            or characterName == "Kolossos"
+        ) and score > 0 then
+            hasExecutionerEvidence = true
+        end
+    end
+
+    -- Skins can inherit survivor animations. Once a real executioner marker
+    -- exists, survivor animation matches must not override the executioner.
+    if hasExecutionerEvidence then
+        for characterName in pairs(scores) do
+            if characterName ~= "Tripwire"
+                and characterName ~= "Fleetway"
+                and characterName ~= "2011x"
+                and characterName ~= "Kolossos"
+            then
+                scores[characterName] = 0
+            end
+        end
     end
 
     local bestName = nil
