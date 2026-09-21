@@ -5079,18 +5079,26 @@ ESP_ABILITY_CHARACTER_NAMES = {
 ESP_CHARACTER_ABILITY_SETS = {
     Tripwire = {"step", "brighterday", "reachout"},
     Fleetway = {"chaosdash", "fatefuldrain", "lasersofdestrucation", "lasersofdestruction", "burst"},
-    ["2011x"] = {"charge", "godstrickery", "invisiblity", "invisibility", "ragemode"},
-    Kolossos = {"charge", "grab", "block", "indicator"},
+    ["2011x"] = {"godstrickery", "invisiblity", "invisibility", "ragemode"},
+    Kolossos = {"grab", "block", "indicator"},
 
     Sonic = {"dropdash", "peelout"},
     Tails = {"lasercanon", "lasercannon", "glide"},
     Knuckles = {"punch", "counter"},
     Eggman = {"jetpackboost", "energyshield"},
     Amy = {"hammer", "hammerthrow", "reroll"},
-    Cream = {"heal", "dash"},
+    Cream = {"heal"},
     ["Metal Sonic"] = {"destructivecharge", "desturctivecharge", "selfrepair"},
     Silver = {"rock", "timereversall", "timereversal"},
     Blaze = {"roundhousekick"},
+}
+
+-- These ability names are too generic to classify a character by themselves.
+-- They remain in ESP_ABILITY_ROLE_NAMES for matching, but only become useful
+-- when paired with a character-specific ability.
+ESP_AMBIGUOUS_ABILITY_NAMES = {
+    charge = true,
+    dash = true,
 }
 
 function normalizeESPModelName(name)
@@ -5129,6 +5137,33 @@ function getESPDisplayName(model, inferredName)
     return inferredName or "Unknown"
 end
 
+function isESPAbilityCarrier(instance)
+    if not instance then
+        return false
+    end
+
+    -- Do not treat physical/visual objects as ability names.
+    if instance:IsA("BasePart")
+        or instance:IsA("Attachment")
+        or instance:IsA("Decal")
+        or instance:IsA("Texture")
+        or instance:IsA("ParticleEmitter")
+        or instance:IsA("Beam")
+        or instance:IsA("Trail")
+        or instance:IsA("Smoke")
+        or instance:IsA("Fire")
+        or instance:IsA("Sparkles")
+        or instance:IsA("Sound")
+        or instance:IsA("Animation")
+        or instance:IsA("Humanoid")
+        or instance:IsA("Animator")
+    then
+        return false
+    end
+
+    return true
+end
+
 function getESPAbilityClassification(model)
     if not model or not model:IsA("Model") then
         return nil, nil
@@ -5136,63 +5171,44 @@ function getESPAbilityClassification(model)
 
     local found = {}
 
-    local function processName(value)
+    local function processName(value, allowGeneric)
         local normalized = normalizeESPMarkerName(value)
 
         if ESP_ABILITY_ROLE_NAMES[normalized] then
-            found[normalized] = true
+            if allowGeneric or not ESP_AMBIGUOUS_ABILITY_NAMES[normalized] then
+                found[normalized] = true
+            end
         end
     end
 
+    -- Ability objects can be stored directly in the character model.
+    -- Generic names such as Charge/Dash are ignored unless their holder also
+    -- exposes a non-generic, character-specific ability.
     for _, descendant in ipairs(model:GetDescendants()) do
-        processName(descendant.Name)
+        if isESPAbilityCarrier(descendant) then
+            processName(descendant.Name, true)
 
-        if descendant:IsA("StringValue") then
-            processName(descendant.Value)
+            if descendant:IsA("StringValue") then
+                processName(descendant.Value, false)
+            end
         end
 
         for _, value in pairs(descendant:GetAttributes()) do
             if type(value) == "string" then
-                processName(value)
+                processName(value, false)
             end
         end
     end
 
     for _, value in pairs(model:GetAttributes()) do
         if type(value) == "string" then
-            processName(value)
+            processName(value, false)
         end
     end
 
-    local hasExecutionerAbility = false
-    local hasSurvivorAbility = false
-
-    for abilityName in pairs(found) do
-        local role = ESP_ABILITY_ROLE_NAMES[abilityName]
-
-        if role == "Executioner" then
-            hasExecutionerAbility = true
-        elseif role == "Survivor" then
-            hasSurvivorAbility = true
-        end
-    end
-
-    -- Ability names are the only classifier. If both role sets are present,
-    -- prefer the executioner signal so a real executioner is not hidden by
-    -- generic survivor ability objects attached to the same model.
-    local role
-
-    if hasExecutionerAbility then
-        role = "Executioner"
-    elseif hasSurvivorAbility then
-        role = "Survivor"
-    else
-        return nil, nil
-    end
-
-    -- Infer the character from the strongest number of matching known abilities.
-    local bestName = nil
-    local bestScore = 0
+    -- Generic ability names are only accepted as supporting evidence when a
+    -- character-specific ability from the same character is also present.
+    local characterScores = {}
 
     for characterName, abilities in pairs(ESP_CHARACTER_ABILITY_SETS) do
         local score = 0
@@ -5203,10 +5219,63 @@ function getESPAbilityClassification(model)
             end
         end
 
+        characterScores[characterName] = score
+    end
+
+    local function hasAbility(name)
+        return found[normalizeESPMarkerName(name)] == true
+    end
+
+    -- Charge identifies neither 2011x nor Kolossos by itself.
+    if hasAbility("Charge") then
+        if hasAbility("God's Trickery")
+            or hasAbility("invisiblity")
+            or hasAbility("Rage Mode")
+        then
+            characterScores["2011x"] = characterScores["2011x"] + 1
+        end
+
+        if hasAbility("Grab")
+            or hasAbility("Block")
+            or hasAbility("Indicator")
+        then
+            characterScores["Kolossos"] = characterScores["Kolossos"] + 1
+        end
+    end
+
+    -- Dash identifies Cream only alongside its distinctive Heal ability.
+    if hasAbility("Dash") and hasAbility("Heal") then
+        characterScores["Cream"] = characterScores["Cream"] + 1
+    end
+
+    local bestName = nil
+    local bestScore = 0
+    local bestTie = false
+
+    for characterName, score in pairs(characterScores) do
         if score > bestScore then
             bestScore = score
             bestName = characterName
+            bestTie = false
+        elseif score > 0 and score == bestScore then
+            bestTie = true
         end
+    end
+
+    -- Never guess a character when the ability evidence is tied.
+    if bestScore <= 0 or bestTie then
+        return nil, nil
+    end
+
+    local role = nil
+    if bestName == "Tripwire"
+        or bestName == "Fleetway"
+        or bestName == "2011x"
+        or bestName == "Kolossos"
+    then
+        role = "Executioner"
+    else
+        role = "Survivor"
     end
 
     return role, bestName
