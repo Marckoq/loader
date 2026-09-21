@@ -95,8 +95,22 @@ function getPulseCoreFileApi(functionName)
         return direct
     end
 
-    local synName = "syn_io_" .. functionName
+    local synAliases = {
+        readfile = "read",
+        writefile = "write",
+        appendfile = "append",
+        listfiles = "listdir",
+        makefolder = "makefolder",
+        isfile = "isfile",
+        isfolder = "isfolder",
+        delfile = "delfile",
+        delfolder = "delfolder",
+    }
+
+    local synSuffix = synAliases[functionName] or functionName
+    local synName = "syn_io_" .. synSuffix
     local synIo = rawget(_G, synName)
+
     if type(synIo) == "function" then
         return synIo
     end
@@ -106,17 +120,17 @@ function getPulseCoreFileApi(functionName)
         local ioTable = synTable.io
 
         if type(ioTable) == "table" then
-            local nested = ioTable[functionName]
+            local nested = ioTable[functionName] or ioTable[synSuffix]
 
             if type(nested) == "function" then
                 return function(...)
                     local args = table.pack(...)
-                    local ok, result = pcall(function()
+                    local directOk, directResult = pcall(function()
                         return nested(table.unpack(args, 1, args.n))
                     end)
 
-                    if ok then
-                        return result
+                    if directOk then
+                        return directResult
                     end
 
                     return nested(ioTable, table.unpack(args, 1, args.n))
