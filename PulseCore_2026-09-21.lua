@@ -399,8 +399,8 @@ COLORS = {
     Topbar = Color3.fromRGB(12, 12, 12),
     Text = Color3.fromRGB(242, 242, 242),
     MutedText = Color3.fromRGB(165, 165, 165),
-    Green = Color3.fromRGB(110, 220, 145),
-    Red = Color3.fromRGB(235, 95, 105),
+    Green = Color3.fromRGB(70, 130, 255),
+    Red = Color3.fromRGB(255, 35, 55),
     Yellow = Color3.fromRGB(225, 195, 100),
     White = Color3.fromRGB(255, 255, 255),
 }
@@ -2152,7 +2152,7 @@ createSectionLabel(visualsPage, "VISUALS  /  CHARACTER ESP", 1)
 
 espSurvivorsButton, espSurvivorsDot = createToggleRow(
     visualsPage,
-    "ESP Survivors — green fill",
+    "ESP Survivors — blue fill",
     2
 )
 
@@ -2188,7 +2188,7 @@ visualsHint = create("TextLabel", {
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.32,
     BorderSizePixel = 0,
-    Text = "ESP scans all workspace descendants and highlights Models under Survivors (green) or EXE / Executioners (red). Container class, Character attributes, and character names are not required.",
+    Text = "ESP scans all workspace descendants and highlights models by name. Survivors use blue with a blue outline; Executioners use scarlet with a scarlet outline.",
     Font = Enum.Font.GothamMedium,
     TextSize = 12,
     TextColor3 = COLORS.MutedText,
@@ -4838,7 +4838,7 @@ function registerCharacterModel(model, group)
     local highlight = getOrCreateESPHighlight(model, record)
     highlight.FillColor = group == "Survivor" and COLORS.Green or COLORS.Red
     highlight.FillTransparency = 0.45
-    highlight.OutlineColor = COLORS.White
+    highlight.OutlineColor = COLORS.Green
     highlight.OutlineTransparency = 0
 
     if group == "Survivor" then
