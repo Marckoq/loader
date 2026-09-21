@@ -1329,6 +1329,15 @@ clientModules = {
         serial = 0,
         lastCounterAt = 0,
     },
+    fun = {
+        spinEnabled = false,
+        spinConnection = nil,
+        spectateEnabled = false,
+        spectateConnection = nil,
+        originalCameraSubject = nil,
+        characterLockValue = nil,
+        originalCharacterLock = nil,
+    },
     speedControl = {
         standardMethod = "WalkSpeed",
         standardMode = "Add",
@@ -1443,7 +1452,7 @@ clientModules = {
 clientModules.tabs.info = createTabButton("InfoTab", "INFO", 14)
 localTab = createTabButton("LocalTab", "LOCAL", 66)
 visualsTab = createTabButton("VisualsTab", "VISUALS", 118)
-clientModules.tabs.combat = createTabButton("CombatTab", "COMBAT", 170)
+clientModules.tabs.fun = createTabButton("FunTab", "FUN", 170)
 clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 222)
 clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 274)
 clientModules.tabs.keyList = createTabButton("KeyListTab", "KEY LIST", 326)
@@ -1457,7 +1466,7 @@ clientModules.tabAnimation = {
         Info = 1,
         Local = 2,
         Visuals = 3,
-        Combat = 4,
+        Fun = 4,
         Performance = 5,
         AutoSelect = 6,
         KeyList = 7,
@@ -1609,7 +1618,7 @@ end
 clientModules.pages.info = createScrollingPage("InfoPage")
 localPage = createScrollingPage("LocalPage")
 visualsPage = createScrollingPage("VisualsPage")
-clientModules.pages.combat = createScrollingPage("CombatPage")
+clientModules.pages.fun = createScrollingPage("FunPage")
 clientModules.pages.camera = createScrollingPage("CameraPage")
 -- Legacy pages stay hidden so old configs can be read without exposing removed tabs.
 clientModules.pages.performance = createScrollingPage("PerformancePage")
@@ -2833,125 +2842,428 @@ function clientModules.combat.shutdown()
     table.clear(clientModules.combat.activeMarkers)
 end
 
--- COMBAT UI
-createSectionLabel(clientModules.pages.combat, "COMBAT / ASSIST", 1)
+-- FUN / PLACE-SPECIFIC UI
 
-clientModules.combat.autoAimButton, clientModules.combat.autoAimDot =
-    createToggleRow(clientModules.pages.combat, "Auto Aim", 2)
+function clientModules.fun.findFirstByName(name, className)
+    for _, instance in ipairs(game:GetDescendants()) do
+        if instance.Name == name
+            and (not className or instance:IsA(className)) then
+            return instance
+        end
+    end
 
-clientModules.combat.autoCounterButton, clientModules.combat.autoCounterDot =
-    createToggleRow(clientModules.pages.combat, "Auto Block / Counter", 3)
+    return nil
+end
 
-clientModules.combat.showTargetButton, clientModules.combat.showTargetDot =
-    createToggleRow(clientModules.pages.combat, "Show current target", 4)
+function clientModules.fun.getCharacter()
+    return localPlayer.Character
+end
 
-clientModules.combat.priorityLabel = create("TextLabel", {
-    LayoutOrder = 5,
-    Size = UDim2.new(1, 0, 0, 22),
-    BackgroundTransparency = 1,
-    Text = "Target priority: Weakest",
-    Font = Enum.Font.GothamBold,
-    TextSize = 12,
-    TextColor3 = COLORS.Cyan,
-    TextXAlignment = Enum.TextXAlignment.Left,
-}, clientModules.pages.combat)
+function clientModules.fun.getCharacterRoot()
+    local character = clientModules.fun.getCharacter()
+    if not character then
+        return nil
+    end
 
-do
-    local row = create("Frame", {
-        LayoutOrder = 6,
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1,
-    }, clientModules.pages.combat)
+    return character:FindFirstChild("HumanoidRootPart")
+        or character.PrimaryPart
+end
 
-    clientModules.combat.priorityButtons = {}
+function clientModules.fun.setSpinEnabled(enabled, silent)
+    enabled = enabled == true
+    clientModules.fun.spinEnabled = enabled
 
-    local options = {"Weakest", "Strongest", "Nearest"}
-    for index, option in ipairs(options) do
-        local button = create("TextButton", {
-            Position = UDim2.new((index - 1) / 3, index == 1 and 0 or 6, 0, 0),
-            Size = UDim2.new(1 / 3, -6, 1, 0),
-            BackgroundColor3 = COLORS.Input,
-            BorderSizePixel = 0,
-            Text = option,
-            Font = Enum.Font.GothamBold,
-            TextSize = 11,
-            TextColor3 = COLORS.Text,
-            AutoButtonColor = false,
-        }, row)
-        addCorner(button, 8)
-        addStroke(button, COLORS.Border, 0.35, 1)
+    if clientModules.fun.spinConnection then
+        clientModules.fun.spinConnection:Disconnect()
+        clientModules.fun.spinConnection = nil
+    end
 
-        button.Activated:Connect(function()
-            clientModules.combat.setPriority(option)
+    if enabled then
+        clientModules.fun.spinConnection = RunService.RenderStepped:Connect(function(deltaTime)
+            if guiDestroyed or not clientModules.fun.spinEnabled then
+                return
+            end
+
+            local root = clientModules.fun.getCharacterRoot()
+            if root and root:IsA("BasePart") then
+                root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(360) * deltaTime, 0)
+            end
         end)
+    end
 
-        clientModules.combat.priorityButtons[option] = button
+    if clientModules.fun.spinButton then
+        setSwitchVisual(
+            clientModules.fun.spinButton,
+            clientModules.fun.spinDot,
+            enabled
+        )
+    end
+
+    if not silent then
+        setStatus(
+            enabled and "Fun: Spin enabled." or "Fun: Spin disabled.",
+            enabled and COLORS.Green or COLORS.MutedText
+        )
     end
 end
 
-clientModules.combat.aimSmoothnessBox = createInputRow(
-    clientModules.pages.combat,
-    "Aim smoothness (0.02–1.0)",
-    "0.28",
-    "Example: 0.25",
-    7
-)
+function clientModules.fun.findNearestPlayerCharacter()
+    local root = clientModules.fun.getCharacterRoot()
+    if not root then
+        return nil
+    end
 
-clientModules.combat.targetLabel = create("TextLabel", {
-    LayoutOrder = 8,
-    Size = UDim2.new(1, 0, 0, 42),
-    BackgroundColor3 = COLORS.Card,
-    BackgroundTransparency = 0.16,
+    local nearestCharacter = nil
+    local nearestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                or player.Character.PrimaryPart
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+
+            if targetRoot and targetRoot:IsA("BasePart")
+                and humanoid
+                and humanoid.Health > 0 then
+                local distance = (targetRoot.Position - root.Position).Magnitude
+
+                if distance < nearestDistance then
+                    nearestDistance = distance
+                    nearestCharacter = player.Character
+                end
+            end
+        end
+    end
+
+    return nearestCharacter
+end
+
+function clientModules.fun.setSpectateEnabled(enabled, silent)
+    enabled = enabled == true
+    clientModules.fun.spectateEnabled = enabled
+
+    if clientModules.fun.spectateConnection then
+        clientModules.fun.spectateConnection:Disconnect()
+        clientModules.fun.spectateConnection = nil
+    end
+
+    local camera = workspace.CurrentCamera
+
+    if enabled then
+        if camera and not clientModules.fun.originalCameraSubject then
+            clientModules.fun.originalCameraSubject = camera.CameraSubject
+        end
+
+        clientModules.fun.spectateConnection = RunService.RenderStepped:Connect(function()
+            if guiDestroyed or not clientModules.fun.spectateEnabled then
+                return
+            end
+
+            local currentCamera = workspace.CurrentCamera
+            local targetCharacter = clientModules.fun.findNearestPlayerCharacter()
+            local humanoid = targetCharacter
+                and targetCharacter:FindFirstChildOfClass("Humanoid")
+
+            if currentCamera and humanoid then
+                currentCamera.CameraType = Enum.CameraType.Custom
+                currentCamera.CameraSubject = humanoid
+            end
+        end)
+    else
+        if camera then
+            local character = clientModules.fun.getCharacter()
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+            camera.CameraType = Enum.CameraType.Custom
+            camera.CameraSubject = humanoid or clientModules.fun.originalCameraSubject
+        end
+
+        clientModules.fun.originalCameraSubject = nil
+    end
+
+    if clientModules.fun.spectateButton then
+        setSwitchVisual(
+            clientModules.fun.spectateButton,
+            clientModules.fun.spectateDot,
+            enabled
+        )
+    end
+
+    if not silent then
+        setStatus(
+            enabled and "Fun: Spectate nearest enabled." or "Fun: Spectate disabled.",
+            enabled and COLORS.Green or COLORS.MutedText
+        )
+    end
+end
+
+function clientModules.fun.setCharacterLockEnabled(enabled, silent)
+    local value = clientModules.fun.characterLockValue
+    if not value or not value.Parent then
+        value = clientModules.fun.findFirstByName("CharacterLOCK", "BoolValue")
+        clientModules.fun.characterLockValue = value
+    end
+
+    if not value then
+        if clientModules.fun.characterLockButton then
+            setSwitchVisual(
+                clientModules.fun.characterLockButton,
+                clientModules.fun.characterLockDot,
+                false
+            )
+        end
+
+        if not silent then
+            setStatus("CharacterLOCK was not found in this place.", COLORS.Yellow)
+        end
+        return false
+    end
+
+    if clientModules.fun.originalCharacterLock == nil then
+        clientModules.fun.originalCharacterLock = value.Value
+    end
+
+    value.Value = enabled == true
+
+    if clientModules.fun.characterLockButton then
+        setSwitchVisual(
+            clientModules.fun.characterLockButton,
+            clientModules.fun.characterLockDot,
+            enabled == true
+        )
+    end
+
+    if not silent then
+        setStatus(
+            enabled and "Place CharacterLOCK enabled locally." or "Place CharacterLOCK disabled locally.",
+            COLORS.Green
+        )
+    end
+
+    return true
+end
+
+function clientModules.fun.playPlaceAnimation(animationName)
+    local character = clientModules.fun.getCharacter()
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if not humanoid then
+        setStatus("No Humanoid found for the animation.", COLORS.Yellow)
+        return false
+    end
+
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+
+    local animation = nil
+
+    -- Prefer an existing animation object from this place.
+    pcall(function()
+        animation = clientModules.fun.findFirstByName(animationName, "Animation")
+    end)
+
+    if not animation then
+        setStatus("Animation '" .. tostring(animationName) .. "' was not found.", COLORS.Yellow)
+        return false
+    end
+
+    local ok, track = pcall(function()
+        return animator:LoadAnimation(animation)
+    end)
+
+    if not ok or not track then
+        setStatus("Could not load animation '" .. tostring(animationName) .. "'.", COLORS.Yellow)
+        return false
+    end
+
+    track.Priority = Enum.AnimationPriority.Action
+    track:Play(0.05, 1, 1)
+
+    setStatus("Played place animation: " .. tostring(animationName) .. ".", COLORS.Green)
+    return true
+end
+
+function clientModules.fun.forceSit(silent)
+    local character = clientModules.fun.getCharacter()
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if humanoid then
+        humanoid.Sit = true
+
+        if not silent then
+            setStatus("Fun: Sit.", COLORS.Green)
+        end
+
+        return true
+    end
+
+    if not silent then
+        setStatus("No Humanoid found.", COLORS.Yellow)
+    end
+
+    return false
+end
+
+function clientModules.fun.forceStand(silent)
+    local character = clientModules.fun.getCharacter()
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if humanoid then
+        humanoid.Sit = false
+
+        if not silent then
+            setStatus("Fun: Stand.", COLORS.Green)
+        end
+
+        return true
+    end
+
+    if not silent then
+        setStatus("No Humanoid found.", COLORS.Yellow)
+    end
+
+    return false
+end
+
+function clientModules.fun.getPlaceInfo()
+    local function readValue(name, className)
+        local value = clientModules.fun.findFirstByName(name, className)
+        if not value then
+            return "not found"
+        end
+
+        return tostring(value.Value)
+    end
+
+    return {
+        gameVersion = readValue("GameVersion", "StringValue"),
+        state = readValue("State", "StringValue"),
+        exe = readValue("EXE", "StringValue"),
+        characterLock = readValue("CharacterLOCK", "BoolValue"),
+    }
+end
+
+function clientModules.fun.shutdown()
+    clientModules.fun.setSpinEnabled(false, true)
+    clientModules.fun.setSpectateEnabled(false, true)
+
+    if clientModules.fun.characterLockValue
+        and clientModules.fun.originalCharacterLock ~= nil
+        and clientModules.fun.characterLockValue.Parent then
+        pcall(function()
+            clientModules.fun.characterLockValue.Value =
+                clientModules.fun.originalCharacterLock
+        end)
+    end
+
+    clientModules.fun.characterLockValue = nil
+    clientModules.fun.originalCharacterLock = nil
+end
+
+createSectionLabel(clientModules.pages.fun, "FUN / PLACE", 1)
+
+clientModules.fun.spinButton, clientModules.fun.spinDot =
+    createToggleRow(clientModules.pages.fun, "Spin", 2)
+
+clientModules.fun.spectateButton, clientModules.fun.spectateDot =
+    createToggleRow(clientModules.pages.fun, "Spectate nearest player", 3)
+
+clientModules.fun.characterLockButton, clientModules.fun.characterLockDot =
+    createToggleRow(clientModules.pages.fun, "CharacterLOCK (local)", 4)
+
+clientModules.fun.sitButton = create("TextButton", {
+    LayoutOrder = 5,
+    Size = UDim2.new(1, 0, 0, 38),
+    BackgroundColor3 = COLORS.CyanDark,
+    BackgroundTransparency = 0.11,
     BorderSizePixel = 0,
-    Text = "Current target: none",
-    Font = Enum.Font.GothamMedium,
-    TextSize = 12,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-}, clientModules.pages.combat)
-addCorner(clientModules.combat.targetLabel, 9)
-addStroke(clientModules.combat.targetLabel, COLORS.Border, 0.28, 1)
-create("UIPadding", {
-    PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 14),
-}, clientModules.combat.targetLabel)
+    Text = "SIT",
+    Font = Enum.Font.GothamBold,
+    TextSize = 13,
+    TextColor3 = COLORS.Text,
+    AutoButtonColor = true,
+    Active = true,
+    Selectable = true,
+}, clientModules.pages.fun)
+addCorner(clientModules.fun.sitButton, 12)
+addStroke(clientModules.fun.sitButton, COLORS.Cyan, 0.35, 1)
 
-createSectionLabel(clientModules.pages.combat, "AUTO AIM / RBXL ABILITIES", 9)
+clientModules.fun.standButton = clientModules.fun.sitButton:Clone()
+clientModules.fun.standButton.Name = "StandButton"
+clientModules.fun.standButton.Text = "STAND"
+clientModules.fun.standButton.Parent = clientModules.pages.fun
+clientModules.fun.standButton.LayoutOrder = 6
 
-create("TextLabel", {
-    LayoutOrder = 10,
-    Size = UDim2.new(1, 0, 0, 122),
+createSectionLabel(clientModules.pages.fun, "FUN / PLACE ANIMATIONS", 7)
+
+local function createFunAnimationButton(text, animationName, layoutOrder)
+    local button = create("TextButton", {
+        LayoutOrder = layoutOrder,
+        Size = UDim2.new(1, 0, 0, 38),
+        BackgroundColor3 = COLORS.CyanDark,
+        BackgroundTransparency = 0.11,
+        BorderSizePixel = 0,
+        Text = text,
+        Font = Enum.Font.GothamBold,
+        TextSize = 13,
+        TextColor3 = COLORS.Text,
+        AutoButtonColor = true,
+        Active = true,
+        Selectable = true,
+    }, clientModules.pages.fun)
+    addCorner(button, 12)
+    addStroke(button, COLORS.Cyan, 0.35, 1)
+
+    button.Activated:Connect(function()
+        clientModules.fun.playPlaceAnimation(animationName)
+    end)
+
+    return button
+end
+
+clientModules.fun.throwButton =
+    createFunAnimationButton("PLAY THROW", "Throw", 8)
+clientModules.fun.downStabButton =
+    createFunAnimationButton("PLAY DOWN STAB", "DownStab", 9)
+clientModules.fun.stabPunchButton =
+    createFunAnimationButton("PLAY STAB PUNCH", "StabPunch", 10)
+
+clientModules.fun.infoLabel = create("TextLabel", {
+    LayoutOrder = 11,
+    Size = UDim2.new(1, 0, 0, 112),
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.22,
     BorderSizePixel = 0,
-    Text = "Executioners:\n2011x — Charge\nTripwire — Brighter Day\nFleetway — Lasers of Destrucation\n\nSurvivors:\nTails — Laser Canon\nAmy — Hammer Throw\nSilver — Rock / Suspension\nBlaze — Sol Flame / Burning Javelin",
+    Text = "PLACE DATA\nLoading...",
     Font = Enum.Font.GothamMedium,
     TextSize = 11,
     TextColor3 = COLORS.MutedText,
     TextWrapped = true,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextYAlignment = Enum.TextYAlignment.Center,
-}, clientModules.pages.combat)
+}, clientModules.pages.fun)
+addCorner(clientModules.fun.infoLabel, 12)
+addStroke(clientModules.fun.infoLabel, COLORS.Border, 0.28, 1)
 
-createSectionLabel(clientModules.pages.combat, "AUTO BLOCK / COUNTER", 11)
+function clientModules.fun.refreshInfo()
+    if not clientModules.fun.infoLabel or not clientModules.fun.infoLabel.Parent then
+        return
+    end
 
-create("TextLabel", {
-    LayoutOrder = 12,
-    Size = UDim2.new(1, 0, 0, 88),
-    BackgroundColor3 = COLORS.CyanDeep,
-    BackgroundTransparency = 0.22,
-    BorderSizePixel = 0,
-    Text = "Kolossos — Block\nKnuckles — Counter\nEggman — Energy Shield\n\nDefense input defaults to the rbxl AB1 key (E in the supplied save).",
-    Font = Enum.Font.GothamMedium,
-    TextSize = 11,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-}, clientModules.pages.combat)
+    local info = clientModules.fun.getPlaceInfo()
+    clientModules.fun.infoLabel.Text = string.format(
+        "PLACE DATA\nGameVersion: %s\nState: %s\nEXE: %s\nCharacterLOCK: %s",
+        info.gameVersion,
+        info.state,
+        info.exe,
+        info.characterLock
+    )
+end
 
+clientModules.fun.refreshInfo()
 function clientModules.speedControl.normalizeMethod(value)
     return "WalkSpeed"
 end
@@ -5332,7 +5644,7 @@ function selectTab(tabName)
         Info = clientModules.pages.info,
         Local = localPage,
         Visuals = visualsPage,
-        Combat = clientModules.pages.combat,
+        Fun = clientModules.pages.fun,
         Performance = clientModules.pages.performance,
         AutoSelect = clientModules.pages.autoSelect,
         KeyList = clientModules.pages.keyList,
@@ -5342,7 +5654,7 @@ function selectTab(tabName)
         Info = clientModules.tabs.info,
         Local = localTab,
         Visuals = visualsTab,
-        Combat = clientModules.tabs.combat,
+        Fun = clientModules.tabs.fun,
         Performance = clientModules.tabs.performance,
         AutoSelect = clientModules.tabs.autoSelect,
         KeyList = clientModules.tabs.keyList,
@@ -5352,7 +5664,7 @@ function selectTab(tabName)
         Info = { "OVERVIEW", "Script information and quick overview" },
         Local = { "LOCAL", "Speed, jump and abilities" },
         Visuals = { "VISUALS", "ESP and on-screen status panels" },
-        Combat = { "COMBAT", "Auto Aim and Block / Counter assistance" },
+        Fun = { "FUN", "Place-specific utilities and client-side effects" },
         Performance = { "PERFORMANCE", "Optimization and FPS limiter" },
         AutoSelect = { "AUTO SELECT", "Automatic Survivor selection" },
         KeyList = { "KEY LIST", "All hotkeys in one place" },
@@ -5372,6 +5684,7 @@ function selectTab(tabName)
     setTabSelected(clientModules.tabs.info, tabName == "Info", instant)
     setTabSelected(localTab, tabName == "Local", instant)
     setTabSelected(visualsTab, tabName == "Visuals", instant)
+    setTabSelected(clientModules.tabs.fun, tabName == "Fun", instant)
     setTabSelected(clientModules.tabs.performance, tabName == "Performance", instant)
     setTabSelected(clientModules.tabs.autoSelect, tabName == "AutoSelect", instant)
     setTabSelected(clientModules.tabs.keyList, tabName == "KeyList", instant)
@@ -10140,14 +10453,6 @@ function configManager.captureCurrentConfig()
             executioners = espExecutionersEnabled,
             tabs = clientModules.boostTabs.enabled,
         },
-        combat = {
-            autoAim = clientModules.combat.autoAimEnabled == true,
-            autoCounter = clientModules.combat.autoCounterEnabled == true,
-            showTarget = clientModules.combat.showTarget == true,
-            aimPriority = clientModules.combat.aimPriority,
-            aimSmoothness = tonumber(clientModules.combat.aimSmoothness) or 0.28,
-            defenseKey = clientModules.combat.defenseKey.Name,
-        },
         client = {
             autoSelect = {
                 enabled = clientModules.autoSelect.enabled,
@@ -10268,36 +10573,6 @@ function configManager.loadConfigByName(configName, options)
     espSurvivorsEnabled = visuals.survivors == true
     espExecutionersEnabled = visuals.executioners == true
     clientModules.boostTabs.setEnabled(false, true)
-
-    local combat = type(configData.combat) == "table" and configData.combat or {}
-    clientModules.combat.aimPriority =
-        combat.aimPriority == "Strongest" and "Strongest"
-        or combat.aimPriority == "Nearest" and "Nearest"
-        or "Weakest"
-
-    clientModules.combat.aimSmoothness = math.clamp(
-        tonumber(combat.aimSmoothness) or 0.28,
-        0.02,
-        1
-    )
-
-    if type(combat.defenseKey) == "string" then
-        local okKey, resultKey = pcall(function()
-            return Enum.KeyCode[combat.defenseKey]
-        end)
-        if okKey and resultKey and resultKey ~= Enum.KeyCode.Unknown then
-            clientModules.combat.defenseKey = resultKey
-        end
-    end
-
-    clientModules.combat.setAutoAimEnabled(combat.autoAim == true, true)
-    clientModules.combat.setAutoCounterEnabled(combat.autoCounter == true, true)
-    clientModules.combat.showTarget = combat.showTarget ~= false
-    clientModules.combat.updateVisuals()
-
-    if clientModules.combat.aimSmoothnessBox then
-        clientModules.combat.aimSmoothnessBox.Text = tostring(clientModules.combat.aimSmoothness)
-    end
 
     local clientConfig = type(configData.client) == "table" and configData.client or {}
     clientModules.autoSelect.loadConfig(clientConfig.autoSelect)
@@ -10478,8 +10753,8 @@ visualsTab.Activated:Connect(function()
     selectTab("Visuals")
 end)
 
-clientModules.tabs.combat.Activated:Connect(function()
-    selectTab("Combat")
+clientModules.tabs.fun.Activated:Connect(function()
+    selectTab("Fun")
 end)
 
 clientModules.tabs.performance.Activated:Connect(function()
@@ -10720,33 +10995,38 @@ espExecutionersButton.Activated:Connect(function()
 end)
 
 activateButton.Activated:Connect(safeRequestStandardBoost)
-clientModules.combat.autoAimButton.Activated:Connect(function()
-    clientModules.combat.setAutoAimEnabled(
-        not clientModules.combat.autoAimEnabled,
+clientModules.fun.spinButton.Activated:Connect(function()
+    clientModules.fun.setSpinEnabled(
+        not clientModules.fun.spinEnabled,
         false
     )
 end)
 
-clientModules.combat.autoCounterButton.Activated:Connect(function()
-    clientModules.combat.setAutoCounterEnabled(
-        not clientModules.combat.autoCounterEnabled,
+clientModules.fun.spectateButton.Activated:Connect(function()
+    clientModules.fun.setSpectateEnabled(
+        not clientModules.fun.spectateEnabled,
         false
     )
 end)
 
-clientModules.combat.showTargetButton.Activated:Connect(function()
-    clientModules.combat.showTarget = not clientModules.combat.showTarget
-    clientModules.combat.updateVisuals()
-end)
+clientModules.fun.characterLockButton.Activated:Connect(function()
+    local value = clientModules.fun.characterLockValue
 
-clientModules.combat.aimSmoothnessBox.FocusLost:Connect(function()
-    local value = tonumber(string.gsub(clientModules.combat.aimSmoothnessBox.Text, ",", "."))
-    if not value then
-        value = 0.28
+    if not value or not value.Parent then
+        value = clientModules.fun.findFirstByName("CharacterLOCK", "BoolValue")
+        clientModules.fun.characterLockValue = value
     end
 
-    clientModules.combat.aimSmoothness = math.clamp(value, 0.02, 1)
-    clientModules.combat.aimSmoothnessBox.Text = tostring(clientModules.combat.aimSmoothness)
+    local enabled = value and not value.Value or true
+    clientModules.fun.setCharacterLockEnabled(enabled, false)
+end)
+
+clientModules.fun.sitButton.Activated:Connect(function()
+    clientModules.fun.forceSit(false)
+end)
+
+clientModules.fun.standButton.Activated:Connect(function()
+    clientModules.fun.forceStand(false)
 end)
 
 boostKeyButton.Activated:Connect(function()
@@ -10789,6 +11069,7 @@ function shutdownMainScript(reason)
         suppressCooldown = true,
     })
     shutdownESP()
+    clientModules.fun.shutdown()
     clientModules.shutdown()
 
     if dragInputChangedConnection then
@@ -11123,7 +11404,7 @@ function initializeMainInterface()
         true
     )
     clientModules.console.refreshModeState()
-    clientModules.combat.initialize()
+    clientModules.fun.refreshInfo()
     clientModules.performance.refreshVisuals()
     clientModules.performance.updateStatus()
     clientModules.performance.updateFpsStatus()
