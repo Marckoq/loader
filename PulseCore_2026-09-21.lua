@@ -5105,28 +5105,33 @@ ESP_ABILITY_CHARACTER_NAMES = {
 }
 
 ESP_CHARACTER_ABILITY_SETS = {
+    -- Stable internal markers observed in the supplied rbxl character templates.
     Tripwire = {"step", "brighterday", "reachout"},
-    Fleetway = {"chaosdash", "fatefuldrain", "lasersofdestrucation", "lasersofdestruction", "burst"},
-    ["2011x"] = {"godstrickery", "invisiblity", "invisibility", "ragemode", "rage", "invis"},
-    Kolossos = {"grab", "block", "indicator"},
+    Fleetway = {"chargedash", "missdash", "grabhold", "toss"},
+    ["2011x"] = {"rage", "invis", "godstrickery", "invisiblity", "invisibility", "ragemode"},
+    Kolossos = {"chargerun", "impalerun", "chargewarn", "block", "killold"},
 
-    Sonic = {"dropdash", "peelout"},
-    Tails = {"lasercanon", "lasercannon", "canon", "glide", "peelout"},
-    Knuckles = {"punch", "counter"},
-    Eggman = {"jetpackboost", "jetpack", "energyshield"},
-    Amy = {"hammer", "hammerthrow", "reroll"},
-    Cream = {"heal"},
-    ["Metal Sonic"] = {"destructivecharge", "desturctivecharge", "selfrepair"},
-    Silver = {"rock", "timereversall", "timereversal"},
-    Blaze = {"roundhousekick"},
+    Sonic = {"dodge1", "dodge2", "dodge3", "brake"},
+    Tails = {"strangledr"},
+    Knuckles = {"focus"},
+    Eggman = {"jetpack"},
+    Amy = {"hammer"},
+    Cream = {"summon", "healloop"},
+    ["Metal Sonic"] = {"dashstart"},
+    Silver = {"aim", "rocksr", "rocks"},
+    Blaze = {"flamestart", "float", "flameloop", "flameend"},
 }
 
--- These ability names are too generic to classify a character by themselves.
--- They remain in ESP_ABILITY_ROLE_NAMES for matching, but only become useful
--- when paired with a character-specific ability.
-ESP_AMBIGUOUS_ABILITY_NAMES = {
+-- These markers occur on several different character templates and therefore
+-- must never identify a character by themselves.
+ESP_GENERIC_ABILITY_NAMES = {
+    canon = true,
+    peelout = true,
+    glide = true,
     charge = true,
     dash = true,
+    flying = true,
+    strangled = true,
 }
 
 function normalizeESPModelName(name)
@@ -5205,22 +5210,71 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Read recognized ability names/values from the character hierarchy.
-    -- This never checks the character model's own name.
-    for _, descendant in ipairs(model:GetDescendants()) do
-        -- Ability names can be represented by folders, UI-like objects,
-        -- StringValues, or other non-physical instances.
-        if not descendant:IsA("BasePart") then
-            processValue(descendant.Name)
+    local function processCandidateName(instance)
+        if not instance then
+            return
         end
 
-        if descendant:IsA("StringValue") then
-            processValue(descendant.Value)
+        -- Only ability-bearing object types are considered here. In particular,
+        -- Sounds such as "Rock" are ignored so footstep/audio assets cannot
+        -- masquerade as abilities.
+        if instance:IsA("Sound")
+            or instance:IsA("BasePart")
+            or instance:IsA("Attachment")
+            or instance:IsA("Decal")
+            or instance:IsA("Texture")
+            or instance:IsA("ParticleEmitter")
+            or instance:IsA("Beam")
+            or instance:IsA("Trail")
+            or instance:IsA("Smoke")
+            or instance:IsA("Fire")
+            or instance:IsA("Sparkles")
+        then
+            return
         end
 
-        for _, value in pairs(descendant:GetAttributes()) do
-            if type(value) == "string" then
-                processValue(value)
+        processValue(instance.Name)
+    end
+
+    -- Scan the character's Animate/Anims tree, where the rbxl shows the
+    -- character-specific move markers actually live.
+    local animate = model:FindFirstChild("Animate")
+    local anims = animate and animate:FindFirstChild("Anims")
+
+    if anims then
+        for _, descendant in ipairs(anims:GetDescendants()) do
+            processCandidateName(descendant)
+
+            if descendant:IsA("StringValue") then
+                processValue(descendant.Value)
+            end
+
+            for _, value in pairs(descendant:GetAttributes()) do
+                if type(value) == "string" then
+                    processValue(value)
+                end
+            end
+        end
+    end
+
+    -- Some characters expose their current ability marker directly on the
+    -- character root (for example Amy/Hammer, Eggman/jetpack, 2011x/Rage).
+    for _, child in ipairs(model:GetChildren()) do
+        if child:IsA("Model")
+            or child:IsA("Folder")
+            or child:IsA("NumberValue")
+            or child:IsA("StringValue")
+        then
+            processCandidateName(child)
+
+            if child:IsA("StringValue") then
+                processValue(child.Value)
+            end
+
+            for _, value in pairs(child:GetAttributes()) do
+                if type(value) == "string" then
+                    processValue(value)
+                end
             end
         end
     end
@@ -5229,6 +5283,11 @@ function getESPAbilityClassification(model)
         if type(value) == "string" then
             processValue(value)
         end
+    end
+
+    -- Generic markers are intentionally not character evidence.
+    for genericName in pairs(ESP_GENERIC_ABILITY_NAMES) do
+        found[genericName] = nil
     end
 
     local scores = {}
@@ -5245,30 +5304,6 @@ function getESPAbilityClassification(model)
         scores[characterName] = score
     end
 
-    -- Charge is shared by 2011x and Kolossos, so it only contributes when a
-    -- second ability identifies one of those characters.
-    if found.charge then
-        if found.godstrickery or found.invisiblity or found.invisibility or found.ragemode then
-            scores["2011x"] = math.max(scores["2011x"], 2)
-        end
-
-        if found.grab or (found.block and found.indicator) then
-            scores["Kolossos"] = math.max(scores["Kolossos"], 2)
-        end
-    end
-
-    -- Dash is used by Cream, but Heal makes the identification unambiguous.
-    if found.dash and found.heal then
-        scores["Cream"] = math.max(scores["Cream"], 2)
-    end
-
-    local executioners = {
-        Tripwire = true,
-        Fleetway = true,
-        ["2011x"] = true,
-        Kolossos = true,
-    }
-
     local bestName = nil
     local bestScore = 0
     local tied = false
@@ -5283,14 +5318,16 @@ function getESPAbilityClassification(model)
         end
     end
 
-    if not bestName or bestScore <= 0 then
+    if not bestName or bestScore <= 0 or tied then
         return nil, nil
     end
 
-    -- A tie means the ability evidence does not identify one character.
-    if tied then
-        return nil, nil
-    end
+    local executioners = {
+        Tripwire = true,
+        Fleetway = true,
+        ["2011x"] = true,
+        Kolossos = true,
+    }
 
     return executioners[bestName] and "Executioner" or "Survivor", bestName
 end
