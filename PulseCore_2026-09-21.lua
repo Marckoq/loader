@@ -1313,6 +1313,8 @@ clientModules = {
         aimSmoothness = 0.28,
         defenseKey = Enum.KeyCode.E,
         aimActiveUntil = 0,
+        activeAttackTrack = nil,
+        attackStopConnection = nil,
         renderBindName = "PulseCoreAutoAim",
         currentTarget = nil,
         currentTargetName = nil,
@@ -2394,33 +2396,28 @@ function clientModules.combat.refreshCharacterHooks()
                 }
 
                 if allowed[animationName] then
-                    -- The attack aim is intentionally short: enough to steer
-                    -- the attack at activation without taking over the camera.
-                    local duration = 0.16
-
-                    if animationName == "lasercanon"
-                        or animationName == "lasercannon"
-                        or animationName == "canon"
-                        or animationName == "brighterday"
-                        or animationName == "lasersofdestrucation"
-                        or animationName == "lasersofdestruction"
-                    then
-                        duration = 0.28
-                    elseif animationName == "charge"
-                        or animationName == "chargedash"
-                        or animationName == "missdash"
-                        or animationName == "throw"
-                        or animationName == "throwhold"
-                        or animationName == "rockaim"
-                        or animationName == "suspension"
-                    then
-                        duration = 0.20
+                    -- Do not use a fixed timer. Keep attack aim alive for the
+                    -- actual animation track so long attacks are fully guided.
+                    if clientModules.combat.attackStopConnection then
+                        clientModules.combat.attackStopConnection:Disconnect()
+                        clientModules.combat.attackStopConnection = nil
                     end
 
-                    clientModules.combat.aimActiveUntil = math.max(
-                        clientModules.combat.aimActiveUntil,
-                        time() + duration
-                    )
+                    clientModules.combat.activeAttackTrack = track
+                    clientModules.combat.attackStopConnection = track.Stopped:Connect(function()
+                        if clientModules.combat.activeAttackTrack == track then
+                            clientModules.combat.activeAttackTrack = nil
+                        end
+
+                        if clientModules.combat.attackStopConnection then
+                            clientModules.combat.attackStopConnection:Disconnect()
+                            clientModules.combat.attackStopConnection = nil
+                        end
+                    end)
+
+                    -- Keep this non-zero for executors/animations that do not
+                    -- report Stopped reliably.
+                    clientModules.combat.aimActiveUntil = time() + 1
                 end
             end)
     end
@@ -2721,25 +2718,59 @@ function clientModules.combat.initialize()
                 return
             end
 
+            local attackTrack = clientModules.combat.activeAttackTrack
+            local attackActive = attackTrack
+                and pcall(function()
+                    return attackTrack.IsPlaying
+                end)
+                and attackTrack.IsPlaying
+
             if clientModules.combat.autoAimEnabled
+                and attackActive
                 and time() <= clientModules.combat.aimActiveUntil then
-                -- Aim only during the short attack window. This changes the
-                -- camera direction used by the attack, but never moves or
-                -- locks the physical cursor.
+                -- Guide the actual attack direction while the supported ability
+                -- is playing. The physical mouse is never moved.
                 local target = clientModules.combat.refreshTarget()
                 local camera = workspace.CurrentCamera
                 local root = target and clientModules.combat.getRoot(target.model)
+                local character = localPlayer.Character
+                local characterRoot = character and clientModules.combat.getRoot(character)
 
-                if camera and root then
-                    local cameraPosition = camera.CFrame.Position
-                    local desired = CFrame.lookAt(cameraPosition, root.Position)
-                    local smoothness = math.clamp(
-                        tonumber(clientModules.combat.aimSmoothness) or 0.28,
-                        0.02,
-                        1
-                    )
+                if root then
+                    local targetPosition = root.Position
 
-                    camera.CFrame = camera.CFrame:Lerp(desired, smoothness)
+                    -- Many movement/melee abilities use the character's facing
+                    -- direction rather than the cursor. Face the character
+                    -- toward the selected target during the attack.
+                    if characterRoot then
+                        local characterPosition = characterRoot.Position
+                        local flatTarget = Vector3.new(
+                            targetPosition.X,
+                            characterPosition.Y,
+                            targetPosition.Z
+                        )
+
+                        if (flatTarget - characterPosition).Magnitude > 0.01 then
+                            characterRoot.CFrame = CFrame.lookAt(
+                                characterPosition,
+                                flatTarget
+                            )
+                        end
+                    end
+
+                    -- Ranged abilities commonly take their direction from the
+                    -- camera/mouse ray. Match the camera to the same target.
+                    if camera then
+                        local cameraPosition = camera.CFrame.Position
+                        local desired = CFrame.lookAt(cameraPosition, targetPosition)
+                        local smoothness = math.clamp(
+                            tonumber(clientModules.combat.aimSmoothness) or 0.28,
+                            0.02,
+                            1
+                        )
+
+                        camera.CFrame = camera.CFrame:Lerp(desired, smoothness)
+                    end
                 end
             elseif clientModules.combat.showTarget then
                 clientModules.combat.refreshTarget()
@@ -2792,6 +2823,13 @@ function clientModules.combat.shutdown()
 
     clientModules.combat.currentTarget = nil
     clientModules.combat.currentTargetName = nil
+    clientModules.combat.activeAttackTrack = nil
+
+    if clientModules.combat.attackStopConnection then
+        clientModules.combat.attackStopConnection:Disconnect()
+        clientModules.combat.attackStopConnection = nil
+    end
+
     table.clear(clientModules.combat.activeMarkers)
 end
 
