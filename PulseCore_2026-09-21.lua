@@ -46,6 +46,47 @@ CONFIG_INDEX_FILE = nil
 CONFIG_FILE_EXTENSION = ".json"
 CONFIG_PATH_FALLBACK = false
 
+-- Only these player nicknames receive the Fun and Combat tabs.
+-- Add approved Roblox usernames/display names here.
+SPECIAL_TAB_NICKNAMES = {
+    -- "NicknameHere",
+}
+
+function normalizeSpecialTabNickname(value)
+    return string.lower(tostring(value or "")):gsub("[%s_%-%.]", "")
+end
+
+function isSpecialTabsAllowed()
+    local allowed = {}
+
+    for _, nickname in ipairs(SPECIAL_TAB_NICKNAMES) do
+        allowed[normalizeSpecialTabNickname(nickname)] = true
+    end
+
+    local candidates = {
+        localPlayer.Name,
+        localPlayer.DisplayName,
+    }
+
+    local character = localPlayer.Character
+    if character then
+        table.insert(candidates, character.Name)
+
+        local nicknameAttribute = character:GetAttribute("Nickname")
+        if type(nicknameAttribute) == "string" then
+            table.insert(candidates, nicknameAttribute)
+        end
+    end
+
+    for _, candidate in ipairs(candidates) do
+        if allowed[normalizeSpecialTabNickname(candidate)] then
+            return true
+        end
+    end
+
+    return false
+end
+
 function getPulseCoreExecutorName()
     local resolvers = {
         function()
@@ -1452,11 +1493,14 @@ clientModules = {
 clientModules.tabs.info = createTabButton("InfoTab", "INFO", 14)
 localTab = createTabButton("LocalTab", "LOCAL", 66)
 visualsTab = createTabButton("VisualsTab", "VISUALS", 118)
-clientModules.tabs.fun = createTabButton("FunTab", "FUN", 170)
-clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 222)
-clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 274)
-clientModules.tabs.keyList = createTabButton("KeyListTab", "KEY LIST", 326)
-settingsTab = createTabButton("SettingsTab", "SETTINGS", 378)
+clientModules.tabs.combat = createTabButton("CombatTab", "COMBAT", 170)
+clientModules.tabs.fun = createTabButton("FunTab", "FUN", 222)
+clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 274)
+clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 326)
+clientModules.tabs.keyList = createTabButton("KeyListTab", "KEY LIST", 378)
+settingsTab = createTabButton("SettingsTab", "SETTINGS", 430)
+
+clientModules.specialTabsAllowed = false
 
 clientModules.tabAnimation = {
     currentName = nil,
@@ -1466,11 +1510,12 @@ clientModules.tabAnimation = {
         Info = 1,
         Local = 2,
         Visuals = 3,
-        Fun = 4,
-        Performance = 5,
-        AutoSelect = 6,
-        KeyList = 7,
-        Settings = 8,
+        Combat = 4,
+        Fun = 5,
+        Performance = 6,
+        AutoSelect = 7,
+        KeyList = 8,
+        Settings = 9,
     },
 }
 
@@ -1618,6 +1663,7 @@ end
 clientModules.pages.info = createScrollingPage("InfoPage")
 localPage = createScrollingPage("LocalPage")
 visualsPage = createScrollingPage("VisualsPage")
+clientModules.pages.combat = createScrollingPage("CombatPage")
 clientModules.pages.fun = createScrollingPage("FunPage")
 clientModules.pages.camera = createScrollingPage("CameraPage")
 -- Legacy pages stay hidden so old configs can be read without exposing removed tabs.
@@ -1629,6 +1675,7 @@ settingsPage = createScrollingPage("SettingsPage")
 clientModules.pages.info.Visible = true
 localPage.Visible = false
 visualsPage.Visible = false
+clientModules.pages.combat.Visible = false
 clientModules.pages.fun.Visible = false
 clientModules.pages.camera.Visible = false
 clientModules.pages.performance.Visible = false
@@ -2841,6 +2888,126 @@ function clientModules.combat.shutdown()
 
     table.clear(clientModules.combat.activeMarkers)
 end
+
+-- COMBAT UI
+createSectionLabel(clientModules.pages.combat, "COMBAT / ASSIST", 1)
+
+clientModules.combat.autoAimButton, clientModules.combat.autoAimDot =
+    createToggleRow(clientModules.pages.combat, "Auto Aim", 2)
+
+clientModules.combat.autoCounterButton, clientModules.combat.autoCounterDot =
+    createToggleRow(clientModules.pages.combat, "Auto Block / Counter", 3)
+
+clientModules.combat.showTargetButton, clientModules.combat.showTargetDot =
+    createToggleRow(clientModules.pages.combat, "Show current target", 4)
+
+clientModules.combat.priorityLabel = create("TextLabel", {
+    LayoutOrder = 5,
+    Size = UDim2.new(1, 0, 0, 22),
+    BackgroundTransparency = 1,
+    Text = "Target priority: Weakest",
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    TextColor3 = COLORS.Cyan,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, clientModules.pages.combat)
+
+do
+    local row = create("Frame", {
+        LayoutOrder = 6,
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+    }, clientModules.pages.combat)
+
+    clientModules.combat.priorityButtons = {}
+
+    local options = {"Weakest", "Strongest", "Nearest"}
+    for index, option in ipairs(options) do
+        local button = create("TextButton", {
+            Position = UDim2.new((index - 1) / 3, index == 1 and 0 or 6, 0, 0),
+            Size = UDim2.new(1 / 3, -6, 1, 0),
+            BackgroundColor3 = COLORS.Input,
+            BorderSizePixel = 0,
+            Text = option,
+            Font = Enum.Font.GothamBold,
+            TextSize = 11,
+            TextColor3 = COLORS.Text,
+            AutoButtonColor = false,
+        }, row)
+        addCorner(button, 8)
+        addStroke(button, COLORS.Border, 0.35, 1)
+
+        button.Activated:Connect(function()
+            clientModules.combat.setPriority(option)
+        end)
+
+        clientModules.combat.priorityButtons[option] = button
+    end
+end
+
+clientModules.combat.aimSmoothnessBox = createInputRow(
+    clientModules.pages.combat,
+    "Aim smoothness (0.02–1.0)",
+    "0.28",
+    "Example: 0.25",
+    7
+)
+
+clientModules.combat.targetLabel = create("TextLabel", {
+    LayoutOrder = 8,
+    Size = UDim2.new(1, 0, 0, 42),
+    BackgroundColor3 = COLORS.Card,
+    BackgroundTransparency = 0.16,
+    BorderSizePixel = 0,
+    Text = "Current target: none",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 12,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, clientModules.pages.combat)
+addCorner(clientModules.combat.targetLabel, 9)
+addStroke(clientModules.combat.targetLabel, COLORS.Border, 0.28, 1)
+create("UIPadding", {
+    PaddingLeft = UDim.new(0, 14),
+    PaddingRight = UDim.new(0, 14),
+}, clientModules.combat.targetLabel)
+
+createSectionLabel(clientModules.pages.combat, "AUTO AIM / RBXL ABILITIES", 9)
+
+create("TextLabel", {
+    LayoutOrder = 10,
+    Size = UDim2.new(1, 0, 0, 122),
+    BackgroundColor3 = COLORS.CyanDeep,
+    BackgroundTransparency = 0.22,
+    BorderSizePixel = 0,
+    Text = "Executioners:\n2011x — Charge\nTripwire — Brighter Day\nFleetway — Lasers of Destrucation\n\nSurvivors:\nTails — Laser Canon\nAmy — Hammer Throw\nSilver — Rock / Suspension\nBlaze — Sol Flame / Burning Javelin",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 11,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, clientModules.pages.combat)
+
+createSectionLabel(clientModules.pages.combat, "AUTO BLOCK / COUNTER", 11)
+
+create("TextLabel", {
+    LayoutOrder = 12,
+    Size = UDim2.new(1, 0, 0, 88),
+    BackgroundColor3 = COLORS.CyanDeep,
+    BackgroundTransparency = 0.22,
+    BorderSizePixel = 0,
+    Text = "Kolossos — Block\nKnuckles — Counter\nEggman — Energy Shield\n\nDefense input defaults to the rbxl AB1 key (E in the supplied save).",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 11,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, clientModules.pages.combat)
+
 
 -- FUN / PLACE-SPECIFIC UI
 
@@ -5644,6 +5811,7 @@ function selectTab(tabName)
         Info = clientModules.pages.info,
         Local = localPage,
         Visuals = visualsPage,
+        Combat = clientModules.pages.combat,
         Fun = clientModules.pages.fun,
         Performance = clientModules.pages.performance,
         AutoSelect = clientModules.pages.autoSelect,
@@ -5654,6 +5822,7 @@ function selectTab(tabName)
         Info = clientModules.tabs.info,
         Local = localTab,
         Visuals = visualsTab,
+        Combat = clientModules.tabs.combat,
         Fun = clientModules.tabs.fun,
         Performance = clientModules.tabs.performance,
         AutoSelect = clientModules.tabs.autoSelect,
@@ -5664,12 +5833,20 @@ function selectTab(tabName)
         Info = { "OVERVIEW", "Script information and quick overview" },
         Local = { "LOCAL", "Speed, jump and abilities" },
         Visuals = { "VISUALS", "ESP and on-screen status panels" },
+        Combat = { "COMBAT", "Auto Aim and Block / Counter assistance" },
         Fun = { "FUN", "Place-specific utilities and client-side effects" },
         Performance = { "PERFORMANCE", "Optimization and FPS limiter" },
         AutoSelect = { "AUTO SELECT", "Automatic Survivor selection" },
         KeyList = { "KEY LIST", "All hotkeys in one place" },
         Settings = { "SETTINGS", "Interface, hotkeys, files and configurations" },
     }
+
+    if ((
+            tabName == "Combat"
+            or tabName == "Fun"
+        ) and not isSpecialTabsAllowed()) then
+        return
+    end
 
     local incomingPage = pageByName[tabName]
     local selectedButton = buttonByName[tabName]
@@ -5777,6 +5954,26 @@ function selectTab(tabName)
 
     clientModules.tabAnimation.currentName = tabName
     clientModules.tabAnimation.currentPage = incomingPage
+end
+
+function refreshSpecialTabsVisibility()
+    local allowed = isSpecialTabsAllowed()
+
+    clientModules.specialTabsAllowed = allowed
+
+    clientModules.tabs.combat.Visible = allowed
+    clientModules.tabs.fun.Visible = allowed
+
+    clientModules.pages.combat.Visible = allowed and clientModules.tabAnimation.currentName == "Combat"
+    clientModules.pages.fun.Visible = allowed and clientModules.tabAnimation.currentName == "Fun"
+
+    if not allowed
+        and (
+            clientModules.tabAnimation.currentName == "Combat"
+            or clientModules.tabAnimation.currentName == "Fun"
+        ) then
+        selectTab("Info")
+    end
 end
 
 function normalizeCharacterName(value)
@@ -10995,6 +11192,43 @@ espExecutionersButton.Activated:Connect(function()
 end)
 
 activateButton.Activated:Connect(safeRequestStandardBoost)
+clientModules.tabs.combat.Activated:Connect(function()
+    selectTab("Combat")
+end)
+
+clientModules.tabs.fun.Activated:Connect(function()
+    selectTab("Fun")
+end)
+
+clientModules.combat.autoAimButton.Activated:Connect(function()
+    clientModules.combat.setAutoAimEnabled(
+        not clientModules.combat.autoAimEnabled,
+        false
+    )
+end)
+
+clientModules.combat.autoCounterButton.Activated:Connect(function()
+    clientModules.combat.setAutoCounterEnabled(
+        not clientModules.combat.autoCounterEnabled,
+        false
+    )
+end)
+
+clientModules.combat.showTargetButton.Activated:Connect(function()
+    clientModules.combat.showTarget = not clientModules.combat.showTarget
+    clientModules.combat.updateVisuals()
+end)
+
+clientModules.combat.aimSmoothnessBox.FocusLost:Connect(function()
+    local value = tonumber(string.gsub(clientModules.combat.aimSmoothnessBox.Text, ",", "."))
+    if not value then
+        value = 0.28
+    end
+
+    clientModules.combat.aimSmoothness = math.clamp(value, 0.02, 1)
+    clientModules.combat.aimSmoothnessBox.Text = tostring(clientModules.combat.aimSmoothness)
+end)
+
 clientModules.fun.spinButton.Activated:Connect(function()
     clientModules.fun.setSpinEnabled(
         not clientModules.fun.spinEnabled,
@@ -11377,6 +11611,7 @@ function initializeMainInterface()
         configManager.loadConfigByName(configManager.autoLoadConfigName, { auto = true })
     end
     clientModules.abilityUI.updateAddAbilityButton()
+    refreshSpecialTabsVisibility()
     selectTab("Info")
     setToggleVisual()
     setSwitchVisual(
@@ -11404,6 +11639,12 @@ function initializeMainInterface()
         true
     )
     clientModules.console.refreshModeState()
+    if isSpecialTabsAllowed() then
+        clientModules.combat.initialize()
+    else
+        clientModules.combat.shutdown()
+    end
+
     clientModules.fun.refreshInfo()
     clientModules.performance.refreshVisuals()
     clientModules.performance.updateStatus()
