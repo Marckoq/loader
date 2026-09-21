@@ -1954,6 +1954,25 @@ function clientModules.combat.detectCharacter(model)
         end
     end
 
+    -- Tripwire/TailsDoll has unique Glorbwire animation asset IDs in the rbxl.
+    -- Check them before the generic Sonic fallback because Tripwire inherits
+    -- Sonic Dodge/Brake animation names.
+    local tripwireAnimationIds = {
+        ["79953933012214"] = true,
+        ["85598394392380"] = true,
+        ["132547926723713"] = true,
+        ["80215516605216"] = true,
+    }
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("Animation") then
+            local animationId = tostring(descendant.AnimationId):match("%d+")
+            if animationId and tripwireAnimationIds[animationId] then
+                return "Tripwire"
+            end
+        end
+    end
+
     -- The supplied rbxl has stable, character-specific animation templates.
     local names = clientModules.combat.animNames(model)
 
@@ -6585,15 +6604,31 @@ function getESPAbilityClassification(model)
         found[genericName] = nil
     end
 
-    -- The rbxl stores Tripwire's character package under TailsDoll and its
-    -- active custom animation set under CustomAnimation/Glorbwire. That is
-    -- stronger character evidence than inherited Sonic Dodge/Brake markers.
+    -- The supplied rbxl stores Tripwire under TailsDoll and uses the
+    -- CustomAnimation/Glorbwire set. Several Glorbwire animations have unique
+    -- asset IDs, so the IDs are a stronger signal than inherited Sonic names.
+    local tripwireAnimationIds = {
+        ["79953933012214"] = true, -- Glorbwire Default Idle
+        ["85598394392380"] = true, -- Glorbwire Default Run/Walk
+        ["132547926723713"] = true, -- Glorbwire Jump
+        ["80215516605216"] = true, -- Glorbwire Kill
+    }
+
     local customAnimation = model:FindFirstChild("CustomAnimation")
     if customAnimation then
         for _, descendant in ipairs(customAnimation:GetDescendants()) do
             local normalized = normalizeESPMarkerName(descendant.Name)
 
             if normalized == "glorbwire" or normalized == "deadglorbwire" then
+                return "Executioner", "Tripwire"
+            end
+        end
+    end
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("Animation") then
+            local animationId = tostring(descendant.AnimationId):match("%d+")
+            if animationId and tripwireAnimationIds[animationId] then
                 return "Executioner", "Tripwire"
             end
         end
