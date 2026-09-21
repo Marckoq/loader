@@ -1313,6 +1313,7 @@ clientModules = {
         aimSmoothness = 0.28,
         defenseKey = Enum.KeyCode.E,
         aimActiveUntil = 0,
+        renderBindName = "PulseCoreAutoAim",
         currentTarget = nil,
         currentTargetName = nil,
         currentCharacterName = nil,
@@ -2592,6 +2593,10 @@ function clientModules.combat.initialize()
         clientModules.combat.renderConnection = nil
     end
 
+    pcall(function()
+        RunService:UnbindFromRenderStep(clientModules.combat.renderBindName)
+    end)
+
     if clientModules.combat.scanConnection then
         clientModules.combat.scanConnection:Disconnect()
         clientModules.combat.scanConnection = nil
@@ -2612,33 +2617,38 @@ function clientModules.combat.initialize()
 
     clientModules.combat.refreshCharacterHooks()
 
-    clientModules.combat.renderConnection = RunService.RenderStepped:Connect(function()
-        if guiDestroyed then
-            return
-        end
-
-        if clientModules.combat.autoAimEnabled
-            and time() <= clientModules.combat.aimActiveUntil then
-            local target = clientModules.combat.refreshTarget()
-            local camera = workspace.CurrentCamera
-            local root = target and clientModules.combat.getRoot(target.model)
-            local localRoot = clientModules.combat.getRoot(localPlayer.Character)
-
-            if camera and root and localRoot then
-                local cameraPosition = camera.CFrame.Position
-                local desired = CFrame.lookAt(cameraPosition, root.Position)
-                local smoothness = math.clamp(
-                    tonumber(clientModules.combat.aimSmoothness) or 0.28,
-                    0.02,
-                    1
-                )
-
-                camera.CFrame = camera.CFrame:Lerp(desired, smoothness)
+    RunService:BindToRenderStep(
+        clientModules.combat.renderBindName,
+        Enum.RenderPriority.Camera.Value + 1,
+        function()
+            if guiDestroyed then
+                return
             end
-        elseif clientModules.combat.showTarget then
-            clientModules.combat.refreshTarget()
+
+            if clientModules.combat.autoAimEnabled
+                and time() <= clientModules.combat.aimActiveUntil then
+                local target = clientModules.combat.refreshTarget()
+                local camera = workspace.CurrentCamera
+                local root = target and clientModules.combat.getRoot(target.model)
+
+                if camera and root then
+                    -- Roblox updates the camera first; Auto Aim only adds
+                    -- a small rotational correction afterward.
+                    local cameraPosition = camera.CFrame.Position
+                    local desired = CFrame.lookAt(cameraPosition, root.Position)
+                    local smoothness = math.clamp(
+                        tonumber(clientModules.combat.aimSmoothness) or 0.28,
+                        0.02,
+                        1
+                    )
+
+                    camera.CFrame = camera.CFrame:Lerp(desired, smoothness)
+                end
+            elseif clientModules.combat.showTarget then
+                clientModules.combat.refreshTarget()
+            end
         end
-    end)
+    )
 
     clientModules.combat.scanConnection = RunService.Heartbeat:Connect(function(deltaTime)
         if guiDestroyed then
@@ -2666,6 +2676,10 @@ function clientModules.combat.shutdown()
         clientModules.combat.renderConnection:Disconnect()
         clientModules.combat.renderConnection = nil
     end
+
+    pcall(function()
+        RunService:UnbindFromRenderStep(clientModules.combat.renderBindName)
+    end)
 
     if clientModules.combat.scanConnection then
         clientModules.combat.scanConnection:Disconnect()
