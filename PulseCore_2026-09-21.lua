@@ -1182,6 +1182,114 @@ mainFrame = create("Frame", {
 addCorner(mainFrame, 14)
 addStroke(mainFrame, COLORS.Border, 0.24, 1.35)
 
+-- Cool Button / fullscreen repository video
+local COOL_VIDEO_URL =
+    "https://raw.githubusercontent.com/Marckoq/loader/main/PulseCore/assets/TikTok_7671328286026337556.mp4"
+
+coolVideoState = {
+    gui = nil,
+    video = nil,
+}
+
+function closeCoolVideo()
+    if coolVideoState.gui then
+        coolVideoState.gui:Destroy()
+        coolVideoState.gui = nil
+        coolVideoState.video = nil
+    end
+end
+
+function playCoolVideo()
+    closeCoolVideo()
+
+    local videoGui = create("ScreenGui", {
+        Name = "PulseCoreCoolVideo",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = 5000,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    }, playerGui)
+
+    coolVideoState.gui = videoGui
+
+    local background = create("Frame", {
+        Name = "Background",
+        Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0, 0),
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BorderSizePixel = 0,
+        ZIndex = 1,
+    }, videoGui)
+
+    local video = create("VideoFrame", {
+        Name = "CoolVideo",
+        Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Video = COOL_VIDEO_URL,
+        Looped = false,
+        Playing = true,
+        Volume = 1,
+        ZIndex = 2,
+    }, background)
+
+    coolVideoState.video = video
+
+    local close = create("TextButton", {
+        Name = "Close",
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -18, 0, 18),
+        Size = UDim2.fromOffset(42, 42),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+        BackgroundTransparency = 0.18,
+        BorderSizePixel = 0,
+        Text = "X",
+        Font = Enum.Font.GothamBold,
+        TextSize = 15,
+        TextColor3 = COLORS.Text,
+        AutoButtonColor = true,
+        ZIndex = 3,
+    }, background)
+    addCorner(close, 999)
+    addStroke(close, COLORS.Border, 0.2, 1)
+
+    close.Activated:Connect(closeCoolVideo)
+
+    -- Clicking the video also closes it after playback has started.
+    video.Ended:Connect(function()
+        task.delay(0.25, closeCoolVideo)
+    end)
+
+    video:GetPropertyChangedSignal("Playing"):Connect(function()
+        if not video.Playing and video.TimePosition <= 0 then
+            setStatus("Cool Button: the video could not be played.", COLORS.Yellow)
+        end
+    end)
+end
+
+coolButton = create("TextButton", {
+    Name = "CoolButton",
+    AnchorPoint = Vector2.new(0, 1),
+    Position = UDim2.new(0, 12, 1, -12),
+    Size = UDim2.fromOffset(180, 34),
+    BackgroundColor3 = COLORS.CyanDark,
+    BackgroundTransparency = 0.08,
+    BorderSizePixel = 0,
+    Text = "Cool Button (pls press)",
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    TextColor3 = COLORS.Text,
+    AutoButtonColor = true,
+    Active = true,
+    Selectable = true,
+    ZIndex = 20,
+}, mainFrame)
+addCorner(coolButton, 10)
+addStroke(coolButton, COLORS.Cyan, 0.25, 1)
+
+coolButton.Activated:Connect(playCoolVideo)
+
 create("UIGradient", {
     Rotation = 35,
     Color = ColorSequence.new({
