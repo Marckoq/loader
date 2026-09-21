@@ -1893,11 +1893,64 @@ function clientModules.combat.detectCharacter(model)
         end
     end
 
-    local group, displayName = getESPAbilityClassification(model)
-    if displayName and displayName ~= "Unknown" then
-        return displayName
+    -- First use character-specific markers. This must happen before the
+    -- generic ESP classifier because Fleetway/Tripwire can inherit Sonic's
+    -- dodge/brake animation markers.
+    local markerCharacters = {
+        tripwire = "Tripwire",
+        brighterday = "Tripwire",
+        reachout = "Tripwire",
+        fleetway = "Fleetway",
+        chaosdash = "Fleetway",
+        fatefuldrain = "Fleetway",
+        lasersofdestrucation = "Fleetway",
+        lasersofdestruction = "Fleetway",
+        kolossos = "Kolossos",
+        chargerun = "Kolossos",
+        impalerun = "Kolossos",
+        chargewarn = "Kolossos",
+        killold = "Kolossos",
+        block = "Kolossos",
+        ["2011x"] = "2011x",
+        rage = "2011x",
+        ragemode = "2011x",
+        godstrickery = "2011x",
+        invis = "2011x",
+        invisibility = "2011x",
+        invisiblity = "2011x",
+        tails = "Tails",
+        canon = "Tails",
+        strangledr = "Tails",
+        amy = "Amy",
+        hammer = "Amy",
+        hammerthrow = "Amy",
+        throwhold = "Amy",
+        silver = "Silver",
+        rockaim = "Silver",
+        suspension = "Silver",
+        blaze = "Blaze",
+        solflame = "Blaze",
+        burningjavelin = "Blaze",
+        flamestart = "Blaze",
+        flameloop = "Blaze",
+        flameend = "Blaze",
+        knuckles = "Knuckles",
+        focus = "Knuckles",
+        eggman = "Eggman",
+        jetpack = "Eggman",
+        energyshield = "Eggman",
+    }
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        local normalized = clientModules.combat.normalize(descendant.Name)
+        local characterName = markerCharacters[normalized]
+
+        if characterName then
+            return characterName
+        end
     end
 
+    -- The supplied rbxl has stable, character-specific animation templates.
     local names = clientModules.combat.animNames(model)
 
     if names.chargedash or names.missdash or names.grabhold or names.toss then
@@ -1912,7 +1965,7 @@ function clientModules.combat.detectCharacter(model)
         return "2011x"
     end
 
-    if names.strangledr or names.strangledr then
+    if names.strangledr then
         return "Tails"
     end
 
@@ -1934,6 +1987,13 @@ function clientModules.combat.detectCharacter(model)
 
     if names.jetpack then
         return "Eggman"
+    end
+
+    -- Only after all character-specific evidence do we fall back to the
+    -- general ESP classifier (which may see inherited Sonic markers).
+    local group, displayName = getESPAbilityClassification(model)
+    if displayName and displayName ~= "Unknown" then
+        return displayName
     end
 
     if names.dodge1 or names.dodge2 or names.dodge3 or names.brake then
@@ -2507,6 +2567,13 @@ function clientModules.combat.setAutoCounterEnabled(enabled, silent)
 
     if clientModules.combat.autoCounterEnabled then
         clientModules.combat.scanEnemyHooks()
+    else
+        for model, connection in pairs(clientModules.combat.modelConnections) do
+            if connection then
+                connection:Disconnect()
+            end
+            clientModules.combat.modelConnections[model] = nil
+        end
     end
 
     if not silent then
@@ -2593,6 +2660,11 @@ end
 function clientModules.combat.shutdown()
     clientModules.combat.serial = clientModules.combat.serial + 1
     clientModules.combat.clearConnections()
+
+    if clientModules.combat.characterConnection then
+        clientModules.combat.characterConnection:Disconnect()
+        clientModules.combat.characterConnection = nil
+    end
 
     if clientModules.combat.renderConnection then
         clientModules.combat.renderConnection:Disconnect()
