@@ -730,8 +730,28 @@ function destroyLiveConsoleMode()
     end
     table.clear(liveConsoleState.connections)
 
-    if liveConsoleState.gui and liveConsoleState.gui.Parent then
-        liveConsoleState.gui:Destroy()
+    local gui = liveConsoleState.gui
+    local frame = liveConsoleState.frame
+
+    if gui and gui.Parent and frame and frame.Parent then
+        local closeTween = TweenService:Create(
+            frame,
+            TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+            {
+                Position = UDim2.fromScale(0.5, 0.86),
+                BackgroundTransparency = 1,
+            }
+        )
+        closeTween:Play()
+
+        task.spawn(function()
+            closeTween.Completed:Wait()
+            if gui and gui.Parent then
+                gui:Destroy()
+            end
+        end)
+    elseif gui and gui.Parent then
+        gui:Destroy()
     end
 
     liveConsoleState.gui = nil
@@ -775,6 +795,9 @@ function runLiveConsoleMode()
     }, consoleGui)
 
     liveConsoleState.frame = frame
+    frame.Position = UDim2.fromScale(0.5, 0.86)
+    frame.BackgroundTransparency = 1
+
     addCorner(frame, 12)
     addStroke(frame, COLORS.Border, 0.20, 1.2)
 
@@ -1047,6 +1070,16 @@ function runLiveConsoleMode()
     updateLiveConsoleFilterButtons()
     updateLiveConsoleCount()
     refreshLiveConsoleCanvas(true)
+
+    local openTween = TweenService:Create(
+        frame,
+        TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        {
+            Position = UDim2.fromScale(0.5, 0.80),
+            BackgroundTransparency = 0.06,
+        }
+    )
+    openTween:Play()
 end
 
 screenGui = create("ScreenGui", {
@@ -1167,6 +1200,21 @@ bodyFrame = create("Frame", {
     BackgroundTransparency = 1,
     ClipsDescendants = true,
 }, mainFrame)
+
+-- CanvasGroups let the whole interface and body fade without individually
+-- tweening every label/button.
+interfaceCanvasGroup = create("CanvasGroup", {
+    Name = "InterfaceAnimationGroup",
+    Position = UDim2.fromScale(0, 0),
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    GroupTransparency = 0,
+    ClipsDescendants = true,
+}, mainFrame)
+
+topBar.Parent = interfaceCanvasGroup
+bodyFrame.Parent = interfaceCanvasGroup
 
 sidebar = create("Frame", {
     Name = "Sidebar",
@@ -1436,6 +1484,19 @@ contentHost = create("Frame", {
     BackgroundTransparency = 1,
     ClipsDescendants = true,
 }, bodyFrame)
+
+bodyCanvasGroup = create("CanvasGroup", {
+    Name = "BodyAnimationGroup",
+    Position = UDim2.fromScale(0, 0),
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    GroupTransparency = 0,
+    ClipsDescendants = true,
+}, bodyFrame)
+
+sidebar.Parent = bodyCanvasGroup
+contentHost.Parent = bodyCanvasGroup
 
 clientModules.header = {}
 clientModules.header.frame = create("Frame", {
@@ -3037,6 +3098,70 @@ function setSwitchVisual(button, dot, enabled)
         Position = targetPosition,
         BackgroundColor3 = targetColor,
     }):Play()
+end
+
+-- Centralized interface motion. The CanvasGroups keep the animations smooth
+-- even though the UI contains many nested controls.
+interfaceAnimationSerial = 0
+
+function animateMainInterfaceVisibility(visible)
+    interfaceAnimationSerial = interfaceAnimationSerial + 1
+    local serial = interfaceAnimationSerial
+
+    if visible then
+        screenGui.Enabled = true
+        mainFrame.Visible = true
+
+        interfaceCanvasGroup.GroupTransparency = 1
+        mainFrame.BackgroundTransparency = 1
+        uiScale.Scale = 0.94
+
+        local tweenInfo = TweenInfo.new(
+            0.28,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.Out
+        )
+
+        TweenService:Create(interfaceCanvasGroup, tweenInfo, {
+            GroupTransparency = 0,
+        }):Play()
+
+        TweenService:Create(mainFrame, tweenInfo, {
+            BackgroundTransparency = 0.16,
+        }):Play()
+
+        TweenService:Create(uiScale, tweenInfo, {
+            Scale = 1,
+        }):Play()
+    else
+        local tweenInfo = TweenInfo.new(
+            0.20,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.In
+        )
+
+        local groupTween = TweenService:Create(interfaceCanvasGroup, tweenInfo, {
+            GroupTransparency = 1,
+        })
+        TweenService:Create(mainFrame, tweenInfo, {
+            BackgroundTransparency = 1,
+        }):Play()
+        TweenService:Create(uiScale, tweenInfo, {
+            Scale = 0.94,
+        }):Play()
+
+        groupTween:Play()
+
+        task.spawn(function()
+            groupTween.Completed:Wait()
+
+            if serial == interfaceAnimationSerial and not guiDestroyed then
+                screenGui.Enabled = false
+                mainFrame.BackgroundTransparency = 0.16
+                uiScale.Scale = 1
+            end
+        end)
+    end
 end
 
 
@@ -8713,15 +8838,44 @@ function configManager.refreshConfigList()
 end
 
 function configManager.setConfigListVisible(visible)
-    configManager.configListVisible = visible == true
-    configManager.configManagerFrame.Visible = configManager.configListVisible
-    configManager.configManagerFrame.Size = configManager.configListVisible
-        and UDim2.new(1, 0, 0, 312)
-        or UDim2.new(1, 0, 0, 0)
-    configManager.listConfigsButton.Text = configManager.configListVisible and "HIDE CONFIGS" or "LIST CONFIGS"
+    local shouldShow = visible == true
+    configManager.configListVisible = shouldShow
+    configManager.listConfigsButton.Text = shouldShow and "HIDE CONFIGS" or "LIST CONFIGS"
 
-    if configManager.configListVisible then
+    configManager.configPanelAnimationSerial = (configManager.configPanelAnimationSerial or 0) + 1
+    local serial = configManager.configPanelAnimationSerial
+
+    if shouldShow then
+        configManager.configManagerFrame.Visible = true
+        configManager.configManagerFrame.Size = UDim2.new(1, 0, 0, 0)
+
+        if configManager.configList then
+            configManager.configList.CanvasPosition = Vector2.new(0, 0)
+        end
+
         configManager.refreshConfigList()
+
+        local tween = TweenService:Create(
+            configManager.configManagerFrame,
+            TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+            { Size = UDim2.new(1, 0, 0, 312) }
+        )
+        tween:Play()
+    else
+        local tween = TweenService:Create(
+            configManager.configManagerFrame,
+            TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+            { Size = UDim2.new(1, 0, 0, 0) }
+        )
+        tween:Play()
+
+        task.spawn(function()
+            tween.Completed:Wait()
+            if serial == configManager.configPanelAnimationSerial
+                and not configManager.configListVisible then
+                configManager.configManagerFrame.Visible = false
+            end
+        end)
     end
 end
 
@@ -9387,7 +9541,42 @@ function shutdownMainScript(reason)
     end
 
     if screenGui and screenGui.Parent then
-        screenGui:Destroy()
+        if interfaceCanvasGroup and mainFrame and uiScale then
+            interfaceAnimationSerial = interfaceAnimationSerial + 1
+
+            interfaceCanvasGroup.GroupTransparency = 0
+            mainFrame.BackgroundTransparency = 0.16
+            uiScale.Scale = 1
+
+            local closeTween = TweenService:Create(
+                interfaceCanvasGroup,
+                TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+                { GroupTransparency = 1 }
+            )
+            local backgroundTween = TweenService:Create(
+                mainFrame,
+                TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+                { BackgroundTransparency = 1 }
+            )
+            local scaleTween = TweenService:Create(
+                uiScale,
+                TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+                { Scale = 0.94 }
+            )
+
+            closeTween:Play()
+            backgroundTween:Play()
+            scaleTween:Play()
+
+            task.spawn(function()
+                closeTween.Completed:Wait()
+                if screenGui and screenGui.Parent then
+                    screenGui:Destroy()
+                end
+            end)
+        else
+            screenGui:Destroy()
+        end
     end
 end
 
@@ -9432,28 +9621,45 @@ clientModules.console.attributeConnection =
         end
     end)
 
+minimizeAnimationSerial = 0
+
 minimizeButton.Activated:Connect(function()
     minimized = not minimized
     minimizeButton.Text = minimized and "+" or "−"
 
+    minimizeAnimationSerial = minimizeAnimationSerial + 1
+    local serial = minimizeAnimationSerial
+    local duration = 0.26
+
     if not minimized then
         bodyFrame.Visible = true
+        bodyCanvasGroup.GroupTransparency = 1
     end
 
-    local tween = TweenService:Create(
+    local sizeTween = TweenService:Create(
         mainFrame,
-        TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        TweenInfo.new(duration, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
         { Size = minimized and minimizedSize or expandedSize }
     )
 
-    tween:Play()
+    local bodyTween = TweenService:Create(
+        bodyCanvasGroup,
+        TweenInfo.new(
+            minimized and 0.16 or 0.24,
+            Enum.EasingStyle.Quint,
+            minimized and Enum.EasingDirection.In or Enum.EasingDirection.Out
+        ),
+        { GroupTransparency = minimized and 1 or 0 }
+    )
+
+    sizeTween:Play()
+    bodyTween:Play()
 
     if minimized then
-        local completedConnection
-        completedConnection = tween.Completed:Connect(function()
-            completedConnection:Disconnect()
+        task.spawn(function()
+            sizeTween.Completed:Wait()
 
-            if minimized and not guiDestroyed then
+            if serial == minimizeAnimationSerial and minimized and not guiDestroyed then
                 bodyFrame.Visible = false
             end
         end)
@@ -9534,7 +9740,7 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
     end
 
     if input.KeyCode == clientModules.keyList.state.interfaceKey then
-        screenGui.Enabled = not screenGui.Enabled
+        animateMainInterfaceVisibility(not screenGui.Enabled)
         return
     elseif input.KeyCode == clientModules.keyList.state.noclipKey then
         clientModules.characterTools.setNoclipEnabled(
