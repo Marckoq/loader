@@ -47,43 +47,35 @@ CONFIG_FILE_EXTENSION = ".json"
 CONFIG_PATH_FALLBACK = false
 
 function getPulseCoreExecutorName()
-    local resolvers = {
-        function()
-            return rawget(_G, "identifyexecutor")
-        end,
-        function()
-            return rawget(_G, "getexecutorname")
-        end,
-        function()
-            return rawget(_G, "whatexecutor")
-        end,
+    local environments = getPulseCoreEnvironment and getPulseCoreEnvironment() or {_ENV, _G}
+
+    local resolverNames = {
+        "identifyexecutor",
+        "getexecutorname",
+        "whatexecutor",
     }
 
-    for _, getResolver in ipairs(resolvers) do
-        local resolver = getResolver()
-        if type(resolver) == "function" then
-            local ok, result = pcall(resolver)
-            if ok and result and tostring(result) ~= "" then
-                local executorName = tostring(result)
-                    :gsub('[<>:"/\\|?*]', "_")
-                    :gsub("[%c]", "_")
-                    :gsub("%s+$", "")
+    for _, environment in ipairs(environments) do
+        for _, functionName in ipairs(resolverNames) do
+            local ok, resolver = pcall(function()
+                return environment[functionName]
+            end)
 
-                if executorName ~= "" then
-                    return executorName
+            if ok and type(resolver) == "function" then
+                local success, result = pcall(resolver)
+
+                if success and result and tostring(result) ~= "" then
+                    local executorName = tostring(result)
+                        :gsub('[<>:"/\\|?*]', "_")
+                        :gsub("[%c]", "_")
+                        :gsub("%s+$", "")
+
+                    if executorName ~= "" then
+                        return executorName
+                    end
                 end
             end
         end
-    end
-
-    if rawget(_G, "syn") then
-        return "Synapse"
-    elseif rawget(_G, "Solara") then
-        return "Solara"
-    elseif rawget(_G, "Wave") then
-        return "Wave"
-    elseif rawget(_G, "Krnl") then
-        return "Krnl"
     end
 
     return "Executor"
@@ -111,11 +103,14 @@ function getPulseCoreEnvironment()
     end)
 
     pcall(function()
-        addEnvironment(rawget(_G, "getgenv") and rawget(_G, "getgenv")())
+        local getgenv = _G.getgenv
+        if type(getgenv) == "function" then
+            addEnvironment(getgenv())
+        end
     end)
 
     pcall(function()
-        local getfenv = rawget(_G, "getfenv")
+        local getfenv = _G.getfenv
         if type(getfenv) == "function" then
             addEnvironment(getfenv(0))
         end
@@ -129,9 +124,14 @@ end
 function getPulseCoreFileApi(functionName)
     local environments = getPulseCoreEnvironment()
 
+    -- Use normal table indexing instead of rawget so executor environments
+    -- with a metatable-backed global namespace are detected correctly.
     for _, environment in ipairs(environments) do
-        local direct = rawget(environment, functionName)
-        if type(direct) == "function" then
+        local ok, direct = pcall(function()
+            return environment[functionName]
+        end)
+
+        if ok and type(direct) == "function" then
             return direct
         end
     end
@@ -152,14 +152,20 @@ function getPulseCoreFileApi(functionName)
 
     for _, environment in ipairs(environments) do
         for _, name in ipairs(names) do
-            local candidate = rawget(environment, "syn_io_" .. name)
-            if type(candidate) == "function" then
+            local ok, candidate = pcall(function()
+                return environment["syn_io_" .. name]
+            end)
+
+            if ok and type(candidate) == "function" then
                 return candidate
             end
         end
 
-        local synTable = rawget(environment, "syn")
-        if type(synTable) == "table" and type(synTable.io) == "table" then
+        local okSyn, synTable = pcall(function()
+            return environment.syn
+        end)
+
+        if okSyn and type(synTable) == "table" and type(synTable.io) == "table" then
             for _, name in ipairs(names) do
                 local candidate = synTable.io[name]
                 if type(candidate) == "function" then
