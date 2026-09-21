@@ -2797,14 +2797,13 @@ function clientModules.combat.initialize()
                 return
             end
 
-            if clientModules.combat.autoAimEnabled
-                and time() <= clientModules.combat.aimActiveUntil then
+            if clientModules.combat.autoAimEnabled then
+                -- Auto Aim continuously keeps the cursor on the selected target.
+                -- The old aimActiveUntil timer caused the mouse to stop after
+                -- the first ability signal, even though Auto Aim was still on.
                 local target = clientModules.combat.refreshTarget()
 
                 if target and target.model then
-                    -- Move the real cursor/mouse delta toward the projected
-                    -- target point. Roblox's normal camera controller then
-                    -- handles the camera rotation from that mouse input.
                     clientModules.combat.moveCursorToTarget(target.model)
                 end
             elseif clientModules.combat.showTarget then
