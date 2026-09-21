@@ -5053,6 +5053,10 @@ ESP_ABILITY_ROLE_NAMES = {
     jetpack = "Survivor",
     rage = "Executioner",
     invis = "Executioner",
+    chargerun = "Executioner",
+    impalerun = "Executioner",
+    chargewarn = "Executioner",
+    killold = "Executioner",
 }
 
 ESP_ABILITY_CHARACTER_NAMES = {
@@ -5102,6 +5106,10 @@ ESP_ABILITY_CHARACTER_NAMES = {
     jetpack = "Eggman",
     rage = "2011x",
     invis = "2011x",
+    chargerun = "Kolossos",
+    impalerun = "Kolossos",
+    chargewarn = "Kolossos",
+    killold = "Kolossos",
 }
 
 ESP_CHARACTER_ABILITY_SETS = {
@@ -5187,10 +5195,11 @@ function isESPAbilityNameCandidate(instance)
         or instance:IsA("Fire")
         or instance:IsA("Sparkles")
         or instance:IsA("Sound")
-        or instance:IsA("Animation")
     then
         return false
     end
+
+    -- Animation objects in Animate.Anims are valid ability markers for this game.
 
     return true
 end
@@ -5217,7 +5226,8 @@ function getESPAbilityClassification(model)
 
         -- Only ability-bearing object types are considered here. In particular,
         -- Sounds such as "Rock" are ignored so footstep/audio assets cannot
-        -- masquerade as abilities.
+        -- masquerade as abilities. Animation objects are allowed because
+        -- Animate.Anims contains the stable character-specific markers.
         if instance:IsA("Sound")
             or instance:IsA("BasePart")
             or instance:IsA("Attachment")
