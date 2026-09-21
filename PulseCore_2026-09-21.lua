@@ -9863,6 +9863,13 @@ end
 -- Показываем интерфейс до тяжёлой инициализации, чтобы UI успел отрисоваться
 -- даже если отдельная функция настройки опционального модуля выдаст ошибку.
 mainFrame.Visible = true
+
+-- Первый запуск также использует ту же плавную анимацию, что и горячая клавиша.
+interfaceCanvasGroup.GroupTransparency = 1
+mainFrame.BackgroundTransparency = 1
+uiScale.Scale = 0.94
+animateMainInterfaceVisibility(true)
+
 task.defer(function()
     if not guiDestroyed and mainFrame.Parent then
         local ok, err = pcall(initializeMainInterface)
