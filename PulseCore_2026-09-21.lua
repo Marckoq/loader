@@ -44,6 +44,7 @@ CONFIG_ROOT_PATH = nil
 CONFIG_AUTOLOAD_FILE = nil
 CONFIG_INDEX_FILE = nil
 CONFIG_FILE_EXTENSION = ".json"
+CONFIG_PATH_FALLBACK = false
 
 function getPulseCoreExecutorName()
     local resolvers = {
@@ -103,11 +104,22 @@ function getPulseCoreFileApi(functionName)
     local synTable = rawget(_G, "syn")
     if type(synTable) == "table" then
         local ioTable = synTable.io
+
         if type(ioTable) == "table" then
             local nested = ioTable[functionName]
+
             if type(nested) == "function" then
                 return function(...)
-                    return nested(ioTable, ...)
+                    local args = table.pack(...)
+                    local ok, result = pcall(function()
+                        return nested(table.unpack(args, 1, args.n))
+                    end)
+
+                    if ok then
+                        return result
+                    end
+
+                    return nested(ioTable, table.unpack(args, 1, args.n))
                 end
             end
         end
@@ -136,23 +148,25 @@ function getPulseCoreLocalAppData()
         local ok, localAppData = pcall(getenv, "LOCALAPPDATA")
 
         if ok and type(localAppData) == "string" and localAppData ~= "" then
-            return localAppData
+            return localAppData, false
         end
 
         local okUser, userProfile = pcall(getenv, "USERPROFILE")
 
         if okUser and type(userProfile) == "string" and userProfile ~= "" then
-            return userProfile .. "\\AppData\\Local"
+            return userProfile .. "\\AppData\\Local", false
         end
     end
 
-    return nil
+    -- Some executors sandbox their filesystem to their own workspace and
+    -- do not expose Windows environment variables to Luau.
+    return "PulseCore\\Configs", true
 end
 
 function initializePulseCoreConfigPath()
-    local localAppData = getPulseCoreLocalAppData()
+    local localAppData, usingFallback = getPulseCoreLocalAppData()
     if not localAppData then
-        return false, "LOCALAPPDATA is unavailable to this executor."
+        return false, "Unable to determine a writable config location."
     end
 
     local missing = getPulseCoreMissingFileApis()
@@ -163,9 +177,15 @@ function initializePulseCoreConfigPath()
     if not CONFIG_ROOT_PATH then
         local executorName = getPulseCoreExecutorName()
 
-        CONFIG_ROOT_PATH = localAppData
-            .. "\\" .. executorName
-            .. "\\workspace\\PulseCore\\Configs"
+        if usingFallback then
+            CONFIG_ROOT_PATH = localAppData
+            CONFIG_PATH_FALLBACK = true
+        else
+            CONFIG_ROOT_PATH = localAppData
+                .. "\\" .. executorName
+                .. "\\workspace\\PulseCore\\Configs"
+            CONFIG_PATH_FALLBACK = false
+        end
 
         CONFIG_AUTOLOAD_FILE = CONFIG_ROOT_PATH .. "\\AutoLoad.txt"
         CONFIG_INDEX_FILE = CONFIG_ROOT_PATH .. "\\ConfigIndex.json"
@@ -174,14 +194,27 @@ function initializePulseCoreConfigPath()
     local makeFolderApi = getPulseCoreFileApi("makefolder")
     local isFolderApi = getPulseCoreFileApi("isfolder")
 
-    local executorRoot = localAppData .. "\\" .. getPulseCoreExecutorName()
+    if not makeFolderApi then
+        return false, "Missing file API: makefolder"
+    end
 
-    local segments = {
-        executorRoot,
-        executorRoot .. "\\workspace",
-        executorRoot .. "\\workspace\\PulseCore",
-        CONFIG_ROOT_PATH,
-    }
+    local segments
+
+    if CONFIG_PATH_FALLBACK then
+        segments = {
+            "PulseCore",
+            CONFIG_ROOT_PATH,
+        }
+    else
+        local executorRoot = localAppData .. "\\" .. getPulseCoreExecutorName()
+
+        segments = {
+            executorRoot,
+            executorRoot .. "\\workspace",
+            executorRoot .. "\\workspace\\PulseCore",
+            CONFIG_ROOT_PATH,
+        }
+    end
 
     for _, folderPath in ipairs(segments) do
         local folderExists = false
@@ -201,6 +234,7 @@ function initializePulseCoreConfigPath()
 
     if isFolderApi then
         local verified = false
+
         pcall(function()
             verified = isFolderApi(CONFIG_ROOT_PATH)
         end)
@@ -211,6 +245,24 @@ function initializePulseCoreConfigPath()
     end
 
     return true, nil
+end
+
+function getPulseCoreConfigFilePath(configName)
+    if not CONFIG_ROOT_PATH or not configName then
+        return nil
+    end
+
+    return CONFIG_ROOT_PATH .. "\\" .. configName .. CONFIG_FILE_EXTENSION
+end
+
+function isReservedWindowsConfigName(name)
+    local upper = string.upper(name):gsub("%.[^%.]*$", "")
+    return upper == "CON"
+        or upper == "PRN"
+        or upper == "AUX"
+        or upper == "NUL"
+        or upper:match("^COM[1-9]$")
+        or upper:match("^LPT[1-9]$")
 end
 
 function getPulseCoreConfigFilePath(configName)
@@ -7690,7 +7742,7 @@ function configManager.persistAutoLoadConfig()
 
     if not configManager.autoLoadConfigName then
         local deleted = true
-        if type(isfile) == "function" and isFileApi(CONFIG_AUTOLOAD_FILE) then
+        if isFileApi and isFileApi(CONFIG_AUTOLOAD_FILE) then
             deleted = pcall(deleteFileApi, CONFIG_AUTOLOAD_FILE)
         end
         return deleted == true
@@ -7780,7 +7832,7 @@ function configManager.loadStoredConfigs()
                     then
                         local configName = fileName:sub(1, -#CONFIG_FILE_EXTENSION - 1)
 
-                        local readOk, encoded = pcall(readfile, filePath)
+                        local readOk, encoded = pcall(readFileApi, filePath)
                         if readOk and type(encoded) == "string" and encoded ~= "" then
                             local decodeOk, decoded = pcall(function()
                                 return HttpService:JSONDecode(encoded)
@@ -7845,8 +7897,14 @@ function configManager.loadStoredConfigs()
             end
         end
 
+        local pathMessage = CONFIG_PATH_FALLBACK
+            and "Executor workspace fallback: "
+            or "Local AppData path: "
+
         configManager.updateConfigStatus(
-            "Configs loaded from local files.\\nFolder: " .. tostring(CONFIG_ROOT_PATH),
+            "Configs loaded from local files.\\n"
+                .. pathMessage
+                .. tostring(CONFIG_ROOT_PATH),
             COLORS.Green
         )
         return
