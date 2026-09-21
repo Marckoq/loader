@@ -2570,11 +2570,18 @@ function clientModules.combat.scanEnemyHooks()
         clientModules.combat.bindEnemyModel(model)
     end
 
-    for model, connection in pairs(clientModules.combat.modelConnections) do
+    for model, connections in pairs(clientModules.combat.modelConnections) do
         if not valid[model] or not model.Parent then
-            if connection then
-                connection:Disconnect()
+            if type(connections) == "table" then
+                for _, connection in ipairs(connections) do
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            elseif connections then
+                connections:Disconnect()
             end
+
             clientModules.combat.modelConnections[model] = nil
         end
     end
