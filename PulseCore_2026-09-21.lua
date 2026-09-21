@@ -399,8 +399,10 @@ COLORS = {
     Topbar = Color3.fromRGB(12, 12, 12),
     Text = Color3.fromRGB(242, 242, 242),
     MutedText = Color3.fromRGB(165, 165, 165),
-    Green = Color3.fromRGB(70, 130, 255),
-    Red = Color3.fromRGB(255, 35, 55),
+    Green = Color3.fromRGB(110, 220, 145),
+    Red = Color3.fromRGB(235, 95, 105),
+    ESPBlue = Color3.fromRGB(70, 130, 255),
+    ESPRed = Color3.fromRGB(255, 35, 55),
     Yellow = Color3.fromRGB(225, 195, 100),
     White = Color3.fromRGB(255, 255, 255),
 }
@@ -2188,7 +2190,7 @@ visualsHint = create("TextLabel", {
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.32,
     BorderSizePixel = 0,
-    Text = "ESP scans all workspace descendants and highlights models by name. Survivors use blue with a blue outline; Executioners use scarlet with a scarlet outline.",
+    Text = "ESP finds characters by model name and ability names. Survivors use blue; Executioners use scarlet. A name tag stays above each highlighted character and scales down with distance.",
     Font = Enum.Font.GothamMedium,
     TextSize = 12,
     TextColor3 = COLORS.MutedText,
@@ -2982,6 +2984,7 @@ characterFolderAncestryConnection = nil
 localCharacterAddedConnection = nil
 espWorkspaceAddedConnection = nil
 espWorkspaceRemovingConnection = nil
+espNameTagConnection = nil
 espScanQueued = false
 espScanSerial = 0
 
@@ -4790,34 +4793,56 @@ function unregisterCharacterModel(model, destroyHighlight)
         end)
     end
 
+    if record.nameTag and record.nameTag.Parent then
+        pcall(function()
+            record.nameTag:Destroy()
+        end)
+    end
+
     trackedModels[model] = nil
 end
 
 function refreshAllTrackedModels()
     for model, record in pairs(trackedModels) do
         if not model or not model.Parent then
+            if record and record.highlight and record.highlight.Parent then
+                pcall(function()
+                    record.highlight:Destroy()
+                end)
+            end
+
+            if record and record.nameTag and record.nameTag.Parent then
+                pcall(function()
+                    record.nameTag:Destroy()
+                end)
+            end
+
             trackedModels[model] = nil
         elseif record then
             local group = record.group
+            local espColor = group == "Survivor" and COLORS.ESPBlue or COLORS.ESPRed
+            local enabled = group == "Survivor"
+                and espSurvivorsEnabled
+                or group == "Executioner"
+                and espExecutionersEnabled
+
             local highlight = record.highlight
-
             if highlight and highlight.Parent and highlight:IsA("Highlight") then
-                highlight.FillColor =
-                    group == "Survivor" and COLORS.Green or COLORS.Red
+                highlight.FillColor = espColor
+                highlight.OutlineColor = espColor
+                highlight.Enabled = enabled
+            end
 
-                if group == "Survivor" then
-                    highlight.Enabled = espSurvivorsEnabled
-                elseif group == "Executioner" then
-                    highlight.Enabled = espExecutionersEnabled
-                else
-                    highlight.Enabled = false
-                end
+            local nameTag = record.nameTag
+            if nameTag and nameTag.Parent then
+                nameTag.Enabled = enabled
+                nameTag.TextLabel.TextColor3 = espColor
             end
         end
     end
 end
 
-function registerCharacterModel(model, group)
+function registerCharacterModel(model, group, displayName)
     if not model or not model:IsA("Model") or isLocalCharacterModel(model) then
         return
     end
@@ -4831,38 +4856,331 @@ function registerCharacterModel(model, group)
         record = {
             model = model,
             group = group,
+            displayName = displayName or model.Name,
             highlight = nil,
+            nameTag = nil,
+            nameTagAdornee = nil,
         }
         trackedModels[model] = record
     else
         record.group = group
+        record.displayName = displayName or record.displayName or model.Name
     end
 
+    local espColor = group == "Survivor" and COLORS.ESPBlue or COLORS.ESPRed
     local highlight = getOrCreateESPHighlight(model, record)
-    highlight.FillColor = group == "Survivor" and COLORS.Green or COLORS.Red
+
+    highlight.FillColor = espColor
     highlight.FillTransparency = 0.45
-    highlight.OutlineColor = COLORS.Green
+    highlight.OutlineColor = espColor
     highlight.OutlineTransparency = 0
 
-    if group == "Survivor" then
-        highlight.Enabled = espSurvivorsEnabled
-    else
-        highlight.Enabled = espExecutionersEnabled
+    local nameTag = getOrCreateESPNameTag(
+        model,
+        record,
+        record.displayName,
+        group
+    )
+
+    if nameTag then
+        nameTag.Enabled = group == "Survivor"
+            and espSurvivorsEnabled
+            or group == "Executioner"
+            and espExecutionersEnabled
     end
+
+    highlight.Enabled = group == "Survivor"
+        and espSurvivorsEnabled
+        or group == "Executioner"
+        and espExecutionersEnabled
 end
 
 function getESPScanRoot()
     return workspace
 end
 
-ESP_EXECUTIONER_ABILITY_NAMES = {
-    step = true,
-    brighterday = true,
-    reachout = true,
+ESP_ABILITY_ROLE_NAMES = {
+    -- Executioners
+    step = "Executioner",
+    brighterday = "Executioner",
+    reachout = "Executioner",
+    chaosdash = "Executioner",
+    fatefuldrain = "Executioner",
+    lasersofdestrucation = "Executioner",
+    lasersofdestruction = "Executioner",
+    burst = "Executioner",
+    charge = "Executioner",
+    godstrickery = "Executioner",
+    invisiblity = "Executioner",
+    invisibility = "Executioner",
+    ragemode = "Executioner",
+    grab = "Executioner",
+    block = "Executioner",
+    indicator = "Executioner",
+
+    -- Survivors
+    dropdash = "Survivor",
+    peelout = "Survivor",
+    lasercanon = "Survivor",
+    lasercannon = "Survivor",
+    glide = "Survivor",
+    punch = "Survivor",
+    counter = "Survivor",
+    jetpackboost = "Survivor",
+    energyshield = "Survivor",
+    hammer = "Survivor",
+    hammerthrow = "Survivor",
+    reroll = "Survivor",
+    heal = "Survivor",
+    dash = "Survivor",
+    destructivecharge = "Survivor",
+    desturctivecharge = "Survivor",
+    selfrepair = "Survivor",
+    rock = "Survivor",
+    timereversall = "Survivor",
+    timereversal = "Survivor",
+    roundhousekick = "Survivor",
 }
 
-function normalizeESPMarkerName(name)
+ESP_ABILITY_CHARACTER_NAMES = {
+    -- Executioners
+    step = "Tripwire",
+    brighterday = "Tripwire",
+    reachout = "Tripwire",
+    chaosdash = "Fleetway",
+    fatefuldrain = "Fleetway",
+    lasersofdestrucation = "Fleetway",
+    lasersofdestruction = "Fleetway",
+    burst = "Fleetway",
+    godstrickery = "2011x",
+    invisiblity = "2011x",
+    invisibility = "2011x",
+    ragemode = "2011x",
+    grab = "Kolossos",
+    block = "Kolossos",
+    indicator = "Kolossos",
+
+    -- Survivors
+    dropdash = "Sonic",
+    peelout = "Sonic",
+    lasercanon = "Tails",
+    lasercannon = "Tails",
+    glide = "Tails",
+    punch = "Knuckles",
+    counter = "Knuckles",
+    jetpackboost = "Eggman",
+    energyshield = "Eggman",
+    hammer = "Amy",
+    hammerthrow = "Amy",
+    reroll = "Amy",
+    heal = "Cream",
+    dash = "Cream",
+    destructivecharge = "Metal Sonic",
+    desturctivecharge = "Metal Sonic",
+    selfrepair = "Metal Sonic",
+    rock = "Silver",
+    timereversall = "Silver",
+    timereversal = "Silver",
+    roundhousekick = "Blaze",
+}
+
+function normalizeESPModelName(name)
+    -- Case-insensitive and ignores spaces, hyphens, underscores, slashes,
+    -- and other punctuation. This makes "Metal Sonic" -> "metalsonic".
     return string.lower(tostring(name or "")):gsub("[^%w]+", "")
+end
+
+function normalizeESPMarkerName(name)
+    return normalizeESPModelName(name)
+end
+
+function getESPGroupByModelName(name)
+    return ESP_MODEL_ROLE_NAMES[normalizeESPModelName(name)]
+end
+
+function getESPGroupByAbilityName(name)
+    return ESP_ABILITY_ROLE_NAMES[normalizeESPMarkerName(name)]
+end
+
+function getESPCharacterNameByAbility(name)
+    return ESP_ABILITY_CHARACTER_NAMES[normalizeESPMarkerName(name)]
+end
+
+-- Keep the old function name for compatibility with any existing PulseCore
+-- code, but now it classifies MODEL NAMES rather than folder names.
+function normalizeESPContainerName(name)
+    return normalizeESPModelName(name)
+end
+
+function getESPGroupByName(name)
+    return getESPGroupByModelName(name)
+end
+
+function isLocalCharacterModel(model)
+    return model == localPlayer.Character
+end
+
+function getOrCreateESPNameTag(model, record, displayName, group)
+    local label = record.nameTag
+
+    if label and label.Parent and label:IsA("BillboardGui") then
+        label.TextLabel.Text = displayName
+        label.TextLabel.TextColor3 = group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+        return label
+    end
+
+    if label then
+        pcall(function()
+            label:Destroy()
+        end)
+        record.nameTag = nil
+    end
+
+    local adornee = model:FindFirstChild("Head", true)
+        or model:FindFirstChild("HumanoidRootPart", true)
+        or model:FindFirstChild("UpperTorso", true)
+        or model:FindFirstChild("Torso", true)
+
+    if not adornee or not adornee:IsA("BasePart") then
+        for _, descendant in ipairs(model:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                adornee = descendant
+                break
+            end
+        end
+    end
+
+    if not adornee then
+        return nil
+    end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = ESP_HIGHLIGHT_NAME .. "_NameTag"
+    billboard.Adornee = adornee
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 0
+    billboard.Size = UDim2.fromOffset(220, 40)
+    billboard.StudsOffset = Vector3.new(0, 3.2, 0)
+    billboard.Parent = screenGui
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Name = "TextLabel"
+    textLabel.BackgroundTransparency = 1
+    textLabel.Size = UDim2.fromScale(1, 1)
+    textLabel.Text = displayName
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextSize = 18
+    textLabel.TextColor3 = group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+    textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    textLabel.TextStrokeTransparency = 0.2
+    textLabel.TextWrapped = true
+    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+    textLabel.Parent = billboard
+
+    record.nameTag = billboard
+    record.nameTagAdornee = adornee
+    return billboard
+end
+
+function updateESPNameTags()
+    local camera = workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    local cameraPosition = camera.CFrame.Position
+
+    for model, record in pairs(trackedModels) do
+        if model and model.Parent and record and record.nameTag and record.nameTag.Parent then
+            local adornee = record.nameTagAdornee
+
+            if not adornee or not adornee.Parent or not adornee:IsDescendantOf(model) then
+                adornee = model:FindFirstChild("Head", true)
+                    or model:FindFirstChild("HumanoidRootPart", true)
+                    or model:FindFirstChild("UpperTorso", true)
+                    or model:FindFirstChild("Torso", true)
+
+                if adornee and adornee:IsA("BasePart") then
+                    record.nameTagAdornee = adornee
+                    record.nameTag.Adornee = adornee
+                end
+            end
+
+            if adornee and adornee:IsA("BasePart") then
+                local distance = (cameraPosition - adornee.Position).Magnitude
+                local textSize = math.clamp(1800 / math.max(distance, 1), 8, 18)
+                record.nameTag.TextLabel.TextSize = textSize
+                record.nameTag.TextLabel.TextColor3 =
+                    record.group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+            end
+        end
+    end
+end
+
+function getESPDisplayName(model, abilityCharacterName)
+    local namedGroup = getESPGroupByModelName(model.Name)
+
+    if namedGroup then
+        return model.Name
+    end
+
+    return abilityCharacterName or model.Name
+end
+
+function getESPAbilityClassification(model)
+    if not model or not model:IsA("Model") then
+        return nil, nil
+    end
+
+    local survivorFound = false
+    local executionerFound = false
+    local characterName
+
+    local function processName(value)
+        local normalized = normalizeESPMarkerName(value)
+        local group = ESP_ABILITY_ROLE_NAMES[normalized]
+
+        if group == "Executioner" then
+            executionerFound = true
+            characterName = characterName or ESP_ABILITY_CHARACTER_NAMES[normalized]
+        elseif group == "Survivor" then
+            survivorFound = true
+            characterName = characterName or ESP_ABILITY_CHARACTER_NAMES[normalized]
+        end
+    end
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        processName(descendant.Name)
+
+        if descendant:IsA("StringValue") then
+            processName(descendant.Value)
+        end
+
+        local attributes = descendant:GetAttributes()
+        for _, value in pairs(attributes) do
+            if type(value) == "string" then
+                processName(value)
+            end
+        end
+    end
+
+    local rootAttributes = model:GetAttributes()
+    for _, value in pairs(rootAttributes) do
+        if type(value) == "string" then
+            processName(value)
+        end
+    end
+
+    if executionerFound then
+        return "Executioner", characterName
+    end
+
+    if survivorFound then
+        return "Survivor", characterName
+    end
+
+    return nil, nil
 end
 
 function isESPExecutionerModel(model)
@@ -4870,61 +5188,8 @@ function isESPExecutionerModel(model)
         return false
     end
 
-    -- Structural markers from the reference ESP.
-    for _, descendant in ipairs(model:GetDescendants()) do
-        if descendant:IsA("BasePart") then
-            local descendantName = string.lower(descendant.Name)
-
-            if descendant.Name == "Rage"
-                or descendantName == "upperjaggedteeth"
-            then
-                return true
-            end
-
-            if descendant.Name == "Body_Original"
-                or descendant.Name == "Lowerbody_Composited"
-            then
-                local parent = descendant.Parent
-                if parent and parent.Name == "InitialPoses" then
-                    return true
-                end
-            end
-        end
-    end
-
-    return false
-end
-
-function hasESPExecutionerAbility(model)
-    if not model or not model:IsA("Model") then
-        return false
-    end
-
-    local function matches(value)
-        local normalized = normalizeESPMarkerName(value)
-        return ESP_EXECUTIONER_ABILITY_NAMES[normalized] == true
-    end
-
-    -- Ability names can be represented by object names or string values.
-    for _, descendant in ipairs(model:GetDescendants()) do
-        if matches(descendant.Name) then
-            return true
-        end
-
-        if descendant:IsA("StringValue") and matches(descendant.Value) then
-            return true
-        end
-    end
-
-    -- Some games store ability identifiers in attributes.
-    local modelAttributes = model:GetAttributes()
-    for _, value in pairs(modelAttributes) do
-        if type(value) == "string" and matches(value) then
-            return true
-        end
-    end
-
-    return false
+    return getESPGroupByName(model.Name) == "Executioner"
+        or getESPGroupByAbilityName(model.Name) == "Executioner"
 end
 
 function isDirectWorkspacePlayersModel(model)
@@ -4937,32 +5202,33 @@ end
 
 function getESPGroupForModel(model)
     if not model or not model:IsA("Model") or isLocalCharacterModel(model) then
-        return nil
+        return nil, nil
     end
 
-    -- Known names have the highest priority.
+    -- Known model names have the highest priority.
     local namedGroup = getESPGroupByModelName(model.Name)
     if namedGroup then
-        return namedGroup
+        return namedGroup, model.Name
     end
 
-    -- Ability names are an additional strong indicator for Executioners,
-    -- which covers skins whose model name is unrelated to the base character.
-    if hasESPExecutionerAbility(model) then
-        return "Executioner"
+    -- Ability names classify skins whose model names differ from their base
+    -- character. Executioners take priority over survivor matches.
+    local abilityGroup, abilityCharacterName = getESPAbilityClassification(model)
+    if abilityGroup then
+        return abilityGroup, getESPDisplayName(model, abilityCharacterName)
     end
 
-    -- Player models can use arbitrary skin names, so unknown names inside
-    -- Workspace.Players fall back to the structural EXE markers.
+    -- Unknown player models inside Workspace.Players remain survivors when
+    -- there is no recognized ability marker.
     if isDirectWorkspacePlayersModel(model) then
         if isESPExecutionerModel(model) then
-            return "Executioner"
+            return "Executioner", model.Name
         end
 
-        return "Survivor"
+        return "Survivor", model.Name
     end
 
-    return nil
+    return nil, nil
 end
 
 function scanESPContainers()
@@ -4979,10 +5245,13 @@ function scanESPContainers()
     if playersFolder then
         for _, model in ipairs(playersFolder:GetChildren()) do
             if model:IsA("Model") and not isLocalCharacterModel(model) then
-                local group = getESPGroupForModel(model)
+                local group, displayName = getESPGroupForModel(model)
 
                 if group then
-                    validModels[model] = group
+                    validModels[model] = {
+                        group = group,
+                        displayName = displayName or model.Name,
+                    }
                 end
             end
         end
@@ -4995,16 +5264,20 @@ function scanESPContainers()
             local character = player.Character
 
             if character and character:IsA("Model") then
-                local group = getESPGroupForModel(character)
+                local group, displayName = getESPGroupForModel(character)
 
                 if not group then
                     group = isESPExecutionerModel(character)
                         and "Executioner"
                         or getESPGroupByModelName(character.Name)
+                    displayName = character.Name
                 end
 
                 if group then
-                    validModels[character] = group
+                    validModels[character] = {
+                        group = group,
+                        displayName = displayName or character.Name,
+                    }
                 end
             end
         end
@@ -5013,16 +5286,23 @@ function scanESPContainers()
     -- Keep name-based support for matching character models elsewhere.
     for _, instance in ipairs(workspace:GetDescendants()) do
         if instance:IsA("Model") and not isLocalCharacterModel(instance) then
-            local group = getESPGroupForModel(instance)
+            local group, displayName = getESPGroupForModel(instance)
 
             if group then
-                validModels[instance] = group
+                validModels[instance] = {
+                    group = group,
+                    displayName = displayName or instance.Name,
+                }
             end
         end
     end
 
-    for model, group in pairs(validModels) do
-        registerCharacterModel(model, group)
+    for model, info in pairs(validModels) do
+        registerCharacterModel(
+            model,
+            info.group,
+            info.displayName
+        )
     end
 
     local modelsToRemove = {}
@@ -5082,6 +5362,19 @@ function initializeESP()
     espScanSerial = espScanSerial + 1
     espScanQueued = false
 
+    if espNameTagConnection then
+        espNameTagConnection:Disconnect()
+        espNameTagConnection = nil
+    end
+
+    espNameTagConnection = RunService.RenderStepped:Connect(function()
+        if guiDestroyed then
+            return
+        end
+
+        updateESPNameTags()
+    end)
+
     -- A new model can appear anywhere in Workspace, so no folder-specific
     -- condition is used here.
     espWorkspaceAddedConnection = workspace.DescendantAdded:Connect(function(instance)
@@ -5116,6 +5409,11 @@ function initializeESP()
 end
 
 function shutdownESP()
+    if espNameTagConnection then
+        espNameTagConnection:Disconnect()
+        espNameTagConnection = nil
+    end
+
     if espWorkspaceAddedConnection then
         espWorkspaceAddedConnection:Disconnect()
         espWorkspaceAddedConnection = nil
