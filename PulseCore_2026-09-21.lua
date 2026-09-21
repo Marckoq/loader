@@ -5285,10 +5285,17 @@ function getESPAbilityClassification(model)
             return
         end
 
-        -- Only ability-bearing object types are considered here. In particular,
-        -- Sounds such as "Rock" are ignored so footstep/audio assets cannot
-        -- masquerade as abilities. Animation objects are allowed because
-        -- Animate.Anims contains the stable character-specific markers.
+        -- First test the exact normalized name against the known ability table.
+        -- Some real ability markers (for example Tripwire's Reachout) are
+        -- stored as Sounds, so their class cannot be used as a blanket filter.
+        local normalized = normalizeESPMarkerName(instance.Name)
+        if ESP_ABILITY_ROLE_NAMES[normalized] then
+            found[normalized] = true
+            return
+        end
+
+        -- Unknown physical/visual objects are ignored to avoid false positives
+        -- such as a Sound named Rock being mistaken for Silver's ability.
         if instance:IsA("Sound")
             or instance:IsA("BasePart")
             or instance:IsA("Attachment")
@@ -5303,8 +5310,6 @@ function getESPAbilityClassification(model)
         then
             return
         end
-
-        processValue(instance.Name)
     end
 
     -- Scan the character's Animate/Anims tree, where the rbxl shows the
@@ -5359,6 +5364,16 @@ function getESPAbilityClassification(model)
     -- Generic markers are intentionally not character evidence.
     for genericName in pairs(ESP_GENERIC_ABILITY_NAMES) do
         found[genericName] = nil
+    end
+
+    -- If an executioner-specific marker is present, it must outrank survivor
+    -- animation sets inherited by skins.
+    local executionerMarkerFound = false
+    for abilityName, role in pairs(ESP_ABILITY_ROLE_NAMES) do
+        if role == "Executioner" and found[abilityName] then
+            executionerMarkerFound = true
+            break
+        end
     end
 
     local scores = {}
