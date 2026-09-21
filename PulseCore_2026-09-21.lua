@@ -4705,7 +4705,46 @@ function getESPGroupByName(name)
 end
 
 function isLocalCharacterModel(model)
-    return model == localPlayer.Character
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    if model == localPlayer.Character then
+        return true
+    end
+
+    -- Roblox can expose the same player character through another container.
+    local okPlayer, owner = pcall(function()
+        return Players:GetPlayerFromCharacter(model)
+    end)
+
+    if okPlayer and owner == localPlayer then
+        return true
+    end
+
+    -- Some custom character systems clone Player.Character into Workspace.Players
+    -- without registering it through Players:GetPlayerFromCharacter().
+    if model.Name == localPlayer.Name then
+        return true
+    end
+
+    local localUserId = tostring(localPlayer.UserId)
+
+    for _, attributeName in ipairs({"UserId", "PlayerUserId", "UserID"}) do
+        local value = model:GetAttribute(attributeName)
+        if value ~= nil and tostring(value) == localUserId then
+            return true
+        end
+    end
+
+    -- Custom games sometimes keep an ObjectValue pointing back to the Player.
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("ObjectValue") and descendant.Value == localPlayer then
+            return true
+        end
+    end
+
+    return false
 end
 
 function getOrCreateESPNameTag(model, record, displayName, group)
