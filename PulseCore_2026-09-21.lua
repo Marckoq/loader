@@ -2605,10 +2605,17 @@ function clientModules.combat.setAutoCounterEnabled(enabled, silent)
     if clientModules.combat.autoCounterEnabled then
         clientModules.combat.scanEnemyHooks()
     else
-        for model, connection in pairs(clientModules.combat.modelConnections) do
-            if connection then
-                connection:Disconnect()
+        for model, connections in pairs(clientModules.combat.modelConnections) do
+            if type(connections) == "table" then
+                for _, connection in ipairs(connections) do
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            elseif connections then
+                connections:Disconnect()
             end
+
             clientModules.combat.modelConnections[model] = nil
         end
     end
