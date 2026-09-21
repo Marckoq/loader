@@ -5137,12 +5137,12 @@ function getESPDisplayName(model, inferredName)
     return inferredName or "Unknown"
 end
 
-function isESPAbilityCarrier(instance)
+function isESPAbilityNameCandidate(instance)
     if not instance then
         return false
     end
 
-    -- Do not treat physical/visual objects as ability names.
+    -- Physical/visual objects are not considered ability-name objects.
     if instance:IsA("BasePart")
         or instance:IsA("Attachment")
         or instance:IsA("Decal")
@@ -5155,8 +5155,6 @@ function isESPAbilityCarrier(instance)
         or instance:IsA("Sparkles")
         or instance:IsA("Sound")
         or instance:IsA("Animation")
-        or instance:IsA("Humanoid")
-        or instance:IsA("Animator")
     then
         return false
     end
@@ -5181,23 +5179,23 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Ability objects can be stored directly in the character model.
-    -- Generic names such as Charge/Dash are ignored unless their holder also
-    -- exposes a non-generic, character-specific ability.
+    -- Ability objects can be stored anywhere in the character hierarchy.
+    -- Model names are never used as a fallback; only an exact recognized
+    -- ability name/value can enter the classifier.
     for _, descendant in ipairs(model:GetDescendants()) do
-        local isCarrier = isESPAbilityCarrier(descendant)
-
-        if isCarrier then
+        if isESPAbilityNameCandidate(descendant) then
             processName(descendant.Name, true)
 
             if descendant:IsA("StringValue") then
                 processName(descendant.Value, false)
             end
+        end
 
-            for _, value in pairs(descendant:GetAttributes()) do
-                if type(value) == "string" then
-                    processName(value, false)
-                end
+        -- Attributes are checked independently of object class. Some games
+        -- keep ability identifiers on Humanoid/parts rather than folders.
+        for _, value in pairs(descendant:GetAttributes()) do
+            if type(value) == "string" then
+                processName(value, false)
             end
         end
     end
