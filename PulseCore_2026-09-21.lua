@@ -4657,6 +4657,9 @@ end
 --
 -- Executioners:
 --   2011X, Kolossos, Tripwire, Fleetway, MSS
+--
+-- Player models inside Workspace.Players are classified structurally,
+-- allowing skins to keep arbitrary model names.
 -- ============================================================================
 
 ESP_MODEL_ROLE_NAMES = {
@@ -4852,6 +4855,63 @@ function getESPScanRoot()
     return workspace
 end
 
+function isESPExecutionerModel(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    -- Match the same structural markers used by the reference ESP:
+    -- Rage, upperjaggedteeth, or specific InitialPoses body objects.
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") then
+            local descendantName = string.lower(descendant.Name)
+
+            if descendant.Name == "Rage"
+                or descendantName == "upperjaggedteeth"
+            then
+                return true
+            end
+
+            if descendant.Name == "Body_Original"
+                or descendant.Name == "Lowerbody_Composited"
+            then
+                local parent = descendant.Parent
+                if parent and parent.Name == "InitialPoses" then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+function isDirectWorkspacePlayersModel(model)
+    local playersFolder = workspace:FindFirstChild("Players")
+    return playersFolder ~= nil
+        and model ~= nil
+        and model:IsA("Model")
+        and model.Parent == playersFolder
+end
+
+function getESPGroupForModel(model)
+    if not model or not model:IsA("Model") or isLocalCharacterModel(model) then
+        return nil
+    end
+
+    -- Player models are classified structurally so skins can use any name.
+    if isDirectWorkspacePlayersModel(model) then
+        if isESPExecutionerModel(model) then
+            return "Executioner"
+        end
+
+        return "Survivor"
+    end
+
+    -- Keep the configured name list for models outside Workspace.Players.
+    return getESPGroupByModelName(model.Name)
+end
+
 function scanESPContainers()
     if guiDestroyed then
         return
@@ -4859,29 +4919,67 @@ function scanESPContainers()
 
     local validModels = {}
 
-    -- Search EVERY Workspace descendant. Folder placement is irrelevant.
+    -- First scan the game's player-model container. This is the important
+    -- path for skins whose model names differ from their base character.
+    local playersFolder = workspace:FindFirstChild("Players")
+
+    if playersFolder then
+        for _, model in ipairs(playersFolder:GetChildren()) do
+            if model:IsA("Model") and not isLocalCharacterModel(model) then
+                local group = getESPGroupForModel(model)
+
+                if group then
+                    validModels[model] = group
+                end
+            end
+        end
+    end
+
+    -- Also scan actual Player characters in case the game uses Player.Character
+    -- directly instead of a Workspace.Players model.
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            local character = player.Character
+
+            if character and character:IsA("Model") then
+                local group = getESPGroupForModel(character)
+
+                if not group then
+                    group = isESPExecutionerModel(character)
+                        and "Executioner"
+                        or getESPGroupByModelName(character.Name)
+                end
+
+                if group then
+                    validModels[character] = group
+                end
+            end
+        end
+    end
+
+    -- Keep name-based support for matching character models elsewhere.
     for _, instance in ipairs(workspace:GetDescendants()) do
         if instance:IsA("Model") and not isLocalCharacterModel(instance) then
-            local group = getESPGroupByModelName(instance.Name)
+            local group = getESPGroupForModel(instance)
+
             if group then
                 validModels[instance] = group
             end
         end
     end
 
-    -- Register all currently matching models.
     for model, group in pairs(validModels) do
         registerCharacterModel(model, group)
     end
 
-    -- Remove models that were renamed, moved out, destroyed, or otherwise
-    -- stopped matching the configured list.
     local modelsToRemove = {}
+
     for model in pairs(trackedModels) do
         if not model
             or not model.Parent
             or not validModels[model]
-            or not model:IsDescendantOf(workspace) then
+            or not model:IsDescendantOf(workspace)
+        then
             table.insert(modelsToRemove, model)
         end
     end
