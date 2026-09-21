@@ -5956,6 +5956,53 @@ function selectTab(tabName)
     clientModules.tabAnimation.currentPage = incomingPage
 end
 
+function relayoutSidebarTabs()
+    local orderedTabs = {
+        clientModules.tabs.info,
+        localTab,
+        visualsTab,
+        clientModules.tabs.combat,
+        clientModules.tabs.fun,
+        clientModules.tabs.performance,
+        clientModules.tabs.autoSelect,
+        clientModules.tabs.keyList,
+        settingsTab,
+    }
+
+    local y = 14
+
+    for _, button in ipairs(orderedTabs) do
+        if button then
+            local visible = button.Visible
+
+            if visible then
+                button.Position = UDim2.fromOffset(12, y)
+                y = y + 52
+            end
+        end
+    end
+
+    -- Keep the animated selection in sync with the compacted sidebar.
+    local selectedName = clientModules.tabAnimation.currentName
+    local selectedButton = selectedName and ({
+        Info = clientModules.tabs.info,
+        Local = localTab,
+        Visuals = visualsTab,
+        Combat = clientModules.tabs.combat,
+        Fun = clientModules.tabs.fun,
+        Performance = clientModules.tabs.performance,
+        AutoSelect = clientModules.tabs.autoSelect,
+        KeyList = clientModules.tabs.keyList,
+        Settings = settingsTab,
+    })[selectedName]
+
+    if selectedButton and selectedButton.Visible then
+        clientModules.tabAnimation.selectionBackground.Position = selectedButton.Position
+        clientModules.tabAnimation.selectionBar.Position =
+            UDim2.fromOffset(0, selectedButton.Position.Y.Offset + 23)
+    end
+end
+
 function refreshSpecialTabsVisibility()
     local allowed = isSpecialTabsAllowed()
 
@@ -5963,6 +6010,9 @@ function refreshSpecialTabsVisibility()
 
     clientModules.tabs.combat.Visible = allowed
     clientModules.tabs.fun.Visible = allowed
+
+    -- Repack the sidebar so hidden special tabs do not leave empty slots.
+    relayoutSidebarTabs()
 
     clientModules.pages.combat.Visible = allowed and clientModules.tabAnimation.currentName == "Combat"
     clientModules.pages.fun.Visible = allowed and clientModules.tabAnimation.currentName == "Fun"
@@ -5974,6 +6024,8 @@ function refreshSpecialTabsVisibility()
         ) then
         selectTab("Info")
     end
+
+    relayoutSidebarTabs()
 end
 
 function normalizeCharacterName(value)
