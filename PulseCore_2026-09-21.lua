@@ -5372,6 +5372,17 @@ function getESPAbilityClassification(model)
         return "Executioner", "Tripwire"
     end
 
+    -- Fleetway can also inherit Sonic markers. Its actual ability names are
+    -- stored in ESP_ABILITY_CHARACTER_NAMES, so use those as direct evidence.
+    if found.chaosdash
+        or found.fatefuldrain
+        or found.lasersofdestrucation
+        or found.lasersofdestruction
+        or found.burst
+    then
+        return "Executioner", "Fleetway"
+    end
+
     local scores = {}
     local hasExecutionerEvidence = false
 
