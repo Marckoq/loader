@@ -4664,8 +4664,8 @@ end
 -- Temporary mode: classification uses ONLY the normalized model name.
 -- ============================================================================
 
--- Temporary ESP mode: classify characters strictly by model name.
--- Known survivor and executioner names are normalized case-insensitively.
+-- ESP classification mode: ability markers only.
+-- Internal aliases below are based on the supplied game's .rbxl structure.
 ESP_MODEL_ROLE_NAMES = {
     sonic = "Survivor",
     tails = "Survivor",
@@ -5047,6 +5047,12 @@ ESP_ABILITY_ROLE_NAMES = {
     timereversall = "Survivor",
     timereversal = "Survivor",
     roundhousekick = "Survivor",
+
+    -- Internal ability markers confirmed from the supplied .rbxl.
+    canon = "Survivor",
+    jetpack = "Survivor",
+    rage = "Executioner",
+    invis = "Executioner",
 }
 
 ESP_ABILITY_CHARACTER_NAMES = {
@@ -5090,18 +5096,24 @@ ESP_ABILITY_CHARACTER_NAMES = {
     timereversall = "Silver",
     timereversal = "Silver",
     roundhousekick = "Blaze",
+
+    -- Internal ability markers confirmed from the supplied .rbxl.
+    canon = "Tails",
+    jetpack = "Eggman",
+    rage = "2011x",
+    invis = "2011x",
 }
 
 ESP_CHARACTER_ABILITY_SETS = {
     Tripwire = {"step", "brighterday", "reachout"},
     Fleetway = {"chaosdash", "fatefuldrain", "lasersofdestrucation", "lasersofdestruction", "burst"},
-    ["2011x"] = {"godstrickery", "invisiblity", "invisibility", "ragemode"},
+    ["2011x"] = {"godstrickery", "invisiblity", "invisibility", "ragemode", "rage", "invis"},
     Kolossos = {"grab", "block", "indicator"},
 
     Sonic = {"dropdash", "peelout"},
-    Tails = {"lasercanon", "lasercannon", "glide"},
+    Tails = {"lasercanon", "lasercannon", "canon", "glide", "peelout"},
     Knuckles = {"punch", "counter"},
-    Eggman = {"jetpackboost", "energyshield"},
+    Eggman = {"jetpackboost", "jetpack", "energyshield"},
     Amy = {"hammer", "hammerthrow", "reroll"},
     Cream = {"heal"},
     ["Metal Sonic"] = {"destructivecharge", "desturctivecharge", "selfrepair"},
@@ -5300,12 +5312,15 @@ function getESPGroupForModel(model)
         return nil, nil
     end
 
-    local group = getESPGroupByModelName(model.Name)
+    -- The character model's username/name is intentionally ignored.
+    -- Classification is based only on recognized ability markers.
+    local group, displayName = getESPAbilityClassification(model)
+
     if not group then
         return nil, nil
     end
 
-    return group, model.Name
+    return group, displayName or "Unknown"
 end
 function scanESPContainers()
     if guiDestroyed then
