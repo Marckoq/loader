@@ -4855,13 +4855,22 @@ function getESPScanRoot()
     return workspace
 end
 
+ESP_EXECUTIONER_ABILITY_NAMES = {
+    step = true,
+    brighterday = true,
+    reachout = true,
+}
+
+function normalizeESPMarkerName(name)
+    return string.lower(tostring(name or "")):gsub("[^%w]+", "")
+end
+
 function isESPExecutionerModel(model)
     if not model or not model:IsA("Model") then
         return false
     end
 
-    -- Match the same structural markers used by the reference ESP:
-    -- Rage, upperjaggedteeth, or specific InitialPoses body objects.
+    -- Structural markers from the reference ESP.
     for _, descendant in ipairs(model:GetDescendants()) do
         if descendant:IsA("BasePart") then
             local descendantName = string.lower(descendant.Name)
@@ -4886,6 +4895,38 @@ function isESPExecutionerModel(model)
     return false
 end
 
+function hasESPExecutionerAbility(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    local function matches(value)
+        local normalized = normalizeESPMarkerName(value)
+        return ESP_EXECUTIONER_ABILITY_NAMES[normalized] == true
+    end
+
+    -- Ability names can be represented by object names or string values.
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if matches(descendant.Name) then
+            return true
+        end
+
+        if descendant:IsA("StringValue") and matches(descendant.Value) then
+            return true
+        end
+    end
+
+    -- Some games store ability identifiers in attributes.
+    local modelAttributes = model:GetAttributes()
+    for _, value in pairs(modelAttributes) do
+        if type(value) == "string" and matches(value) then
+            return true
+        end
+    end
+
+    return false
+end
+
 function isDirectWorkspacePlayersModel(model)
     local playersFolder = workspace:FindFirstChild("Players")
     return playersFolder ~= nil
@@ -4899,16 +4940,20 @@ function getESPGroupForModel(model)
         return nil
     end
 
-    -- Explicit character names always take priority. This prevents known
-    -- Executioners such as Fleetway from being misclassified as Survivors
-    -- when a skin does not contain the structural EXE markers.
+    -- Known names have the highest priority.
     local namedGroup = getESPGroupByModelName(model.Name)
     if namedGroup then
         return namedGroup
     end
 
+    -- Ability names are an additional strong indicator for Executioners,
+    -- which covers skins whose model name is unrelated to the base character.
+    if hasESPExecutionerAbility(model) then
+        return "Executioner"
+    end
+
     -- Player models can use arbitrary skin names, so unknown names inside
-    -- Workspace.Players fall back to structural EXE detection.
+    -- Workspace.Players fall back to the structural EXE markers.
     if isDirectWorkspacePlayersModel(model) then
         if isESPExecutionerModel(model) then
             return "Executioner"
