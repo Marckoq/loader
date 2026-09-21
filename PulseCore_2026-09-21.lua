@@ -5185,17 +5185,19 @@ function getESPAbilityClassification(model)
     -- Generic names such as Charge/Dash are ignored unless their holder also
     -- exposes a non-generic, character-specific ability.
     for _, descendant in ipairs(model:GetDescendants()) do
-        if isESPAbilityCarrier(descendant) then
+        local isCarrier = isESPAbilityCarrier(descendant)
+
+        if isCarrier then
             processName(descendant.Name, true)
 
             if descendant:IsA("StringValue") then
                 processName(descendant.Value, false)
             end
-        end
 
-        for _, value in pairs(descendant:GetAttributes()) do
-            if type(value) == "string" then
-                processName(value, false)
+            for _, value in pairs(descendant:GetAttributes()) do
+                if type(value) == "string" then
+                    processName(value, false)
+                end
             end
         end
     end
@@ -5235,10 +5237,9 @@ function getESPAbilityClassification(model)
             characterScores["2011x"] = characterScores["2011x"] + 1
         end
 
-        if hasAbility("Grab")
-            or hasAbility("Block")
-            or hasAbility("Indicator")
-        then
+        if hasAbility("Grab") then
+            characterScores["Kolossos"] = characterScores["Kolossos"] + 1
+        elseif hasAbility("Block") and hasAbility("Indicator") then
             characterScores["Kolossos"] = characterScores["Kolossos"] + 1
         end
     end
