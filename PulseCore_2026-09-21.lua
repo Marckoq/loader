@@ -1305,6 +1305,27 @@ clientModules = {
         updateConnection = nil,
         updateAccumulator = 0,
     },
+    combat = {
+        autoAimEnabled = false,
+        autoCounterEnabled = false,
+        showTarget = true,
+        aimPriority = "Weakest",
+        aimSmoothness = 0.28,
+        defenseKey = Enum.KeyCode.E,
+        aimActiveUntil = 0,
+        currentTarget = nil,
+        currentTargetName = nil,
+        currentCharacterName = nil,
+        markerConnections = {},
+        animationConnection = nil,
+        characterConnection = nil,
+        renderConnection = nil,
+        scanConnection = nil,
+        modelConnections = {},
+        activeMarkers = {},
+        serial = 0,
+        lastCounterAt = 0,
+    },
     speedControl = {
         standardMethod = "WalkSpeed",
         standardMode = "Add",
@@ -1419,10 +1440,11 @@ clientModules = {
 clientModules.tabs.info = createTabButton("InfoTab", "INFO", 14)
 localTab = createTabButton("LocalTab", "LOCAL", 66)
 visualsTab = createTabButton("VisualsTab", "VISUALS", 118)
-clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 170)
-clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 222)
-clientModules.tabs.keyList = createTabButton("KeyListTab", "KEY LIST", 274)
-settingsTab = createTabButton("SettingsTab", "SETTINGS", 326)
+clientModules.tabs.combat = createTabButton("CombatTab", "COMBAT", 170)
+clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 222)
+clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 274)
+clientModules.tabs.keyList = createTabButton("KeyListTab", "KEY LIST", 326)
+settingsTab = createTabButton("SettingsTab", "SETTINGS", 378)
 
 clientModules.tabAnimation = {
     currentName = nil,
@@ -1432,10 +1454,11 @@ clientModules.tabAnimation = {
         Info = 1,
         Local = 2,
         Visuals = 3,
-        Performance = 4,
-        AutoSelect = 5,
-        KeyList = 6,
-        Settings = 7,
+        Combat = 4,
+        Performance = 5,
+        AutoSelect = 6,
+        KeyList = 7,
+        Settings = 8,
     },
 }
 
@@ -1583,6 +1606,7 @@ end
 clientModules.pages.info = createScrollingPage("InfoPage")
 localPage = createScrollingPage("LocalPage")
 visualsPage = createScrollingPage("VisualsPage")
+clientModules.pages.combat = createScrollingPage("CombatPage")
 clientModules.pages.camera = createScrollingPage("CameraPage")
 -- Legacy pages stay hidden so old configs can be read without exposing removed tabs.
 clientModules.pages.performance = createScrollingPage("PerformancePage")
@@ -1593,6 +1617,7 @@ settingsPage = createScrollingPage("SettingsPage")
 clientModules.pages.info.Visible = true
 localPage.Visible = false
 visualsPage.Visible = false
+clientModules.pages.combat.Visible = false
 clientModules.pages.camera.Visible = false
 clientModules.pages.performance.Visible = false
 clientModules.pages.hud.Visible = false
@@ -1782,6 +1807,933 @@ function createToggleRow(parent, labelText, layoutOrder)
 
     return button, dot
 end
+
+--==================================================
+-- COMBAT
+-- Built against the supplied save.rbxl character/animation layout.
+--==================================================
+
+function clientModules.combat.normalize(value)
+    return string.lower(tostring(value or "")):gsub("[%s_%-%.]", "")
+end
+
+function clientModules.combat.attributeCharacter(model)
+    if not model then
+        return nil
+    end
+
+    local attributeNames = {
+        "Character",
+        "character",
+        "CharacterName",
+        "characterName",
+        "SelectedCharacter",
+        "selectedCharacter",
+        "CurrentCharacter",
+        "currentCharacter",
+    }
+
+    for _, attributeName in ipairs(attributeNames) do
+        local value = model:GetAttribute(attributeName)
+        if type(value) == "string" and value ~= "" then
+            return value
+        end
+    end
+
+    return nil
+end
+
+function clientModules.combat.animNames(model)
+    local result = {}
+
+    if not model then
+        return result
+    end
+
+    local animate = model:FindFirstChild("Animate")
+    local anims = animate and animate:FindFirstChild("Anims")
+
+    if anims then
+        for _, descendant in ipairs(anims:GetDescendants()) do
+            if descendant:IsA("Animation") then
+                result[clientModules.combat.normalize(descendant.Name)] = true
+            end
+        end
+    end
+
+    return result
+end
+
+function clientModules.combat.detectCharacter(model)
+    if not model or not model:IsA("Model") then
+        return nil
+    end
+
+    local attributeName = clientModules.combat.attributeCharacter(model)
+    if attributeName then
+        local normalized = clientModules.combat.normalize(attributeName)
+        local aliases = {
+            ["2011x"] = "2011x",
+            ["2011X"] = "2011x",
+            kolossos = "Kolossos",
+            tripwire = "Tripwire",
+            fleetway = "Fleetway",
+            tails = "Tails",
+            knuckles = "Knuckles",
+            eggman = "Eggman",
+            amy = "Amy",
+            silver = "Silver",
+            blaze = "Blaze",
+        }
+
+        for alias, canonical in pairs(aliases) do
+            if normalized == clientModules.combat.normalize(alias) then
+                return canonical
+            end
+        end
+    end
+
+    local group, displayName = getESPAbilityClassification(model)
+    if displayName and displayName ~= "Unknown" then
+        return displayName
+    end
+
+    local names = clientModules.combat.animNames(model)
+
+    if names.chargedash or names.missdash or names.grabhold or names.toss then
+        return "Fleetway"
+    end
+
+    if names.chargerun or names.chargewarn or names.impalerun or names.killold or names.block then
+        return "Kolossos"
+    end
+
+    if names.teleportattack then
+        return "2011x"
+    end
+
+    if names.strangledr or names.strangledr then
+        return "Tails"
+    end
+
+    if names.throwhold then
+        return "Amy"
+    end
+
+    if names.rockaim or names.minionrise then
+        return "Silver"
+    end
+
+    if names.flamestart or names.flameloop or names.flameend then
+        return "Blaze"
+    end
+
+    if names.focus then
+        return "Knuckles"
+    end
+
+    if names.jetpack then
+        return "Eggman"
+    end
+
+    if names.dodge1 or names.dodge2 or names.dodge3 or names.brake then
+        return "Sonic"
+    end
+
+    return nil
+end
+
+function clientModules.combat.getRoot(model)
+    if not model or not model.Parent then
+        return nil
+    end
+
+    local root = model:FindFirstChild("HumanoidRootPart")
+        or model.PrimaryPart
+        or model:FindFirstChild("UpperTorso")
+        or model:FindFirstChild("Torso")
+
+    return root and root:IsA("BasePart") and root or nil
+end
+
+function clientModules.combat.getHealth(model)
+    if not model then
+        return nil
+    end
+
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid.Health
+    end
+
+    local healthNames = {"Health", "HP", "CurrentHealth"}
+    for _, name in ipairs(healthNames) do
+        local value = model:FindFirstChild(name, true)
+        if value and (value:IsA("NumberValue") or value:IsA("IntValue")) then
+            return value.Value
+        end
+    end
+
+    return nil
+end
+
+function clientModules.combat.getDistance(model)
+    local localCharacter = localPlayer.Character
+    local localRoot = clientModules.combat.getRoot(localCharacter)
+    local root = clientModules.combat.getRoot(model)
+
+    if not localRoot or not root then
+        return math.huge
+    end
+
+    return (root.Position - localRoot.Position).Magnitude
+end
+
+function clientModules.combat.isAlive(model)
+    local health = clientModules.combat.getHealth(model)
+    if health ~= nil then
+        return health > 0
+    end
+
+    local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+    return humanoid == nil or humanoid.Health > 0
+end
+
+function clientModules.combat.getPlayerModels()
+    local result = {}
+    local seen = {}
+
+    local function addModel(model)
+        if not model
+            or not model:IsA("Model")
+            or model == localPlayer.Character
+            or seen[model]
+            or not model:IsDescendantOf(workspace)
+        then
+            return
+        end
+
+        seen[model] = true
+        table.insert(result, model)
+    end
+
+    local playersFolder = workspace:FindFirstChild("Players")
+    if playersFolder then
+        for _, child in ipairs(playersFolder:GetChildren()) do
+            addModel(child)
+        end
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            addModel(player.Character)
+        end
+    end
+
+    return result
+end
+
+function clientModules.combat.getTargetInfo(model)
+    local group, displayName = getESPGroupForModel(model)
+    local detectedName = clientModules.combat.detectCharacter(model)
+
+    if detectedName then
+        displayName = detectedName
+
+        if detectedName == "2011x"
+            or detectedName == "Kolossos"
+            or detectedName == "Tripwire"
+            or detectedName == "Fleetway"
+        then
+            group = "Executioner"
+        else
+            group = "Survivor"
+        end
+    end
+
+    if not group then
+        return nil
+    end
+
+    return {
+        model = model,
+        group = group,
+        name = displayName or detectedName or model.Name,
+        health = clientModules.combat.getHealth(model),
+        distance = clientModules.combat.getDistance(model),
+    }
+end
+
+function clientModules.combat.getCandidates()
+    local localCharacter = localPlayer.Character
+    local localName = clientModules.combat.detectCharacter(localCharacter)
+    clientModules.combat.currentCharacterName = localName
+
+    if not localName then
+        return nil, {}
+    end
+
+    local localIsExecutioner =
+        localName == "2011x"
+        or localName == "Kolossos"
+        or localName == "Tripwire"
+        or localName == "Fleetway"
+
+    local result = {}
+
+    for _, model in ipairs(clientModules.combat.getPlayerModels()) do
+        local info = clientModules.combat.getTargetInfo(model)
+
+        if info and clientModules.combat.isAlive(model) then
+            if localIsExecutioner then
+                if info.group == "Survivor" then
+                    table.insert(result, info)
+                end
+            elseif info.group == "Executioner"
+                and (
+                    info.name == "2011x"
+                    or info.name == "Kolossos"
+                    or info.name == "Tripwire"
+                    or info.name == "Fleetway"
+                )
+            then
+                table.insert(result, info)
+            end
+        end
+    end
+
+    return localName, result
+end
+
+function clientModules.combat.chooseTarget(candidates)
+    if #candidates == 0 then
+        return nil
+    end
+
+    local priority = clientModules.combat.aimPriority
+
+    table.sort(candidates, function(a, b)
+        if priority == "Strongest" then
+            local ah = a.health or -math.huge
+            local bh = b.health or -math.huge
+            if ah ~= bh then
+                return ah > bh
+            end
+        elseif priority == "Weakest" then
+            local ah = a.health or math.huge
+            local bh = b.health or math.huge
+            if ah ~= bh then
+                return ah < bh
+            end
+        end
+
+        return a.distance < b.distance
+    end)
+
+    return candidates[1]
+end
+
+function clientModules.combat.refreshTarget()
+    local _, candidates = clientModules.combat.getCandidates()
+    local target = clientModules.combat.chooseTarget(candidates)
+
+    clientModules.combat.currentTarget = target and target.model or nil
+    clientModules.combat.currentTargetName = target and target.name or nil
+
+    if clientModules.combat.targetLabel then
+        if target then
+            local hpText = target.health ~= nil and string.format(" • %.0f HP", target.health) or ""
+            local distanceText = target.distance < math.huge
+                and string.format(" • %.1f studs", target.distance)
+                or ""
+            clientModules.combat.targetLabel.Text =
+                "Current target: " .. tostring(target.name) .. hpText .. distanceText
+            clientModules.combat.targetLabel.TextColor3 = COLORS.Green
+        else
+            clientModules.combat.targetLabel.Text = "Current target: none"
+            clientModules.combat.targetLabel.TextColor3 = COLORS.MutedText
+        end
+    end
+
+    return target
+end
+
+function clientModules.combat.setPriority(priority)
+    local priorities = {
+        Weakest = true,
+        Strongest = true,
+        Nearest = true,
+    }
+
+    if priorities[priority] then
+        clientModules.combat.aimPriority = priority
+    end
+
+    if clientModules.combat.priorityButtons then
+        for name, button in pairs(clientModules.combat.priorityButtons) do
+            local active = name == clientModules.combat.aimPriority
+            button.BackgroundColor3 = active and COLORS.Cyan or COLORS.Input
+            button.TextColor3 = active and COLORS.CyanDeep or COLORS.Text
+        end
+    end
+
+    if clientModules.combat.priorityLabel then
+        clientModules.combat.priorityLabel.Text =
+            "Target priority: " .. clientModules.combat.aimPriority
+    end
+end
+
+function clientModules.combat.updateVisuals()
+    setSwitchVisual(
+        clientModules.combat.autoAimButton,
+        clientModules.combat.autoAimDot,
+        clientModules.combat.autoAimEnabled
+    )
+
+    setSwitchVisual(
+        clientModules.combat.autoCounterButton,
+        clientModules.combat.autoCounterDot,
+        clientModules.combat.autoCounterEnabled
+    )
+
+    setSwitchVisual(
+        clientModules.combat.showTargetButton,
+        clientModules.combat.showTargetDot,
+        clientModules.combat.showTarget
+    )
+
+    clientModules.combat.setPriority(clientModules.combat.aimPriority)
+
+    if clientModules.combat.aimSmoothnessBox
+        and clientModules.combat.aimSmoothnessBox.Text == "" then
+        clientModules.combat.aimSmoothnessBox.Text = tostring(clientModules.combat.aimSmoothness)
+    end
+end
+
+function clientModules.combat.clearConnections()
+    for _, connection in ipairs(clientModules.combat.markerConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    clientModules.combat.markerConnections = {}
+
+    if clientModules.combat.animationConnection then
+        clientModules.combat.animationConnection:Disconnect()
+        clientModules.combat.animationConnection = nil
+    end
+
+    if clientModules.combat.characterConnection then
+        clientModules.combat.characterConnection:Disconnect()
+        clientModules.combat.characterConnection = nil
+    end
+end
+
+function clientModules.combat.refreshCharacterHooks()
+    clientModules.combat.clearConnections()
+    table.clear(clientModules.combat.activeMarkers)
+
+    local character = localPlayer.Character
+    if not character then
+        return
+    end
+
+    local function checkMarker(instance)
+        if not instance or not instance.Parent then
+            return
+        end
+
+        local normalized = clientModules.combat.normalize(instance.Name)
+
+        local allowed = {
+            brighterday = true,
+            reachout = true,
+            lasersofdestrucation = true,
+            lasersofdestruction = true,
+            canon = true,
+            lasercanon = true,
+            lasercannon = true,
+            hammer = true,
+            hammerthrow = true,
+            suspension = true,
+            solflame = true,
+            burningjavelin = true,
+        }
+
+        if allowed[normalized] and not instance:IsA("Animation") and not instance:IsA("Sound") then
+            clientModules.combat.activeMarkers[instance] = true
+            clientModules.combat.aimActiveUntil = time() + 0.12
+        end
+    end
+
+    for _, descendant in ipairs(character:GetDescendants()) do
+        checkMarker(descendant)
+    end
+
+    table.insert(clientModules.combat.markerConnections,
+        character.DescendantAdded:Connect(checkMarker)
+    )
+
+    table.insert(clientModules.combat.markerConnections,
+        character.DescendantRemoving:Connect(function(instance)
+            clientModules.combat.activeMarkers[instance] = nil
+        end)
+    )
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        clientModules.combat.animationConnection =
+            humanoid.AnimationPlayed:Connect(function(track)
+                if not clientModules.combat.autoAimEnabled then
+                    return
+                end
+
+                local animation = track and track.Animation
+                local animationName = animation and clientModules.combat.normalize(animation.Name)
+
+                local allowed = {
+                    charge = true,
+                    brighterday = true,
+                    reachout = true,
+                    lasersofdestrucation = true,
+                    lasersofdestruction = true,
+                    chargedash = true,
+                    missdash = true,
+                    canon = true,
+                    lasercanon = true,
+                    lasercannon = true,
+                    throw = true,
+                    throwhold = true,
+                    aim = true,
+                    rockaim = true,
+                    suspension = true,
+                    flamestart = true,
+                    flameloop = true,
+                    flameend = true,
+                    burningjavelin = true,
+                    solflame = true,
+                }
+
+                if allowed[animationName] then
+                    clientModules.combat.aimActiveUntil = math.max(
+                        clientModules.combat.aimActiveUntil,
+                        time() + 0.18
+                    )
+                end
+            end)
+    end
+end
+
+function clientModules.combat.pressDefenseKey()
+    local keyCode = clientModules.combat.defenseKey or Enum.KeyCode.E
+    local keyValue = keyCode.Value
+
+    local sent = false
+
+    pcall(function()
+        local virtualInputManager = game:GetService("VirtualInputManager")
+        virtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.025)
+        virtualInputManager:SendKeyEvent(false, keyCode, false, game)
+        sent = true
+    end)
+
+    if not sent then
+        pcall(function()
+            local press = keypress
+            local release = keyrelease
+
+            if type(press) == "function" then
+                press(keyValue)
+                task.wait(0.025)
+                if type(release) == "function" then
+                    release(keyValue)
+                end
+                sent = true
+            end
+        end)
+    end
+
+    return sent
+end
+
+function clientModules.combat.detectDefenseCharacter(model)
+    local name = clientModules.combat.detectCharacter(model)
+
+    if name == "Kolossos" or name == "Knuckles" or name == "Eggman" then
+        return name
+    end
+
+    local names = clientModules.combat.animNames(model)
+
+    if names.block then
+        return "Kolossos"
+    end
+
+    if names.focus then
+        return "Knuckles"
+    end
+
+    if names.jetpack then
+        return "Eggman"
+    end
+
+    return nil
+end
+
+function clientModules.combat.isEnemyAttack(model, track)
+    local info = clientModules.combat.getTargetInfo(model)
+    if not info or info.group ~= "Executioner" then
+        return false
+    end
+
+    local animation = track and track.Animation
+    local normalized = animation and clientModules.combat.normalize(animation.Name)
+
+    local attacks = {
+        attack = true,
+        attack1 = true,
+        attack2 = true,
+        m1 = true,
+        punch = true,
+        charge = true,
+        chargerun = true,
+        chargewarn = true,
+        chargedash = true,
+        missdash = true,
+        grab = true,
+        grabhold = true,
+        toss = true,
+        teleportattack = true,
+        step = true,
+        brighterday = true,
+        reachout = true,
+        lasersofdestrucation = true,
+        lasersofdestruction = true,
+        godstrickery = true,
+        ragemode = true,
+    }
+
+    return normalized and attacks[normalized] == true
+end
+
+function clientModules.combat.bindEnemyModel(model)
+    if not model or clientModules.combat.modelConnections[model] then
+        return
+    end
+
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return
+    end
+
+    local connection = humanoid.AnimationPlayed:Connect(function(track)
+        if not clientModules.combat.autoCounterEnabled then
+            return
+        end
+
+        local defenseCharacter = clientModules.combat.detectDefenseCharacter(localPlayer.Character)
+        if not defenseCharacter then
+            return
+        end
+
+        if not clientModules.combat.isEnemyAttack(model, track) then
+            return
+        end
+
+        local distance = clientModules.combat.getDistance(model)
+        if distance > 45 then
+            return
+        end
+
+        local now = time()
+        if now - clientModules.combat.lastCounterAt < 0.75 then
+            return
+        end
+
+        clientModules.combat.lastCounterAt = now
+
+        task.delay(0.05, function()
+            if guiDestroyed or not clientModules.combat.autoCounterEnabled then
+                return
+            end
+
+            clientModules.combat.pressDefenseKey()
+        end)
+    end)
+
+    clientModules.combat.modelConnections[model] = connection
+end
+
+function clientModules.combat.scanEnemyHooks()
+    local valid = {}
+
+    for _, model in ipairs(clientModules.combat.getPlayerModels()) do
+        valid[model] = true
+        clientModules.combat.bindEnemyModel(model)
+    end
+
+    for model, connection in pairs(clientModules.combat.modelConnections) do
+        if not valid[model] or not model.Parent then
+            if connection then
+                connection:Disconnect()
+            end
+            clientModules.combat.modelConnections[model] = nil
+        end
+    end
+end
+
+function clientModules.combat.setAutoAimEnabled(enabled, silent)
+    clientModules.combat.autoAimEnabled = enabled == true
+    clientModules.combat.updateVisuals()
+
+    if clientModules.combat.autoAimEnabled then
+        clientModules.combat.refreshCharacterHooks()
+    end
+
+    if not silent then
+        setStatus(
+            clientModules.combat.autoAimEnabled
+                and "Auto Aim enabled."
+                or "Auto Aim disabled.",
+            clientModules.combat.autoAimEnabled and COLORS.Green or COLORS.MutedText
+        )
+    end
+end
+
+function clientModules.combat.setAutoCounterEnabled(enabled, silent)
+    clientModules.combat.autoCounterEnabled = enabled == true
+    clientModules.combat.updateVisuals()
+
+    if clientModules.combat.autoCounterEnabled then
+        clientModules.combat.scanEnemyHooks()
+    end
+
+    if not silent then
+        setStatus(
+            clientModules.combat.autoCounterEnabled
+                and "Auto Block / Counter enabled."
+                or "Auto Block / Counter disabled.",
+            clientModules.combat.autoCounterEnabled and COLORS.Green or COLORS.MutedText
+        )
+    end
+end
+
+function clientModules.combat.initialize()
+    clientModules.combat.serial = clientModules.combat.serial + 1
+
+    clientModules.combat.clearConnections()
+
+    if clientModules.combat.renderConnection then
+        clientModules.combat.renderConnection:Disconnect()
+        clientModules.combat.renderConnection = nil
+    end
+
+    if clientModules.combat.scanConnection then
+        clientModules.combat.scanConnection:Disconnect()
+        clientModules.combat.scanConnection = nil
+    end
+
+    if clientModules.combat.characterConnection then
+        clientModules.combat.characterConnection:Disconnect()
+        clientModules.combat.characterConnection = nil
+    end
+
+    clientModules.combat.characterConnection = localPlayer.CharacterAdded:Connect(function()
+        task.defer(function()
+            if not guiDestroyed then
+                clientModules.combat.refreshCharacterHooks()
+            end
+        end)
+    end)
+
+    clientModules.combat.refreshCharacterHooks()
+
+    clientModules.combat.renderConnection = RunService.RenderStepped:Connect(function()
+        if guiDestroyed then
+            return
+        end
+
+        if clientModules.combat.autoAimEnabled
+            and time() <= clientModules.combat.aimActiveUntil then
+            local target = clientModules.combat.refreshTarget()
+            local camera = workspace.CurrentCamera
+            local root = target and clientModules.combat.getRoot(target.model)
+            local localRoot = clientModules.combat.getRoot(localPlayer.Character)
+
+            if camera and root and localRoot then
+                local cameraPosition = camera.CFrame.Position
+                local desired = CFrame.lookAt(cameraPosition, root.Position)
+                local smoothness = math.clamp(
+                    tonumber(clientModules.combat.aimSmoothness) or 0.28,
+                    0.02,
+                    1
+                )
+
+                camera.CFrame = camera.CFrame:Lerp(desired, smoothness)
+            end
+        elseif clientModules.combat.showTarget then
+            clientModules.combat.refreshTarget()
+        end
+    end)
+
+    clientModules.combat.scanConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if guiDestroyed then
+            return
+        end
+
+        if clientModules.combat.autoCounterEnabled then
+            clientModules.combat.scanEnemyHooks()
+        end
+    end)
+
+    clientModules.combat.updateVisuals()
+end
+
+function clientModules.combat.shutdown()
+    clientModules.combat.serial = clientModules.combat.serial + 1
+    clientModules.combat.clearConnections()
+
+    if clientModules.combat.renderConnection then
+        clientModules.combat.renderConnection:Disconnect()
+        clientModules.combat.renderConnection = nil
+    end
+
+    if clientModules.combat.scanConnection then
+        clientModules.combat.scanConnection:Disconnect()
+        clientModules.combat.scanConnection = nil
+    end
+
+    for model, connection in pairs(clientModules.combat.modelConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+        clientModules.combat.modelConnections[model] = nil
+    end
+
+    clientModules.combat.currentTarget = nil
+    clientModules.combat.currentTargetName = nil
+    table.clear(clientModules.combat.activeMarkers)
+end
+
+-- COMBAT UI
+createSectionLabel(clientModules.pages.combat, "COMBAT / ASSIST", 1)
+
+clientModules.combat.autoAimButton, clientModules.combat.autoAimDot =
+    createToggleRow(clientModules.pages.combat, "Auto Aim", 2)
+
+clientModules.combat.autoCounterButton, clientModules.combat.autoCounterDot =
+    createToggleRow(clientModules.pages.combat, "Auto Block / Counter", 3)
+
+clientModules.combat.showTargetButton, clientModules.combat.showTargetDot =
+    createToggleRow(clientModules.pages.combat, "Show current target", 4)
+
+clientModules.combat.priorityLabel = create("TextLabel", {
+    LayoutOrder = 5,
+    Size = UDim2.new(1, 0, 0, 22),
+    BackgroundTransparency = 1,
+    Text = "Target priority: Weakest",
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    TextColor3 = COLORS.Cyan,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, clientModules.pages.combat)
+
+do
+    local row = create("Frame", {
+        LayoutOrder = 6,
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+    }, clientModules.pages.combat)
+
+    clientModules.combat.priorityButtons = {}
+
+    local options = {"Weakest", "Strongest", "Nearest"}
+    for index, option in ipairs(options) do
+        local button = create("TextButton", {
+            Position = UDim2.new((index - 1) / 3, index == 1 and 0 or 6, 0, 0),
+            Size = UDim2.new(1 / 3, -6, 1, 0),
+            BackgroundColor3 = COLORS.Input,
+            BorderSizePixel = 0,
+            Text = option,
+            Font = Enum.Font.GothamBold,
+            TextSize = 11,
+            TextColor3 = COLORS.Text,
+            AutoButtonColor = false,
+        }, row)
+        addCorner(button, 8)
+        addStroke(button, COLORS.Border, 0.35, 1)
+
+        button.Activated:Connect(function()
+            clientModules.combat.setPriority(option)
+        end)
+
+        clientModules.combat.priorityButtons[option] = button
+    end
+end
+
+clientModules.combat.aimSmoothnessBox = createInputRow(
+    clientModules.pages.combat,
+    "Aim smoothness (0.02–1.0)",
+    "0.28",
+    "Example: 0.25",
+    7
+)
+
+clientModules.combat.targetLabel = create("TextLabel", {
+    LayoutOrder = 8,
+    Size = UDim2.new(1, 0, 0, 42),
+    BackgroundColor3 = COLORS.Card,
+    BackgroundTransparency = 0.16,
+    BorderSizePixel = 0,
+    Text = "Current target: none",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 12,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, clientModules.pages.combat)
+addCorner(clientModules.combat.targetLabel, 9)
+addStroke(clientModules.combat.targetLabel, COLORS.Border, 0.28, 1)
+create("UIPadding", {
+    PaddingLeft = UDim.new(0, 14),
+    PaddingRight = UDim.new(0, 14),
+}, clientModules.combat.targetLabel)
+
+createSectionLabel(clientModules.pages.combat, "AUTO AIM / RBXL ABILITIES", 9)
+
+create("TextLabel", {
+    LayoutOrder = 10,
+    Size = UDim2.new(1, 0, 0, 122),
+    BackgroundColor3 = COLORS.CyanDeep,
+    BackgroundTransparency = 0.22,
+    BorderSizePixel = 0,
+    Text = "Executioners:\n2011x — Charge\nTripwire — Brighter Day\nFleetway — Lasers of Destrucation\n\nSurvivors:\nTails — Laser Canon\nAmy — Hammer Throw\nSilver — Rock / Suspension\nBlaze — Sol Flame / Burning Javelin",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 11,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, clientModules.pages.combat)
+
+createSectionLabel(clientModules.pages.combat, "AUTO BLOCK / COUNTER", 11)
+
+create("TextLabel", {
+    LayoutOrder = 12,
+    Size = UDim2.new(1, 0, 0, 88),
+    BackgroundColor3 = COLORS.CyanDeep,
+    BackgroundTransparency = 0.22,
+    BorderSizePixel = 0,
+    Text = "Kolossos — Block\nKnuckles — Counter\nEggman — Energy Shield\n\nDefense input defaults to the rbxl AB1 key (E in the supplied save).",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 11,
+    TextColor3 = COLORS.MutedText,
+    TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Center,
+}, clientModules.pages.combat)
 
 function clientModules.speedControl.normalizeMethod(value)
     return "WalkSpeed"
@@ -4095,6 +5047,9 @@ function clientModules.shutdown()
     clientModules.hud.showSpeed = false
     clientModules.hud.updateConnectionState()
     clientModules.autoSelect.shutdown()
+    if clientModules.combat and clientModules.combat.shutdown then
+        clientModules.combat.shutdown()
+    end
 end
 
 function setAbilityDelayVisual(ability)
@@ -4160,6 +5115,7 @@ function selectTab(tabName)
         Info = clientModules.pages.info,
         Local = localPage,
         Visuals = visualsPage,
+        Combat = clientModules.pages.combat,
         Performance = clientModules.pages.performance,
         AutoSelect = clientModules.pages.autoSelect,
         KeyList = clientModules.pages.keyList,
@@ -4169,6 +5125,7 @@ function selectTab(tabName)
         Info = clientModules.tabs.info,
         Local = localTab,
         Visuals = visualsTab,
+        Combat = clientModules.tabs.combat,
         Performance = clientModules.tabs.performance,
         AutoSelect = clientModules.tabs.autoSelect,
         KeyList = clientModules.tabs.keyList,
@@ -4178,6 +5135,7 @@ function selectTab(tabName)
         Info = { "OVERVIEW", "Script information and quick overview" },
         Local = { "LOCAL", "Speed, jump and abilities" },
         Visuals = { "VISUALS", "ESP and on-screen status panels" },
+        Combat = { "COMBAT", "Auto Aim and Block / Counter assistance" },
         Performance = { "PERFORMANCE", "Optimization and FPS limiter" },
         AutoSelect = { "AUTO SELECT", "Automatic Survivor selection" },
         KeyList = { "KEY LIST", "All hotkeys in one place" },
@@ -8935,6 +9893,14 @@ function configManager.captureCurrentConfig()
             executioners = espExecutionersEnabled,
             tabs = clientModules.boostTabs.enabled,
         },
+        combat = {
+            autoAim = clientModules.combat.autoAimEnabled == true,
+            autoCounter = clientModules.combat.autoCounterEnabled == true,
+            showTarget = clientModules.combat.showTarget == true,
+            aimPriority = clientModules.combat.aimPriority,
+            aimSmoothness = tonumber(clientModules.combat.aimSmoothness) or 0.28,
+            defenseKey = clientModules.combat.defenseKey.Name,
+        },
         client = {
             autoSelect = {
                 enabled = clientModules.autoSelect.enabled,
@@ -9055,6 +10021,36 @@ function configManager.loadConfigByName(configName, options)
     espSurvivorsEnabled = visuals.survivors == true
     espExecutionersEnabled = visuals.executioners == true
     clientModules.boostTabs.setEnabled(false, true)
+
+    local combat = type(configData.combat) == "table" and configData.combat or {}
+    clientModules.combat.aimPriority =
+        combat.aimPriority == "Strongest" and "Strongest"
+        or combat.aimPriority == "Nearest" and "Nearest"
+        or "Weakest"
+
+    clientModules.combat.aimSmoothness = math.clamp(
+        tonumber(combat.aimSmoothness) or 0.28,
+        0.02,
+        1
+    )
+
+    if type(combat.defenseKey) == "string" then
+        local okKey, resultKey = pcall(function()
+            return Enum.KeyCode[combat.defenseKey]
+        end)
+        if okKey and resultKey and resultKey ~= Enum.KeyCode.Unknown then
+            clientModules.combat.defenseKey = resultKey
+        end
+    end
+
+    clientModules.combat.setAutoAimEnabled(combat.autoAim == true, true)
+    clientModules.combat.setAutoCounterEnabled(combat.autoCounter == true, true)
+    clientModules.combat.showTarget = combat.showTarget ~= false
+    clientModules.combat.updateVisuals()
+
+    if clientModules.combat.aimSmoothnessBox then
+        clientModules.combat.aimSmoothnessBox.Text = tostring(clientModules.combat.aimSmoothness)
+    end
 
     local clientConfig = type(configData.client) == "table" and configData.client or {}
     clientModules.autoSelect.loadConfig(clientConfig.autoSelect)
@@ -9233,6 +10229,10 @@ end)
 
 visualsTab.Activated:Connect(function()
     selectTab("Visuals")
+end)
+
+clientModules.tabs.combat.Activated:Connect(function()
+    selectTab("Combat")
 end)
 
 clientModules.tabs.performance.Activated:Connect(function()
@@ -9473,6 +10473,35 @@ espExecutionersButton.Activated:Connect(function()
 end)
 
 activateButton.Activated:Connect(safeRequestStandardBoost)
+clientModules.combat.autoAimButton.Activated:Connect(function()
+    clientModules.combat.setAutoAimEnabled(
+        not clientModules.combat.autoAimEnabled,
+        false
+    )
+end)
+
+clientModules.combat.autoCounterButton.Activated:Connect(function()
+    clientModules.combat.setAutoCounterEnabled(
+        not clientModules.combat.autoCounterEnabled,
+        false
+    )
+end)
+
+clientModules.combat.showTargetButton.Activated:Connect(function()
+    clientModules.combat.showTarget = not clientModules.combat.showTarget
+    clientModules.combat.updateVisuals()
+end)
+
+clientModules.combat.aimSmoothnessBox.FocusLost:Connect(function()
+    local value = tonumber(string.gsub(clientModules.combat.aimSmoothnessBox.Text, ",", "."))
+    if not value then
+        value = 0.28
+    end
+
+    clientModules.combat.aimSmoothness = math.clamp(value, 0.02, 1)
+    clientModules.combat.aimSmoothnessBox.Text = tostring(clientModules.combat.aimSmoothness)
+end)
+
 boostKeyButton.Activated:Connect(function()
     beginBinding("Boost")
 end)
@@ -9847,6 +10876,7 @@ function initializeMainInterface()
         true
     )
     clientModules.console.refreshModeState()
+    clientModules.combat.initialize()
     clientModules.performance.refreshVisuals()
     clientModules.performance.updateStatus()
     clientModules.performance.updateFpsStatus()
