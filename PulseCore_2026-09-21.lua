@@ -5057,6 +5057,18 @@ ESP_ABILITY_ROLE_NAMES = {
     impalerun = "Executioner",
     chargewarn = "Executioner",
     killold = "Executioner",
+
+    -- Stable animation markers from the supplied rbxl.
+    dodge1 = "Survivor",
+    dodge2 = "Survivor",
+    dodge3 = "Survivor",
+    brake = "Survivor",
+    strangledr = "Survivor",
+    focus = "Survivor",
+    dashstart = "Survivor",
+    flamestart = "Survivor",
+    flameloop = "Survivor",
+    flameend = "Survivor",
 }
 
 ESP_ABILITY_CHARACTER_NAMES = {
@@ -5110,6 +5122,16 @@ ESP_ABILITY_CHARACTER_NAMES = {
     impalerun = "Kolossos",
     chargewarn = "Kolossos",
     killold = "Kolossos",
+    dodge1 = "Sonic",
+    dodge2 = "Sonic",
+    dodge3 = "Sonic",
+    brake = "Sonic",
+    strangledr = "Tails",
+    focus = "Knuckles",
+    dashstart = "Metal Sonic",
+    flamestart = "Blaze",
+    flameloop = "Blaze",
+    flameend = "Blaze",
 }
 
 ESP_CHARACTER_ABILITY_SETS = {
