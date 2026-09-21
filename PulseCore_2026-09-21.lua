@@ -47,32 +47,32 @@ CONFIG_FILE_EXTENSION = ".json"
 CONFIG_PATH_FALLBACK = false
 
 function getPulseCoreExecutorName()
-    local environments = getPulseCoreEnvironment and getPulseCoreEnvironment() or {_ENV, _G}
-
-    local resolverNames = {
-        "identifyexecutor",
-        "getexecutorname",
-        "whatexecutor",
+    local resolvers = {
+        function()
+            return identifyexecutor
+        end,
+        function()
+            return getexecutorname
+        end,
+        function()
+            return whatexecutor
+        end,
     }
 
-    for _, environment in ipairs(environments) do
-        for _, functionName in ipairs(resolverNames) do
-            local ok, resolver = pcall(function()
-                return environment[functionName]
-            end)
+    for _, getResolver in ipairs(resolvers) do
+        local okResolver, resolver = pcall(getResolver)
 
-            if ok and type(resolver) == "function" then
-                local success, result = pcall(resolver)
+        if okResolver and type(resolver) == "function" then
+            local ok, result = pcall(resolver)
 
-                if success and result and tostring(result) ~= "" then
-                    local executorName = tostring(result)
-                        :gsub('[<>:"/\\|?*]', "_")
-                        :gsub("[%c]", "_")
-                        :gsub("%s+$", "")
+            if ok and result and tostring(result) ~= "" then
+                local executorName = tostring(result)
+                    :gsub('[<>:"/\\|?*]', "_")
+                    :gsub("[%c]", "_")
+                    :gsub("%s+$", "")
 
-                    if executorName ~= "" then
-                        return executorName
-                    end
+                if executorName ~= "" then
+                    return executorName
                 end
             end
         end
@@ -122,25 +122,51 @@ function getPulseCoreEnvironment()
 end
 
 function getPulseCoreFileApi(functionName)
-    local environments = getPulseCoreEnvironment()
+    -- First try direct global references. Real exposes its filesystem API
+    -- as normal globals, and this avoids executor-specific environment quirks.
+    local directResolvers = {
+        readfile = function()
+            return readfile
+        end,
+        writefile = function()
+            return writefile
+        end,
+        makefolder = function()
+            return makefolder
+        end,
+        appendfile = function()
+            return appendfile
+        end,
+        listfiles = function()
+            return listfiles
+        end,
+        isfile = function()
+            return isfile
+        end,
+        isfolder = function()
+            return isfolder
+        end,
+        delfile = function()
+            return delfile
+        end,
+        delfolder = function()
+            return delfolder
+        end,
+    }
 
-    -- Use normal table indexing instead of rawget so executor environments
-    -- with a metatable-backed global namespace are detected correctly.
-    for _, environment in ipairs(environments) do
-        local ok, direct = pcall(function()
-            return environment[functionName]
-        end)
-
+    local directResolver = directResolvers[functionName]
+    if directResolver then
+        local ok, direct = pcall(directResolver)
         if ok and type(direct) == "function" then
             return direct
         end
     end
 
     local aliases = {
-        readfile = {"readfile", "read"},
-        writefile = {"writefile", "write"},
-        appendfile = {"appendfile", "append"},
-        listfiles = {"listfiles", "listdir"},
+        readfile = {"read", "readfile"},
+        writefile = {"write", "writefile"},
+        appendfile = {"append", "appendfile"},
+        listfiles = {"listdir", "listfiles"},
         makefolder = {"makefolder", "mkdir"},
         isfile = {"isfile", "isFile"},
         isfolder = {"isfolder", "isFolder"},
@@ -150,7 +176,7 @@ function getPulseCoreFileApi(functionName)
 
     local names = aliases[functionName] or {functionName}
 
-    for _, environment in ipairs(environments) do
+    for _, environment in ipairs(getPulseCoreEnvironment()) do
         for _, name in ipairs(names) do
             local ok, candidate = pcall(function()
                 return environment["syn_io_" .. name]
@@ -214,7 +240,13 @@ function getPulseCoreLocalAppData()
 end
 
 function initializePulseCoreConfigPath()
-    local executorName = string.lower(getPulseCoreExecutorName())
+    local directRealSignals = false
+
+    pcall(function()
+        directRealSignals = type(readfile) == "function"
+            and type(writefile) == "function"
+            and type(makefolder) == "function"
+    end)
 
     local missing = getPulseCoreMissingFileApis()
     if #missing > 0 then
@@ -222,7 +254,9 @@ function initializePulseCoreConfigPath()
     end
 
     if not CONFIG_ROOT_PATH then
-        if executorName == "real" then
+        local executorName = string.lower(getPulseCoreExecutorName())
+
+        if executorName == "real" or directRealSignals then
             CONFIG_ROOT_PATH = "PulseCore/Configs"
             CONFIG_PATH_FALLBACK = true
         else
@@ -250,44 +284,15 @@ function initializePulseCoreConfigPath()
         return false, "Missing file API: makefolder"
     end
 
-    local segments
+    -- Real resolves all filesystem paths relative to its workspace.
+    -- Its makefolder implementation is recursive, so creating the final path
+    -- is sufficient and also creates missing parent directories.
+    local created, createError = pcall(function()
+        makeFolderApi(CONFIG_ROOT_PATH)
+    end)
 
-    if CONFIG_PATH_FALLBACK then
-        segments = {
-            "PulseCore",
-            CONFIG_ROOT_PATH,
-        }
-    else
-        local executorRoot = getPulseCoreLocalAppData()
-        executorRoot = executorRoot
-            .. "\\" .. getPulseCoreExecutorName()
-
-        segments = {
-            executorRoot,
-            executorRoot .. "\\workspace",
-            executorRoot .. "\\workspace\\PulseCore",
-            CONFIG_ROOT_PATH,
-        }
-    end
-
-    for _, folderPath in ipairs(segments) do
-        local folderExists = false
-
-        if isFolderApi then
-            pcall(function()
-                folderExists = isFolderApi(folderPath)
-            end)
-        end
-
-        if not folderExists then
-            local created, createError = pcall(function()
-                return makeFolderApi(folderPath)
-            end)
-
-            if not created and folderPath == CONFIG_ROOT_PATH then
-                return false, "Executor rejected the config folder: " .. tostring(createError)
-            end
-        end
+    if not created then
+        return false, "Config folder could not be created: " .. tostring(createError)
     end
 
     if isFolderApi then
