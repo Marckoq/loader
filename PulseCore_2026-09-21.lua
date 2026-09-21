@@ -46,13 +46,20 @@ CONFIG_INDEX_FILE = nil
 CONFIG_FILE_EXTENSION = ".json"
 
 function getPulseCoreExecutorName()
-    local names = {
-        "identifyexecutor",
-        "getexecutorname",
+    local resolvers = {
+        function()
+            return rawget(_G, "identifyexecutor")
+        end,
+        function()
+            return rawget(_G, "getexecutorname")
+        end,
+        function()
+            return rawget(_G, "whatexecutor")
+        end,
     }
 
-    for _, functionName in ipairs(names) do
-        local resolver = _G[functionName]
+    for _, getResolver in ipairs(resolvers) do
+        local resolver = getResolver()
         if type(resolver) == "function" then
             local ok, result = pcall(resolver)
             if ok and result and tostring(result) ~= "" then
@@ -60,6 +67,7 @@ function getPulseCoreExecutorName()
                     :gsub('[<>:"/\\|?*]', "_")
                     :gsub("[%c]", "_")
                     :gsub("%s+$", "")
+
                 if executorName ~= "" then
                     return executorName
                 end
@@ -67,24 +75,75 @@ function getPulseCoreExecutorName()
         end
     end
 
+    if rawget(_G, "syn") then
+        return "Synapse"
+    elseif rawget(_G, "Solara") then
+        return "Solara"
+    elseif rawget(_G, "Wave") then
+        return "Wave"
+    elseif rawget(_G, "Krnl") then
+        return "Krnl"
+    end
+
     return "Executor"
 end
 
-function getPulseCoreLocalAppData()
-    local ok, localAppData = pcall(function()
-        return os.getenv("LOCALAPPDATA")
-    end)
-
-    if ok and type(localAppData) == "string" and localAppData ~= "" then
-        return localAppData
+function getPulseCoreFileApi(functionName)
+    local direct = rawget(_G, functionName)
+    if type(direct) == "function" then
+        return direct
     end
 
-    local okUser, userProfile = pcall(function()
-        return os.getenv("USERPROFILE")
-    end)
+    local synName = "syn_io_" .. functionName
+    local synIo = rawget(_G, synName)
+    if type(synIo) == "function" then
+        return synIo
+    end
 
-    if okUser and type(userProfile) == "string" and userProfile ~= "" then
-        return userProfile .. "\\AppData\\Local"
+    local synTable = rawget(_G, "syn")
+    if type(synTable) == "table" then
+        local ioTable = synTable.io
+        if type(ioTable) == "table" then
+            local nested = ioTable[functionName]
+            if type(nested) == "function" then
+                return function(...)
+                    return nested(ioTable, ...)
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+function getPulseCoreMissingFileApis()
+    local required = {"makefolder", "writefile", "readfile"}
+    local missing = {}
+
+    for _, functionName in ipairs(required) do
+        if not getPulseCoreFileApi(functionName) then
+            table.insert(missing, functionName)
+        end
+    end
+
+    return missing
+end
+
+function getPulseCoreLocalAppData()
+    local getenv = rawget(os, "getenv")
+
+    if type(getenv) == "function" then
+        local ok, localAppData = pcall(getenv, "LOCALAPPDATA")
+
+        if ok and type(localAppData) == "string" and localAppData ~= "" then
+            return localAppData
+        end
+
+        local okUser, userProfile = pcall(getenv, "USERPROFILE")
+
+        if okUser and type(userProfile) == "string" and userProfile ~= "" then
+            return userProfile .. "\\AppData\\Local"
+        end
     end
 
     return nil
@@ -93,15 +152,12 @@ end
 function initializePulseCoreConfigPath()
     local localAppData = getPulseCoreLocalAppData()
     if not localAppData then
-        return false
+        return false, "LOCALAPPDATA is unavailable to this executor."
     end
 
-    -- Keep the core requirement intentionally small: many executors expose
-    -- basic file I/O but not optional directory enumeration/deletion APIs.
-    if type(makefolder) ~= "function"
-        or type(writefile) ~= "function"
-        or type(readfile) ~= "function" then
-        return false
+    local missing = getPulseCoreMissingFileApis()
+    if #missing > 0 then
+        return false, "Missing file API: " .. table.concat(missing, ", ")
     end
 
     if not CONFIG_ROOT_PATH then
@@ -115,6 +171,9 @@ function initializePulseCoreConfigPath()
         CONFIG_INDEX_FILE = CONFIG_ROOT_PATH .. "\\ConfigIndex.json"
     end
 
+    local makeFolderApi = getPulseCoreFileApi("makefolder")
+    local isFolderApi = getPulseCoreFileApi("isfolder")
+
     local executorRoot = localAppData .. "\\" .. getPulseCoreExecutorName()
 
     local segments = {
@@ -127,28 +186,49 @@ function initializePulseCoreConfigPath()
     for _, folderPath in ipairs(segments) do
         local folderExists = false
 
-        if type(isfolder) == "function" then
+        if isFolderApi then
             pcall(function()
-                folderExists = isfolder(folderPath)
+                folderExists = isFolderApi(folderPath)
             end)
         end
 
         if not folderExists then
             pcall(function()
-                makefolder(folderPath)
+                makeFolderApi(folderPath)
             end)
         end
     end
 
-    if type(isfolder) == "function" then
+    if isFolderApi then
         local verified = false
         pcall(function()
-            verified = isfolder(CONFIG_ROOT_PATH)
+            verified = isFolderApi(CONFIG_ROOT_PATH)
         end)
-        return verified
+
+        if not verified then
+            return false, "The executor rejected the Configs folder path."
+        end
     end
 
-    return true
+    return true, nil
+end
+
+function getPulseCoreConfigFilePath(configName)
+    if not CONFIG_ROOT_PATH or not configName then
+        return nil
+    end
+
+    return CONFIG_ROOT_PATH .. "\\" .. configName .. CONFIG_FILE_EXTENSION
+end
+
+function isReservedWindowsConfigName(name)
+    local upper = string.upper(name):gsub("%.[^%.]*$", "")
+    return upper == "CON"
+        or upper == "PRN"
+        or upper == "AUX"
+        or upper == "NUL"
+        or upper:match("^COM[1-9]$")
+        or upper:match("^LPT[1-9]$")
 end
 
 function getPulseCoreConfigFilePath(configName)
@@ -7482,13 +7562,18 @@ function configManager.updateConfigStatus(message, color)
 end
 
 function configManager.persistConfigs()
-    if not initializePulseCoreConfigPath() then
+    local storageReady, storageError = initializePulseCoreConfigPath()
+    if not storageReady then
         configManager.updateConfigStatus(
-            "Basic local file API is unavailable in this executor.",
+            storageError or "Config storage is unavailable.",
             COLORS.Red
         )
         return false
     end
+
+    local writeFileApi = getPulseCoreFileApi("writefile")
+    local deleteFileApi = getPulseCoreFileApi("delfile")
+    local listFilesApi = getPulseCoreFileApi("listfiles")
 
     local wroteAll = true
     local configNames = {}
@@ -7512,7 +7597,7 @@ function configManager.persistConfigs()
         end
 
         local saved, saveError = pcall(function()
-            writefile(filePath, encodedOrError)
+            writeFileApi(filePath, encodedOrError)
         end)
 
         if not saved then
@@ -7545,7 +7630,7 @@ function configManager.persistConfigs()
         end
 
         local indexSaved, indexError = pcall(function()
-            writefile(CONFIG_INDEX_FILE, indexData)
+            writeFileApi(CONFIG_INDEX_FILE, indexData)
         end)
 
         if not indexSaved then
@@ -7558,8 +7643,8 @@ function configManager.persistConfigs()
     end
 
     -- Optional cleanup for executors that expose directory enumeration/deletion.
-    if type(listfiles) == "function" and type(delfile) == "function" then
-        local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+    if listFilesApi and deleteFileApi then
+        local listedOk, files = pcall(listFilesApi, CONFIG_ROOT_PATH)
 
         if listedOk and type(files) == "table" then
             local activeFiles = {}
@@ -7580,7 +7665,7 @@ function configManager.persistConfigs()
                 if fileName
                     and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION
                     and not activeFiles[fileName] then
-                    pcall(delfile, filePath)
+                    pcall(deleteFileApi, filePath)
                 end
             end
         end
@@ -7590,24 +7675,29 @@ function configManager.persistConfigs()
 end
 
 function configManager.persistAutoLoadConfig()
-    if not initializePulseCoreConfigPath() then
+    local storageReady, storageError = initializePulseCoreConfigPath()
+    if not storageReady then
         configManager.updateConfigStatus(
-            "Config file API is unavailable in this executor.",
+            storageError or "Config storage is unavailable.",
             COLORS.Red
         )
         return false
     end
 
+    local writeFileApi = getPulseCoreFileApi("writefile")
+    local isFileApi = getPulseCoreFileApi("isfile")
+    local deleteFileApi = getPulseCoreFileApi("delfile")
+
     if not configManager.autoLoadConfigName then
         local deleted = true
-        if type(isfile) == "function" and isfile(CONFIG_AUTOLOAD_FILE) then
-            deleted = pcall(delfile, CONFIG_AUTOLOAD_FILE)
+        if type(isfile) == "function" and isFileApi(CONFIG_AUTOLOAD_FILE) then
+            deleted = pcall(deleteFileApi, CONFIG_AUTOLOAD_FILE)
         end
         return deleted == true
     end
 
     local saved, saveError = pcall(function()
-        writefile(CONFIG_AUTOLOAD_FILE, configManager.autoLoadConfigName)
+        writeFileApi(CONFIG_AUTOLOAD_FILE, configManager.autoLoadConfigName)
     end)
 
     if not saved then
@@ -7625,7 +7715,11 @@ function configManager.loadStoredConfigs()
     configManager.savedConfigs = {}
     configManager.autoLoadConfigName = nil
 
-    local fileStorageReady = initializePulseCoreConfigPath()
+    local readFileApi = getPulseCoreFileApi("readfile")
+    local isFileApi = getPulseCoreFileApi("isfile")
+    local listFilesApi = getPulseCoreFileApi("listfiles")
+
+    local fileStorageReady, storageError = initializePulseCoreConfigPath()
 
     if fileStorageReady then
         local loadedFromIndex = false
@@ -7633,15 +7727,15 @@ function configManager.loadStoredConfigs()
         if CONFIG_INDEX_FILE then
             local indexExists = true
 
-            if type(isfile) == "function" then
+            if isFileApi then
                 indexExists = false
                 pcall(function()
-                    indexExists = isfile(CONFIG_INDEX_FILE)
+                    indexExists = isFileApi(CONFIG_INDEX_FILE)
                 end)
             end
 
             if indexExists then
-                local readOk, encodedIndex = pcall(readfile, CONFIG_INDEX_FILE)
+                local readOk, encodedIndex = pcall(readFileApi, CONFIG_INDEX_FILE)
 
                 if readOk and type(encodedIndex) == "string" and encodedIndex ~= "" then
                     local decodeOk, decodedIndex = pcall(function()
@@ -7654,7 +7748,7 @@ function configManager.loadStoredConfigs()
                         for _, configName in ipairs(decodedIndex) do
                             if type(configName) == "string" and configName ~= "" then
                                 local filePath = getPulseCoreConfigFilePath(configName)
-                                local readConfigOk, encodedConfig = pcall(readfile, filePath)
+                                local readConfigOk, encodedConfig = pcall(readFileApi, filePath)
 
                                 if readConfigOk and type(encodedConfig) == "string" and encodedConfig ~= "" then
                                     local decodeConfigOk, decodedConfig = pcall(function()
@@ -7673,8 +7767,8 @@ function configManager.loadStoredConfigs()
         end
 
         -- Fallback for executors that expose listfiles but have no manifest yet.
-        if not loadedFromIndex and type(listfiles) == "function" then
-            local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+        if not loadedFromIndex and listFilesApi then
+            local listedOk, files = pcall(listFilesApi, CONFIG_ROOT_PATH)
 
             if listedOk and type(files) == "table" then
                 for _, filePath in ipairs(files) do
@@ -7707,12 +7801,12 @@ function configManager.loadStoredConfigs()
             if type(isfile) == "function" then
                 autoLoadExists = false
                 pcall(function()
-                    autoLoadExists = isfile(CONFIG_AUTOLOAD_FILE)
+                    autoLoadExists = isFileApi(CONFIG_AUTOLOAD_FILE)
                 end)
             end
 
             if autoLoadExists then
-                local readOk, storedAutoLoad = pcall(readfile, CONFIG_AUTOLOAD_FILE)
+                local readOk, storedAutoLoad = pcall(readFileApi, CONFIG_AUTOLOAD_FILE)
 
                 if readOk then
                     storedAutoLoad = clientModules.abilityUI.trimText(tostring(storedAutoLoad or ""))
@@ -7759,7 +7853,7 @@ function configManager.loadStoredConfigs()
     end
 
     configManager.updateConfigStatus(
-        "Basic local file API is unavailable in this executor.",
+        storageError or "Config storage is unavailable.",
         COLORS.Red
     )
 end
