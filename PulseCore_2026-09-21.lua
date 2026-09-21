@@ -92,36 +92,36 @@ end
 function getPulseCoreEnvironment()
     local environments = {}
 
-    local okEnv, currentEnv = pcall(function()
-        return _ENV
-    end)
-    if okEnv and type(currentEnv) == "table" then
-        table.insert(environments, currentEnv)
-    end
-
-    local okGetGenv, globalEnv = pcall(function()
-        local resolver = rawget(_G, "getgenv")
-        if type(resolver) == "function" then
-            return resolver()
+    local function addEnvironment(environment)
+        if type(environment) ~= "table" then
+            return
         end
-        return nil
-    end)
-    if okGetGenv and type(globalEnv) == "table" then
-        table.insert(environments, globalEnv)
-    end
 
-    local okGetFenv, functionEnv = pcall(function()
-        local resolver = rawget(_G, "getfenv")
-        if type(resolver) == "function" then
-            return resolver(0)
+        for _, existing in ipairs(environments) do
+            if existing == environment then
+                return
+            end
         end
-        return nil
-    end)
-    if okGetFenv and type(functionEnv) == "table" then
-        table.insert(environments, functionEnv)
+
+        table.insert(environments, environment)
     end
 
-    table.insert(environments, _G)
+    pcall(function()
+        addEnvironment(_ENV)
+    end)
+
+    pcall(function()
+        addEnvironment(rawget(_G, "getgenv") and rawget(_G, "getgenv")())
+    end)
+
+    pcall(function()
+        local getfenv = rawget(_G, "getfenv")
+        if type(getfenv) == "function" then
+            addEnvironment(getfenv(0))
+        end
+    end)
+
+    addEnvironment(_G)
 
     return environments
 end
@@ -136,11 +136,11 @@ function getPulseCoreFileApi(functionName)
         end
     end
 
-    local synAliases = {
-        readfile = {"read", "readfile"},
-        writefile = {"write", "writefile"},
-        appendfile = {"append", "appendfile"},
-        listfiles = {"listdir", "listfiles"},
+    local aliases = {
+        readfile = {"readfile", "read"},
+        writefile = {"writefile", "write"},
+        appendfile = {"appendfile", "append"},
+        listfiles = {"listfiles", "listdir"},
         makefolder = {"makefolder", "mkdir"},
         isfile = {"isfile", "isFile"},
         isfolder = {"isfolder", "isFolder"},
@@ -148,41 +148,23 @@ function getPulseCoreFileApi(functionName)
         delfolder = {"delfolder", "deletedir"},
     }
 
-    local aliases = synAliases[functionName] or {functionName}
+    local names = aliases[functionName] or {functionName}
 
     for _, environment in ipairs(environments) do
-        local synTable = rawget(environment, "syn")
-
-        if type(synTable) == "table" then
-            local ioTable = synTable.io
-
-            if type(ioTable) == "table" then
-                for _, alias in ipairs(aliases) do
-                    local nested = ioTable[alias]
-
-                    if type(nested) == "function" then
-                        return function(...)
-                            local args = table.pack(...)
-
-                            local directOk, directResult = pcall(function()
-                                return nested(table.unpack(args, 1, args.n))
-                            end)
-
-                            if directOk then
-                                return directResult
-                            end
-
-                            return nested(ioTable, table.unpack(args, 1, args.n))
-                        end
-                    end
-                end
+        for _, name in ipairs(names) do
+            local candidate = rawget(environment, "syn_io_" .. name)
+            if type(candidate) == "function" then
+                return candidate
             end
         end
 
-        for _, alias in ipairs(aliases) do
-            local prefixed = rawget(environment, "syn_io_" .. alias)
-            if type(prefixed) == "function" then
-                return prefixed
+        local synTable = rawget(environment, "syn")
+        if type(synTable) == "table" and type(synTable.io) == "table" then
+            for _, name in ipairs(names) do
+                local candidate = synTable.io[name]
+                if type(candidate) == "function" then
+                    return candidate
+                end
             end
         end
     end
@@ -226,10 +208,7 @@ function getPulseCoreLocalAppData()
 end
 
 function initializePulseCoreConfigPath()
-    local localAppData, usingFallback = getPulseCoreLocalAppData()
-    if not localAppData then
-        return false, "Unable to determine a writable config location."
-    end
+    local executorName = string.lower(getPulseCoreExecutorName())
 
     local missing = getPulseCoreMissingFileApis()
     if #missing > 0 then
@@ -237,16 +216,21 @@ function initializePulseCoreConfigPath()
     end
 
     if not CONFIG_ROOT_PATH then
-        local executorName = getPulseCoreExecutorName()
-
-        if usingFallback then
-            CONFIG_ROOT_PATH = localAppData
+        if executorName == "real" then
+            CONFIG_ROOT_PATH = "PulseCore/Configs"
             CONFIG_PATH_FALLBACK = true
         else
-            CONFIG_ROOT_PATH = localAppData
-                .. "\\" .. executorName
-                .. "\\workspace\\PulseCore\\Configs"
-            CONFIG_PATH_FALLBACK = false
+            local localAppData = getPulseCoreLocalAppData()
+
+            if localAppData then
+                CONFIG_ROOT_PATH = localAppData
+                    .. "\\" .. getPulseCoreExecutorName()
+                    .. "\\workspace\\PulseCore\\Configs"
+                CONFIG_PATH_FALLBACK = false
+            else
+                CONFIG_ROOT_PATH = "PulseCore/Configs"
+                CONFIG_PATH_FALLBACK = true
+            end
         end
 
         CONFIG_AUTOLOAD_FILE = CONFIG_ROOT_PATH .. "\\AutoLoad.txt"
@@ -268,7 +252,9 @@ function initializePulseCoreConfigPath()
             CONFIG_ROOT_PATH,
         }
     else
-        local executorRoot = localAppData .. "\\" .. getPulseCoreExecutorName()
+        local executorRoot = getPulseCoreLocalAppData()
+        executorRoot = executorRoot
+            .. "\\" .. getPulseCoreExecutorName()
 
         segments = {
             executorRoot,
@@ -288,15 +274,18 @@ function initializePulseCoreConfigPath()
         end
 
         if not folderExists then
-            pcall(function()
-                makeFolderApi(folderPath)
+            local created, createError = pcall(function()
+                return makeFolderApi(folderPath)
             end)
+
+            if not created and folderPath == CONFIG_ROOT_PATH then
+                return false, "Executor rejected the config folder: " .. tostring(createError)
+            end
         end
     end
 
     if isFolderApi then
         local verified = false
-
         pcall(function()
             verified = isFolderApi(CONFIG_ROOT_PATH)
         end)
@@ -7916,7 +7905,7 @@ function configManager.loadStoredConfigs()
         end
 
         local pathMessage = CONFIG_PATH_FALLBACK
-            and "Executor workspace fallback: "
+            and "Executor workspace path: "
             or "Local AppData path: "
 
         configManager.updateConfigStatus(
