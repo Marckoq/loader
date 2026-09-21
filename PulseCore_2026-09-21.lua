@@ -4663,8 +4663,8 @@ end
 --
 -- Classification uses ONLY recognized ability names; model names are ignored.
 --
--- Player models inside Workspace.Players are classified structurally,
--- allowing skins to keep arbitrary model names.
+-- Every character is classified only by recognized ability names, so skin/model
+-- names and structural markers do not affect the ESP role.
 -- ============================================================================
 
 -- ESP classification is ability-name-only.
@@ -4692,6 +4692,114 @@ function isLocalCharacterModel(model)
     return model == localPlayer.Character
 end
 
+function getOrCreateESPNameTag(model, record, displayName, group)
+    local label = record.nameTag
+
+    if label and label.Parent and label:IsA("BillboardGui") then
+        label.TextLabel.Text = displayName
+        label.TextLabel.TextColor3 =
+            group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+        return label
+    end
+
+    if label then
+        pcall(function()
+            label:Destroy()
+        end)
+        record.nameTag = nil
+    end
+
+    local adornee = model:FindFirstChild("Head", true)
+        or model:FindFirstChild("HumanoidRootPart", true)
+        or model:FindFirstChild("UpperTorso", true)
+        or model:FindFirstChild("Torso", true)
+
+    if not adornee or not adornee:IsA("BasePart") then
+        for _, descendant in ipairs(model:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                adornee = descendant
+                break
+            end
+        end
+    end
+
+    if not adornee then
+        return nil
+    end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = ESP_HIGHLIGHT_NAME .. "_NameTag"
+    billboard.Adornee = adornee
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 0
+    billboard.Size = UDim2.fromOffset(220, 40)
+    billboard.StudsOffset = Vector3.new(0, 3.2, 0)
+    billboard.Parent = screenGui
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Name = "TextLabel"
+    textLabel.BackgroundTransparency = 1
+    textLabel.Size = UDim2.fromScale(1, 1)
+    textLabel.Text = displayName
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextSize = 18
+    textLabel.TextColor3 =
+        group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+    textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    textLabel.TextStrokeTransparency = 0.2
+    textLabel.TextWrapped = true
+    textLabel.TextXAlignment = Enum.TextXAlignment.Center
+    textLabel.TextYAlignment = Enum.TextYAlignment.Center
+    textLabel.Parent = billboard
+
+    record.nameTag = billboard
+    record.nameTagAdornee = adornee
+    return billboard
+end
+
+function updateESPNameTags()
+    local camera = workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    local cameraPosition = camera.CFrame.Position
+
+    for model, record in pairs(trackedModels) do
+        if model
+            and model.Parent
+            and record
+            and record.nameTag
+            and record.nameTag.Parent
+        then
+            local adornee = record.nameTagAdornee
+
+            if not adornee
+                or not adornee.Parent
+                or not adornee:IsDescendantOf(model)
+            then
+                adornee = model:FindFirstChild("Head", true)
+                    or model:FindFirstChild("HumanoidRootPart", true)
+                    or model:FindFirstChild("UpperTorso", true)
+                    or model:FindFirstChild("Torso", true)
+
+                if adornee and adornee:IsA("BasePart") then
+                    record.nameTagAdornee = adornee
+                    record.nameTag.Adornee = adornee
+                end
+            end
+
+            if adornee and adornee:IsA("BasePart") then
+                local distance = (cameraPosition - adornee.Position).Magnitude
+                local textSize = math.clamp(1800 / math.max(distance, 1), 8, 18)
+                record.nameTag.TextLabel.TextSize = textSize
+                record.nameTag.TextLabel.TextColor3 =
+                    record.group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+            end
+        end
+    end
+end
+
 function updateVisualsStatus()
     local trackedCount = 0
     local survivorCount = 0
@@ -4709,7 +4817,7 @@ function updateVisualsStatus()
     end
 
     visualsStatusLabel.Text = string.format(
-        "Models: %d  •  Survivors: %d  •  Executioners: %d\nMatching models by name anywhere in Workspace",
+        "Models: %d  •  Survivors: %d  •  Executioners: %d\nMatching models by recognized ability names anywhere in Workspace",
         trackedCount,
         survivorCount,
         executionerCount
@@ -5069,12 +5177,18 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Mixed role data is treated as unclassified rather than guessing.
-    if hasExecutionerAbility == hasSurvivorAbility then
+    -- Ability names are the only classifier. If both role sets are present,
+    -- prefer the executioner signal so a real executioner is not hidden by
+    -- generic survivor ability objects attached to the same model.
+    local role
+
+    if hasExecutionerAbility then
+        role = "Executioner"
+    elseif hasSurvivorAbility then
+        role = "Survivor"
+    else
         return nil, nil
     end
-
-    local role = hasExecutionerAbility and "Executioner" or "Survivor"
 
     -- Infer the character from the strongest number of matching known abilities.
     local bestName = nil
