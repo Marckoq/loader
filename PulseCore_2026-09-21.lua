@@ -1182,14 +1182,61 @@ mainFrame = create("Frame", {
 addCorner(mainFrame, 14)
 addStroke(mainFrame, COLORS.Border, 0.24, 1.35)
 
--- Cool Button / fullscreen repository video
-local COOL_VIDEO_URL =
-    "https://raw.githubusercontent.com/Marckoq/loader/main/PulseCore/assets/TikTok_7671328286026337556.mp4"
+-- Cool Button / fullscreen local video
+local COOL_VIDEO_PATH = "PulseCore/assets/TikTok_7671328286026337556.mp4"
 
 coolVideoState = {
     gui = nil,
     video = nil,
 }
+
+function getCoolVideoAsset(path)
+    local resolvers = {
+        function()
+            return getcustomasset
+        end,
+        function()
+            return getsynasset
+        end,
+        function()
+            return getasset
+        end,
+    }
+
+    for _, getResolver in ipairs(resolvers) do
+        local okResolver, resolver = pcall(getResolver)
+
+        if okResolver and type(resolver) == "function" then
+            local ok, asset = pcall(resolver, path)
+
+            if ok and type(asset) == "string" and asset ~= "" then
+                return asset
+            end
+        end
+    end
+
+    return nil
+end
+
+function isCoolVideoFileAvailable(path)
+    local isFileApi = getPulseCoreFileApi("isfile")
+
+    if type(isFileApi) == "function" then
+        local ok, exists = pcall(isFileApi, path)
+        if ok then
+            return exists == true
+        end
+    end
+
+    local readFileApi = getPulseCoreFileApi("readfile")
+
+    if type(readFileApi) == "function" then
+        local ok = pcall(readFileApi, path)
+        return ok
+    end
+
+    return false
+end
 
 function closeCoolVideo()
     if coolVideoState.gui then
@@ -1201,6 +1248,24 @@ end
 
 function playCoolVideo()
     closeCoolVideo()
+
+    if not isCoolVideoFileAvailable(COOL_VIDEO_PATH) then
+        setStatus(
+            "Cool Button: video not found at " .. COOL_VIDEO_PATH,
+            COLORS.Yellow
+        )
+        return
+    end
+
+    local videoAsset = getCoolVideoAsset(COOL_VIDEO_PATH)
+
+    if not videoAsset then
+        setStatus(
+            "Cool Button: executor has no local-asset API.",
+            COLORS.Yellow
+        )
+        return
+    end
 
     local videoGui = create("ScreenGui", {
         Name = "PulseCoreCoolVideo",
@@ -1227,7 +1292,7 @@ function playCoolVideo()
         Position = UDim2.fromScale(0, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Video = COOL_VIDEO_URL,
+        Video = videoAsset,
         Looped = false,
         Playing = true,
         Volume = 1,
@@ -1256,15 +1321,8 @@ function playCoolVideo()
 
     close.Activated:Connect(closeCoolVideo)
 
-    -- Clicking the video also closes it after playback has started.
     video.Ended:Connect(function()
         task.delay(0.25, closeCoolVideo)
-    end)
-
-    video:GetPropertyChangedSignal("Playing"):Connect(function()
-        if not video.Playing and video.TimePosition <= 0 then
-            setStatus("Cool Button: the video could not be played.", COLORS.Yellow)
-        end
     end)
 end
 
