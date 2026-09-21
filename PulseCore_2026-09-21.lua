@@ -1899,6 +1899,9 @@ function clientModules.combat.detectCharacter(model)
     -- dodge/brake animation markers.
     local markerCharacters = {
         tripwire = "Tripwire",
+        tailsdoll = "Tripwire",
+        glorbwire = "Tripwire",
+        deadglorbwire = "Tripwire",
         brighterday = "Tripwire",
         reachout = "Tripwire",
         fleetway = "Fleetway",
@@ -2438,40 +2441,45 @@ function clientModules.combat.detectDefenseCharacter(model)
     return nil
 end
 
-function clientModules.combat.isEnemyAttack(model, track)
+function clientModules.combat.isEnemyAttack(model, track, markerName)
     local info = clientModules.combat.getTargetInfo(model)
     if not info or info.group ~= "Executioner" then
         return false
     end
 
     local animation = track and track.Animation
-    local normalized = animation and clientModules.combat.normalize(animation.Name)
+    local normalized = markerName
+        and clientModules.combat.normalize(markerName)
+        or (animation and clientModules.combat.normalize(animation.Name))
 
-    local attacks = {
-        attack = true,
-        attack1 = true,
-        attack2 = true,
-        m1 = true,
-        punch = true,
-        charge = true,
-        chargerun = true,
-        chargewarn = true,
-        chargedash = true,
-        missdash = true,
-        grab = true,
-        grabhold = true,
-        toss = true,
-        teleportattack = true,
-        step = true,
-        brighterday = true,
-        reachout = true,
-        lasersofdestrucation = true,
-        lasersofdestruction = true,
-        godstrickery = true,
-        ragemode = true,
-    }
+    if not normalized then
+        return false
+    end
 
-    return normalized and attacks[normalized] == true
+    -- Auto Block / Counter on the survivor side reacts only to these attack
+    -- families. Fleetway's rbxl uses ChargeDash/MissDash for Chaos Dash and
+    -- GrabHold/Toss for Fateful Drain, so those internal animation markers
+    -- are accepted as the corresponding abilities.
+    if normalized == "attack"
+        or normalized == "attack1"
+        or normalized == "attack2"
+        or normalized == "m1"
+        or normalized == "charge"
+        or normalized == "grab"
+    then
+        return true
+    end
+
+    if info.character == "Fleetway" then
+        return normalized == "chaosdash"
+            or normalized == "fatefuldrain"
+            or normalized == "chargedash"
+            or normalized == "missdash"
+            or normalized == "grabhold"
+            or normalized == "toss"
+    end
+
+    return false
 end
 
 function clientModules.combat.bindEnemyModel(model)
@@ -2484,42 +2492,74 @@ function clientModules.combat.bindEnemyModel(model)
         return
     end
 
-    local connection = humanoid.AnimationPlayed:Connect(function(track)
+    local connections = {}
+
+    local function tryDefend(track, markerName)
         if not clientModules.combat.autoCounterEnabled then
             return
         end
 
+        -- This feature is for survivor-side Counter / Block / Energy Shield.
         local defenseCharacter = clientModules.combat.detectDefenseCharacter(localPlayer.Character)
         if not defenseCharacter then
             return
         end
 
-        if not clientModules.combat.isEnemyAttack(model, track) then
+        if not clientModules.combat.isEnemyAttack(model, track, markerName) then
             return
         end
 
         local distance = clientModules.combat.getDistance(model)
-        if distance > 45 then
+
+        -- Exact requested reaction window: 1–8 studs.
+        if distance < 1 or distance > 8 then
             return
         end
 
         local now = time()
-        if now - clientModules.combat.lastCounterAt < 0.75 then
+        -- No delay before the first key press. The small guard only prevents
+        -- duplicate marker/animation signals from hammering the same defense.
+        if now - clientModules.combat.lastCounterAt < 0.10 then
             return
         end
 
         clientModules.combat.lastCounterAt = now
+        clientModules.combat.pressDefenseKey()
+    end
 
-        task.delay(0.05, function()
-            if guiDestroyed or not clientModules.combat.autoCounterEnabled then
-                return
-            end
+    table.insert(connections, humanoid.AnimationPlayed:Connect(function(track)
+        tryDefend(track, nil)
+    end))
 
-            clientModules.combat.pressDefenseKey()
-        end)
-    end)
+    -- Some attacks expose their ability name as a runtime descendant instead
+    -- of the AnimationTrack name. Catch those markers as soon as they appear.
+    table.insert(connections, model.DescendantAdded:Connect(function(instance)
+        if not instance or not instance.Parent then
+            return
+        end
 
-    clientModules.combat.modelConnections[model] = connection
+        local normalized = clientModules.combat.normalize(instance.Name)
+        local attackMarkers = {
+            attack = true,
+            attack1 = true,
+            attack2 = true,
+            m1 = true,
+            charge = true,
+            grab = true,
+            chaosdash = true,
+            fatefuldrain = true,
+            chargedash = true,
+            missdash = true,
+            grabhold = true,
+            toss = true,
+        }
+
+        if attackMarkers[normalized] then
+            tryDefend(nil, normalized)
+        end
+    end))
+
+    clientModules.combat.modelConnections[model] = connections
 end
 
 function clientModules.combat.scanEnemyHooks()
@@ -6529,6 +6569,20 @@ function getESPAbilityClassification(model)
     -- Generic markers are intentionally not character evidence.
     for genericName in pairs(ESP_GENERIC_ABILITY_NAMES) do
         found[genericName] = nil
+    end
+
+    -- The rbxl stores Tripwire's character package under TailsDoll and its
+    -- active custom animation set under CustomAnimation/Glorbwire. That is
+    -- stronger character evidence than inherited Sonic Dodge/Brake markers.
+    local customAnimation = model:FindFirstChild("CustomAnimation")
+    if customAnimation then
+        for _, descendant in ipairs(customAnimation:GetDescendants()) do
+            local normalized = normalizeESPMarkerName(descendant.Name)
+
+            if normalized == "glorbwire" or normalized == "deadglorbwire" then
+                return "Executioner", "Tripwire"
+            end
+        end
     end
 
     -- Tripwire can inherit Sonic animation markers such as dodge/brake.
