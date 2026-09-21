@@ -42,6 +42,7 @@ CONSOLE_MODE_ATTRIBUTE_NAME = "PulseCoreConsoleModeV1"
 
 CONFIG_ROOT_PATH = nil
 CONFIG_AUTOLOAD_FILE = nil
+CONFIG_INDEX_FILE = nil
 CONFIG_FILE_EXTENSION = ".json"
 
 function getPulseCoreExecutorName()
@@ -90,50 +91,53 @@ function getPulseCoreLocalAppData()
 end
 
 function initializePulseCoreConfigPath()
-    if CONFIG_ROOT_PATH then
-        return true
-    end
-
     local localAppData = getPulseCoreLocalAppData()
     if not localAppData then
         return false
     end
 
-    local executorName = getPulseCoreExecutorName()
-
-    CONFIG_ROOT_PATH = localAppData
-        .. "\\" .. executorName
-        .. "\\workspace\\PulseCore\\Configs"
-
-    CONFIG_AUTOLOAD_FILE = CONFIG_ROOT_PATH .. "\\AutoLoad.txt"
-
-    if type(makefolder) ~= "function" or type(writefile) ~= "function"
-        or type(readfile) ~= "function" or type(listfiles) ~= "function"
-        or type(isfile) ~= "function" or type(delfile) ~= "function" then
+    -- Keep the core requirement intentionally small: many executors expose
+    -- basic file I/O but not optional directory enumeration/deletion APIs.
+    if type(makefolder) ~= "function"
+        or type(writefile) ~= "function"
+        or type(readfile) ~= "function" then
         return false
     end
 
+    if not CONFIG_ROOT_PATH then
+        local executorName = getPulseCoreExecutorName()
+
+        CONFIG_ROOT_PATH = localAppData
+            .. "\\" .. executorName
+            .. "\\workspace\\PulseCore\\Configs"
+
+        CONFIG_AUTOLOAD_FILE = CONFIG_ROOT_PATH .. "\\AutoLoad.txt"
+        CONFIG_INDEX_FILE = CONFIG_ROOT_PATH .. "\\ConfigIndex.json"
+    end
+
+    local executorRoot = localAppData .. "\\" .. getPulseCoreExecutorName()
+
     local segments = {
-        localAppData .. "\\" .. executorName,
-        localAppData .. "\\" .. executorName .. "\\workspace",
-        localAppData .. "\\" .. executorName .. "\\workspace\\PulseCore",
+        executorRoot,
+        executorRoot .. "\\workspace",
+        executorRoot .. "\\workspace\\PulseCore",
         CONFIG_ROOT_PATH,
     }
 
     for _, folderPath in ipairs(segments) do
+        local folderExists = false
+
         if type(isfolder) == "function" then
-            local folderExists = false
             pcall(function()
                 folderExists = isfolder(folderPath)
             end)
-            if folderExists then
-                continue
-            end
         end
 
-        pcall(function()
-            makefolder(folderPath)
-        end)
+        if not folderExists then
+            pcall(function()
+                makefolder(folderPath)
+            end)
+        end
     end
 
     if type(isfolder) == "function" then
@@ -7480,16 +7484,18 @@ end
 function configManager.persistConfigs()
     if not initializePulseCoreConfigPath() then
         configManager.updateConfigStatus(
-            "Config file API is unavailable in this executor.",
+            "Basic local file API is unavailable in this executor.",
             COLORS.Red
         )
         return false
     end
 
     local wroteAll = true
-    local encodedNames = {}
+    local configNames = {}
 
     for name, configData in pairs(configManager.savedConfigs) do
+        table.insert(configNames, name)
+
         local filePath = getPulseCoreConfigFilePath(name)
 
         local ok, encodedOrError = pcall(function()
@@ -7517,24 +7523,70 @@ function configManager.persistConfigs()
             wroteAll = false
             break
         end
-
-        encodedNames[name .. CONFIG_FILE_EXTENSION] = true
     end
 
-    if wroteAll then
+    if not wroteAll then
+        return false
+    end
+
+    table.sort(configNames)
+
+    if CONFIG_INDEX_FILE then
+        local indexOk, indexData = pcall(function()
+            return HttpService:JSONEncode(configNames)
+        end)
+
+        if not indexOk then
+            configManager.updateConfigStatus(
+                "Config index encoding error: " .. tostring(indexData),
+                COLORS.Red
+            )
+            return false
+        end
+
+        local indexSaved, indexError = pcall(function()
+            writefile(CONFIG_INDEX_FILE, indexData)
+        end)
+
+        if not indexSaved then
+            configManager.updateConfigStatus(
+                "Config index save error: " .. tostring(indexError),
+                COLORS.Red
+            )
+            return false
+        end
+    end
+
+    -- Optional cleanup for executors that expose directory enumeration/deletion.
+    if type(listfiles) == "function" and type(delfile) == "function" then
         local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+
         if listedOk and type(files) == "table" then
+            local activeFiles = {}
+
+            for _, name in ipairs(configNames) do
+                activeFiles[name .. CONFIG_FILE_EXTENSION] = true
+            end
+
+            if CONFIG_INDEX_FILE then
+                local indexName = tostring(CONFIG_INDEX_FILE):match("[^\\/]+$")
+                if indexName then
+                    activeFiles[indexName] = true
+                end
+            end
+
             for _, filePath in ipairs(files) do
                 local fileName = tostring(filePath):match("[^\\/]+$")
-                if fileName and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION
-                    and not encodedNames[fileName] then
+                if fileName
+                    and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION
+                    and not activeFiles[fileName] then
                     pcall(delfile, filePath)
                 end
             end
         end
     end
 
-    return wroteAll
+    return true
 end
 
 function configManager.persistAutoLoadConfig()
@@ -7576,35 +7628,100 @@ function configManager.loadStoredConfigs()
     local fileStorageReady = initializePulseCoreConfigPath()
 
     if fileStorageReady then
-        local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+        local loadedFromIndex = false
 
-        if listedOk and type(files) == "table" then
-            for _, filePath in ipairs(files) do
-                local fileName = tostring(filePath):match("[^\\/]+$")
-                if fileName and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION then
-                    local configName = fileName:sub(1, -#CONFIG_FILE_EXTENSION - 1)
+        if CONFIG_INDEX_FILE then
+            local indexExists = true
 
-                    local readOk, encoded = pcall(readfile, filePath)
-                    if readOk and type(encoded) == "string" and encoded ~= "" then
-                        local decodeOk, decoded = pcall(function()
-                            return HttpService:JSONDecode(encoded)
-                        end)
+            if type(isfile) == "function" then
+                indexExists = false
+                pcall(function()
+                    indexExists = isfile(CONFIG_INDEX_FILE)
+                end)
+            end
 
-                        if decodeOk and type(decoded) == "table" then
-                            configManager.savedConfigs[configName] = decoded
+            if indexExists then
+                local readOk, encodedIndex = pcall(readfile, CONFIG_INDEX_FILE)
+
+                if readOk and type(encodedIndex) == "string" and encodedIndex ~= "" then
+                    local decodeOk, decodedIndex = pcall(function()
+                        return HttpService:JSONDecode(encodedIndex)
+                    end)
+
+                    if decodeOk and type(decodedIndex) == "table" then
+                        loadedFromIndex = true
+
+                        for _, configName in ipairs(decodedIndex) do
+                            if type(configName) == "string" and configName ~= "" then
+                                local filePath = getPulseCoreConfigFilePath(configName)
+                                local readConfigOk, encodedConfig = pcall(readfile, filePath)
+
+                                if readConfigOk and type(encodedConfig) == "string" and encodedConfig ~= "" then
+                                    local decodeConfigOk, decodedConfig = pcall(function()
+                                        return HttpService:JSONDecode(encodedConfig)
+                                    end)
+
+                                    if decodeConfigOk and type(decodedConfig) == "table" then
+                                        configManager.savedConfigs[configName] = decodedConfig
+                                    end
+                                end
+                            end
                         end
                     end
                 end
             end
         end
 
-        if type(isfile) == "function" and isfile(CONFIG_AUTOLOAD_FILE) then
-            local readOk, storedAutoLoad = pcall(readfile, CONFIG_AUTOLOAD_FILE)
-            if readOk then
-                storedAutoLoad = clientModules.abilityUI.trimText(tostring(storedAutoLoad or ""))
-                if storedAutoLoad ~= ""
-                    and type(configManager.savedConfigs[storedAutoLoad]) == "table" then
-                    configManager.autoLoadConfigName = storedAutoLoad
+        -- Fallback for executors that expose listfiles but have no manifest yet.
+        if not loadedFromIndex and type(listfiles) == "function" then
+            local listedOk, files = pcall(listfiles, CONFIG_ROOT_PATH)
+
+            if listedOk and type(files) == "table" then
+                for _, filePath in ipairs(files) do
+                    local fileName = tostring(filePath):match("[^\\/]+$")
+
+                    if fileName
+                        and fileName:sub(-#CONFIG_FILE_EXTENSION) == CONFIG_FILE_EXTENSION
+                        and fileName ~= "ConfigIndex" .. CONFIG_FILE_EXTENSION
+                    then
+                        local configName = fileName:sub(1, -#CONFIG_FILE_EXTENSION - 1)
+
+                        local readOk, encoded = pcall(readfile, filePath)
+                        if readOk and type(encoded) == "string" and encoded ~= "" then
+                            local decodeOk, decoded = pcall(function()
+                                return HttpService:JSONDecode(encoded)
+                            end)
+
+                            if decodeOk and type(decoded) == "table" then
+                                configManager.savedConfigs[configName] = decoded
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if CONFIG_AUTOLOAD_FILE then
+            local autoLoadExists = true
+
+            if type(isfile) == "function" then
+                autoLoadExists = false
+                pcall(function()
+                    autoLoadExists = isfile(CONFIG_AUTOLOAD_FILE)
+                end)
+            end
+
+            if autoLoadExists then
+                local readOk, storedAutoLoad = pcall(readfile, CONFIG_AUTOLOAD_FILE)
+
+                if readOk then
+                    storedAutoLoad = clientModules.abilityUI.trimText(tostring(storedAutoLoad or ""))
+
+                    if storedAutoLoad ~= ""
+                        and type(configManager.savedConfigs[storedAutoLoad]) == "table"
+                    then
+                        configManager.autoLoadConfigName = storedAutoLoad
+                    end
                 end
             end
         end
@@ -7612,6 +7729,7 @@ function configManager.loadStoredConfigs()
         -- One-time migration from the old LocalPlayer attribute storage.
         if configManager.countSavedConfigs() == 0 then
             local legacyEncoded = localPlayer:GetAttribute(CONFIG_ATTRIBUTE_NAME)
+
             if type(legacyEncoded) == "string" and legacyEncoded ~= "" then
                 local legacyOk, legacyDecoded = pcall(function()
                     return HttpService:JSONDecode(legacyEncoded)
@@ -7622,8 +7740,10 @@ function configManager.loadStoredConfigs()
                     configManager.persistConfigs()
 
                     local legacyAuto = localPlayer:GetAttribute(AUTO_LOAD_ATTRIBUTE_NAME)
+
                     if type(legacyAuto) == "string"
-                        and type(configManager.savedConfigs[legacyAuto]) == "table" then
+                        and type(configManager.savedConfigs[legacyAuto]) == "table"
+                    then
                         configManager.autoLoadConfigName = legacyAuto
                         configManager.persistAutoLoadConfig()
                     end
@@ -7639,7 +7759,7 @@ function configManager.loadStoredConfigs()
     end
 
     configManager.updateConfigStatus(
-        "Local file storage is unavailable in this executor.",
+        "Basic local file API is unavailable in this executor.",
         COLORS.Red
     )
 end
