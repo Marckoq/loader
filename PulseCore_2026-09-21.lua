@@ -5169,46 +5169,41 @@ function getESPAbilityClassification(model)
 
     local found = {}
 
-    local function processName(value, allowGeneric)
+    local function processValue(value)
         local normalized = normalizeESPMarkerName(value)
 
         if ESP_ABILITY_ROLE_NAMES[normalized] then
-            if allowGeneric or not ESP_AMBIGUOUS_ABILITY_NAMES[normalized] then
-                found[normalized] = true
-            end
+            found[normalized] = true
         end
     end
 
-    -- Ability objects can be stored anywhere in the character hierarchy.
-    -- Model names are never used as a fallback; only an exact recognized
-    -- ability name/value can enter the classifier.
+    -- Read recognized ability names/values from the character hierarchy.
+    -- This never checks the character model's own name.
     for _, descendant in ipairs(model:GetDescendants()) do
-        if isESPAbilityNameCandidate(descendant) then
-            processName(descendant.Name, true)
-
-            if descendant:IsA("StringValue") then
-                processName(descendant.Value, false)
-            end
+        -- Ability names can be represented by folders, UI-like objects,
+        -- StringValues, or other non-physical instances.
+        if not descendant:IsA("BasePart") then
+            processValue(descendant.Name)
         end
 
-        -- Attributes are checked independently of object class. Some games
-        -- keep ability identifiers on Humanoid/parts rather than folders.
+        if descendant:IsA("StringValue") then
+            processValue(descendant.Value)
+        end
+
         for _, value in pairs(descendant:GetAttributes()) do
             if type(value) == "string" then
-                processName(value, false)
+                processValue(value)
             end
         end
     end
 
     for _, value in pairs(model:GetAttributes()) do
         if type(value) == "string" then
-            processName(value, false)
+            processValue(value)
         end
     end
 
-    -- Generic ability names are only accepted as supporting evidence when a
-    -- character-specific ability from the same character is also present.
-    local characterScores = {}
+    local scores = {}
 
     for characterName, abilities in pairs(ESP_CHARACTER_ABILITY_SETS) do
         local score = 0
@@ -5219,67 +5214,58 @@ function getESPAbilityClassification(model)
             end
         end
 
-        characterScores[characterName] = score
+        scores[characterName] = score
     end
 
-    local function hasAbility(name)
-        return found[normalizeESPMarkerName(name)] == true
-    end
-
-    -- Charge identifies neither 2011x nor Kolossos by itself.
-    if hasAbility("Charge") then
-        if hasAbility("God's Trickery")
-            or hasAbility("invisiblity")
-            or hasAbility("Rage Mode")
-        then
-            characterScores["2011x"] = characterScores["2011x"] + 1
+    -- Charge is shared by 2011x and Kolossos, so it only contributes when a
+    -- second ability identifies one of those characters.
+    if found.charge then
+        if found.godstrickery or found.invisiblity or found.invisibility or found.ragemode then
+            scores["2011x"] = math.max(scores["2011x"], 2)
         end
 
-        if hasAbility("Grab") then
-            characterScores["Kolossos"] = characterScores["Kolossos"] + 1
-        elseif hasAbility("Block") and hasAbility("Indicator") then
-            characterScores["Kolossos"] = characterScores["Kolossos"] + 1
+        if found.grab or (found.block and found.indicator) then
+            scores["Kolossos"] = math.max(scores["Kolossos"], 2)
         end
     end
 
-    -- Dash identifies Cream only alongside its distinctive Heal ability.
-    if hasAbility("Dash") and hasAbility("Heal") then
-        characterScores["Cream"] = characterScores["Cream"] + 1
+    -- Dash is used by Cream, but Heal makes the identification unambiguous.
+    if found.dash and found.heal then
+        scores["Cream"] = math.max(scores["Cream"], 2)
     end
+
+    local executioners = {
+        Tripwire = true,
+        Fleetway = true,
+        ["2011x"] = true,
+        Kolossos = true,
+    }
 
     local bestName = nil
     local bestScore = 0
-    local bestTie = false
+    local tied = false
 
-    for characterName, score in pairs(characterScores) do
+    for characterName, score in pairs(scores) do
         if score > bestScore then
-            bestScore = score
             bestName = characterName
-            bestTie = false
+            bestScore = score
+            tied = false
         elseif score > 0 and score == bestScore then
-            bestTie = true
+            tied = true
         end
     end
 
-    -- Never guess a character when the ability evidence is tied.
-    if bestScore <= 0 or bestTie then
+    if not bestName or bestScore <= 0 then
         return nil, nil
     end
 
-    local role = nil
-    if bestName == "Tripwire"
-        or bestName == "Fleetway"
-        or bestName == "2011x"
-        or bestName == "Kolossos"
-    then
-        role = "Executioner"
-    else
-        role = "Survivor"
+    -- A tie means the ability evidence does not identify one character.
+    if tied then
+        return nil, nil
     end
 
-    return role, bestName
+    return executioners[bestName] and "Executioner" or "Survivor", bestName
 end
-
 function isESPExecutionerModel(model)
     local role = getESPAbilityClassification(model)
     return role == "Executioner"
@@ -5347,19 +5333,9 @@ function scanESPContainers()
         end
     end
 
-    -- Scan all models so ability-bearing skins are detected regardless of folder placement.
-    for _, instance in ipairs(workspace:GetDescendants()) do
-        if instance:IsA("Model") and not isLocalCharacterModel(instance) then
-            local group, displayName = getESPGroupForModel(instance)
-
-            if group then
-                validModels[instance] = {
-                    group = group,
-                    displayName = displayName or "Unknown",
-                }
-            end
-        end
-    end
+    -- Do not scan every nested Workspace Model: ability folders and other
+    -- internal models are not separate characters. Only actual player
+    -- characters and direct Workspace.Players models are eligible.
 
     for model, info in pairs(validModels) do
         registerCharacterModel(
@@ -5446,7 +5422,12 @@ function initializeESP()
             return
         end
 
-        if instance:IsA("Model") then
+        if instance:IsA("Model")
+            and (
+                instance.Parent == workspace
+                or instance.Parent == workspace:FindFirstChild("Players")
+            )
+        then
             scheduleESPScan(0.15)
         end
     end)
