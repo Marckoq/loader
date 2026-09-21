@@ -89,52 +89,100 @@ function getPulseCoreExecutorName()
     return "Executor"
 end
 
+function getPulseCoreEnvironment()
+    local environments = {}
+
+    local okEnv, currentEnv = pcall(function()
+        return _ENV
+    end)
+    if okEnv and type(currentEnv) == "table" then
+        table.insert(environments, currentEnv)
+    end
+
+    local okGetGenv, globalEnv = pcall(function()
+        local resolver = rawget(_G, "getgenv")
+        if type(resolver) == "function" then
+            return resolver()
+        end
+        return nil
+    end)
+    if okGetGenv and type(globalEnv) == "table" then
+        table.insert(environments, globalEnv)
+    end
+
+    local okGetFenv, functionEnv = pcall(function()
+        local resolver = rawget(_G, "getfenv")
+        if type(resolver) == "function" then
+            return resolver(0)
+        end
+        return nil
+    end)
+    if okGetFenv and type(functionEnv) == "table" then
+        table.insert(environments, functionEnv)
+    end
+
+    table.insert(environments, _G)
+
+    return environments
+end
+
 function getPulseCoreFileApi(functionName)
-    local direct = rawget(_G, functionName)
-    if type(direct) == "function" then
-        return direct
+    local environments = getPulseCoreEnvironment()
+
+    for _, environment in ipairs(environments) do
+        local direct = rawget(environment, functionName)
+        if type(direct) == "function" then
+            return direct
+        end
     end
 
     local synAliases = {
-        readfile = "read",
-        writefile = "write",
-        appendfile = "append",
-        listfiles = "listdir",
-        makefolder = "makefolder",
-        isfile = "isfile",
-        isfolder = "isfolder",
-        delfile = "delfile",
-        delfolder = "delfolder",
+        readfile = {"read", "readfile"},
+        writefile = {"write", "writefile"},
+        appendfile = {"append", "appendfile"},
+        listfiles = {"listdir", "listfiles"},
+        makefolder = {"makefolder", "mkdir"},
+        isfile = {"isfile", "isFile"},
+        isfolder = {"isfolder", "isFolder"},
+        delfile = {"delfile", "delete", "remove"},
+        delfolder = {"delfolder", "deletedir"},
     }
 
-    local synSuffix = synAliases[functionName] or functionName
-    local synName = "syn_io_" .. synSuffix
-    local synIo = rawget(_G, synName)
+    local aliases = synAliases[functionName] or {functionName}
 
-    if type(synIo) == "function" then
-        return synIo
-    end
+    for _, environment in ipairs(environments) do
+        local synTable = rawget(environment, "syn")
 
-    local synTable = rawget(_G, "syn")
-    if type(synTable) == "table" then
-        local ioTable = synTable.io
+        if type(synTable) == "table" then
+            local ioTable = synTable.io
 
-        if type(ioTable) == "table" then
-            local nested = ioTable[functionName] or ioTable[synSuffix]
+            if type(ioTable) == "table" then
+                for _, alias in ipairs(aliases) do
+                    local nested = ioTable[alias]
 
-            if type(nested) == "function" then
-                return function(...)
-                    local args = table.pack(...)
-                    local directOk, directResult = pcall(function()
-                        return nested(table.unpack(args, 1, args.n))
-                    end)
+                    if type(nested) == "function" then
+                        return function(...)
+                            local args = table.pack(...)
 
-                    if directOk then
-                        return directResult
+                            local directOk, directResult = pcall(function()
+                                return nested(table.unpack(args, 1, args.n))
+                            end)
+
+                            if directOk then
+                                return directResult
+                            end
+
+                            return nested(ioTable, table.unpack(args, 1, args.n))
+                        end
                     end
-
-                    return nested(ioTable, table.unpack(args, 1, args.n))
                 end
+            end
+        end
+
+        for _, alias in ipairs(aliases) do
+            local prefixed = rawget(environment, "syn_io_" .. alias)
+            if type(prefixed) == "function" then
+                return prefixed
             end
         end
     end
@@ -2153,84 +2201,38 @@ create("UIPadding", {
     PaddingRight = UDim.new(0, 14),
 }, visualsHint)
 
-createSectionLabel(visualsPage, "VISUALS  /  BOOST TABS", 6)
-clientModules.boostTabs.toggleButton, clientModules.boostTabs.toggleDot = createToggleRow(
-    visualsPage,
-    "Tabs — show boost status window",
-    7
-)
-clientModules.boostTabs.toggleButton.Parent.Visible = false
-clientModules.boostTabs.enabled = false
+do
+    local boostTabsHost = create("Frame", {
+        Size = UDim2.fromOffset(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = false,
+        Active = false,
+    }, visualsPage)
 
-clientModules.boostTabs.hintLabel = create("TextLabel", {
-    LayoutOrder = 8,
-    Size = UDim2.new(1, 0, 0, 70),
-    BackgroundColor3 = COLORS.CyanDeep,
-    BackgroundTransparency = 0.32,
-    BorderSizePixel = 0,
-    Text = "Shows a window on the left side of the screen with active boosts, activation delay, remaining duration, and cooldown.",
-    Font = Enum.Font.GothamMedium,
-    TextSize = 12,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-}, visualsPage)
-addCorner(clientModules.boostTabs.hintLabel, 12)
-create("UIPadding", {
-    PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 14),
-}, clientModules.boostTabs.hintLabel)
+    clientModules.boostTabs.toggleButton, clientModules.boostTabs.toggleDot = createToggleRow(
+        boostTabsHost,
+        "Boost status",
+        1
+    )
 
-clientModules.boostTabs.window = create("Frame", {
-    Name = "BoostTabsWindow",
-    AnchorPoint = Vector2.new(0, 0.5),
-    Position = UDim2.new(0, 14, 0.5, 0),
-    Size = UDim2.fromOffset(270, 340),
-    BackgroundColor3 = COLORS.Panel,
-    BackgroundTransparency = 0.12,
-    BorderSizePixel = 0,
-    Visible = false,
-    Active = false,
-    ZIndex = 60,
-}, screenGui)
-addCorner(clientModules.boostTabs.window, 14)
-addStroke(clientModules.boostTabs.window, COLORS.Cyan, 0.2, 1.4)
+    clientModules.boostTabs.hintLabel = create("TextLabel", {
+        Size = UDim2.fromOffset(1, 1),
+        Visible = false,
+        BackgroundTransparency = 1,
+        Text = "",
+    }, boostTabsHost)
 
-clientModules.boostTabs.titleLabel = create("TextLabel", {
-    Position = UDim2.fromOffset(14, 8),
-    Size = UDim2.new(1, -28, 0, 30),
-    BackgroundTransparency = 1,
-    Text = "BOOST TABS",
-    Font = Enum.Font.GothamBold,
-    TextSize = 15,
-    TextColor3 = COLORS.Text,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    ZIndex = 61,
-}, clientModules.boostTabs.window)
+    clientModules.boostTabs.window = create("Frame", {
+        Size = UDim2.fromOffset(1, 1),
+        Visible = false,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+    }, screenGui)
 
-clientModules.boostTabs.contentLabel = create("TextLabel", {
-    Position = UDim2.fromOffset(14, 43),
-    Size = UDim2.new(1, -28, 1, -55),
-    BackgroundColor3 = COLORS.CyanDeep,
-    BackgroundTransparency = 0.22,
-    BorderSizePixel = 0,
-    Text = "No active boosts, delays, or cooldowns.",
-    Font = Enum.Font.Code,
-    TextSize = 12,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Top,
-    ZIndex = 61,
-}, clientModules.boostTabs.window)
-addCorner(clientModules.boostTabs.contentLabel, 10)
-create("UIPadding", {
-    PaddingTop = UDim.new(0, 10),
-    PaddingBottom = UDim.new(0, 10),
-    PaddingLeft = UDim.new(0, 10),
-    PaddingRight = UDim.new(0, 10),
-}, clientModules.boostTabs.contentLabel)
+    clientModules.boostTabs.enabled = false
+end
 
 function clientModules.createActionButton(parent, textValue, position, size, backgroundColor)
     local button = create("TextButton", {
@@ -6094,11 +6096,13 @@ function clientModules.boostTabs.update()
 end
 
 function clientModules.boostTabs.refreshVisuals()
-    setSwitchVisual(
-        clientModules.boostTabs.toggleButton,
-        clientModules.boostTabs.toggleDot,
-        clientModules.boostTabs.enabled
-    )
+    if clientModules.boostTabs.toggleButton and clientModules.boostTabs.toggleDot then
+        setSwitchVisual(
+            clientModules.boostTabs.toggleButton,
+            clientModules.boostTabs.toggleDot,
+            clientModules.boostTabs.enabled
+        )
+    end
 
     if clientModules.boostTabs.window then
         clientModules.boostTabs.window.Visible = clientModules.boostTabs.enabled
