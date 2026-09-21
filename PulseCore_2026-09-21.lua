@@ -5270,85 +5270,172 @@ function getESPAbilityClassification(model)
         return nil, nil
     end
 
-    local foundAbilities = {}
-    local foundCharacters = {}
+    local found = {}
 
-    local function checkName(value)
+    local function processValue(value)
         local normalized = normalizeESPMarkerName(value)
 
-        if ESP_ABILITY_CHARACTER_NAMES[normalized] then
-            foundAbilities[normalized] = true
-            foundCharacters[ESP_ABILITY_CHARACTER_NAMES[normalized]] = true
+        if ESP_ABILITY_ROLE_NAMES[normalized] then
+            found[normalized] = true
         end
     end
 
-    -- Проверяем всё дерево модели. Физические/визуальные объекты сами по себе
-    -- не дают классификацию, если их имя не является известной способностью.
-    for _, descendant in ipairs(model:GetDescendants()) do
-        local normalized = normalizeESPMarkerName(descendant.Name)
-
-        if ESP_ABILITY_CHARACTER_NAMES[normalized] then
-            checkName(descendant.Name)
-        elseif descendant:IsA("StringValue") then
-            checkName(descendant.Value)
+    local function processCandidateName(instance)
+        if not instance then
+            return
         end
 
-        for _, value in pairs(descendant:GetAttributes()) do
-            if type(value) == "string" then
-                checkName(value)
+        -- First test the exact normalized name against the known ability table.
+        -- Some real ability markers (for example Tripwire's Reachout) are
+        -- stored as Sounds, so their class cannot be used as a blanket filter.
+        local normalized = normalizeESPMarkerName(instance.Name)
+        if ESP_ABILITY_ROLE_NAMES[normalized] then
+            found[normalized] = true
+            return
+        end
+
+        -- Unknown physical/visual objects are ignored to avoid false positives
+        -- such as a Sound named Rock being mistaken for Silver's ability.
+        if instance:IsA("Sound")
+            or instance:IsA("BasePart")
+            or instance:IsA("Attachment")
+            or instance:IsA("Decal")
+            or instance:IsA("Texture")
+            or instance:IsA("ParticleEmitter")
+            or instance:IsA("Beam")
+            or instance:IsA("Trail")
+            or instance:IsA("Smoke")
+            or instance:IsA("Fire")
+            or instance:IsA("Sparkles")
+        then
+            return
+        end
+    end
+
+    -- Scan the character's Animate/Anims tree, where the rbxl shows the
+    -- character-specific move markers actually live.
+    local animate = model:FindFirstChild("Animate")
+    local anims = animate and animate:FindFirstChild("Anims")
+
+    if anims then
+        for _, descendant in ipairs(anims:GetDescendants()) do
+            processCandidateName(descendant)
+
+            if descendant:IsA("StringValue") then
+                processValue(descendant.Value)
+            end
+
+            for _, value in pairs(descendant:GetAttributes()) do
+                if type(value) == "string" then
+                    processValue(value)
+                end
             end
         end
     end
 
-    -- Атрибуты самой модели тоже учитываем.
+    -- Some characters expose their current ability marker directly on the
+    -- character root (for example Amy/Hammer, Eggman/jetpack, 2011x/Rage).
+    for _, child in ipairs(model:GetChildren()) do
+        if child:IsA("Model")
+            or child:IsA("Folder")
+            or child:IsA("NumberValue")
+            or child:IsA("StringValue")
+        then
+            processCandidateName(child)
+
+            if child:IsA("StringValue") then
+                processValue(child.Value)
+            end
+
+            for _, value in pairs(child:GetAttributes()) do
+                if type(value) == "string" then
+                    processValue(value)
+                end
+            end
+        end
+    end
+
     for _, value in pairs(model:GetAttributes()) do
         if type(value) == "string" then
-            checkName(value)
+            processValue(value)
         end
     end
 
-    ----------------------------------------------------------------
-    -- EXECUTIONERS
-    -- Однозначные способности EXE имеют приоритет над унаследованными
-    -- survivor-анимациями, например Sonic dodge/brake у Tripwire.
-    ----------------------------------------------------------------
+    -- Generic markers are intentionally not character evidence.
+    for genericName in pairs(ESP_GENERIC_ABILITY_NAMES) do
+        found[genericName] = nil
+    end
 
-    local executionerPriority = {
-        "Tripwire",
-        "Fleetway",
-        "2011x",
-        "Kolossos",
+    -- Tripwire can inherit Sonic animation markers such as dodge/brake.
+    -- Its own ability markers must therefore win before the normal score pass.
+    if found.step or found.brighterday or found.reachout then
+        return "Executioner", "Tripwire"
+    end
+
+    local scores = {}
+    local hasExecutionerEvidence = false
+
+    for characterName, abilities in pairs(ESP_CHARACTER_ABILITY_SETS) do
+        local score = 0
+
+        for _, abilityName in ipairs(abilities) do
+            if found[abilityName] then
+                score = score + 1
+            end
+        end
+
+        scores[characterName] = score
+
+        if (
+            characterName == "Tripwire"
+            or characterName == "Fleetway"
+            or characterName == "2011x"
+            or characterName == "Kolossos"
+        ) and score > 0 then
+            hasExecutionerEvidence = true
+        end
+    end
+
+    -- Skins can inherit survivor animations. Once a real executioner marker
+    -- exists, survivor animation matches must not override the executioner.
+    if hasExecutionerEvidence then
+        for characterName in pairs(scores) do
+            if characterName ~= "Tripwire"
+                and characterName ~= "Fleetway"
+                and characterName ~= "2011x"
+                and characterName ~= "Kolossos"
+            then
+                scores[characterName] = 0
+            end
+        end
+    end
+
+    local bestName = nil
+    local bestScore = 0
+    local tied = false
+
+    for characterName, score in pairs(scores) do
+        if score > bestScore then
+            bestName = characterName
+            bestScore = score
+            tied = false
+        elseif score > 0 and score == bestScore then
+            tied = true
+        end
+    end
+
+    if not bestName or bestScore <= 0 or tied then
+        return nil, nil
+    end
+
+    local executioners = {
+        Tripwire = true,
+        Fleetway = true,
+        ["2011x"] = true,
+        Kolossos = true,
     }
 
-    for _, characterName in ipairs(executionerPriority) do
-        if foundCharacters[characterName] then
-            return "Executioner", characterName
-        end
-    end
-
-    ----------------------------------------------------------------
-    -- SURVIVORS
-    ----------------------------------------------------------------
-
-    local survivorPriority = {
-        "Sonic",
-        "Tails",
-        "Knuckles",
-        "Eggman",
-        "Amy",
-        "Cream",
-        "Blaze",
-        "Silver",
-        "Metal Sonic",
-    }
-
-    for _, characterName in ipairs(survivorPriority) do
-        if foundCharacters[characterName] then
-            return "Survivor", characterName
-        end
-    end
-
-    return nil, nil
+    return executioners[bestName] and "Executioner" or "Survivor", bestName
 end
 function isESPExecutionerModel(model)
     local role = getESPAbilityClassification(model)
