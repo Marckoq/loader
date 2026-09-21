@@ -4661,10 +4661,7 @@ end
 -- Executioners:
 --   2011X, Kolossos, Tripwire, Fleetway, MSS
 --
--- Classification uses ONLY recognized ability names; model names are ignored.
---
--- Every character is classified only by recognized ability names, so skin/model
--- names and structural markers do not affect the ESP role.
+-- Temporary mode: classification uses ONLY the normalized model name.
 -- ============================================================================
 
 -- Temporary ESP mode: classify characters strictly by model name.
@@ -4689,7 +4686,7 @@ ESP_MODEL_ROLE_NAMES = {
 
 -- ESP classification is ability-name-only.
 function normalizeESPModelName(name)
-    -- Normalize ability/object names for ability-only ESP matching.
+    -- Normalize model names case-insensitively and ignore punctuation.
     return string.lower(tostring(name or "")):gsub("[^%w]+", "")
 end
 
