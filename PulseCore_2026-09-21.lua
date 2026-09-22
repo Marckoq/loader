@@ -7294,8 +7294,8 @@ function createESPInfoWindow()
 
     espInfoWindow = Instance.new("Frame")
     espInfoWindow.Name = "ESPInfoWindow"
-    espInfoWindow.AnchorPoint = Vector2.new(1, 0)
-    espInfoWindow.Position = UDim2.new(1, -18, 0, 84)
+    espInfoWindow.AnchorPoint = Vector2.new(0, 0)
+    espInfoWindow.Position = UDim2.new(0, 18, 0, 84)
     espInfoWindow.Size = UDim2.fromOffset(360, 430)
     espInfoWindow.BackgroundColor3 = COLORS.Panel
     espInfoWindow.BackgroundTransparency = 0.10
