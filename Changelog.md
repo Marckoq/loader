@@ -3,6 +3,7 @@
 ## 2026-09-22
 
 ### Interface
+- Made script icon preparation synchronous so the PNG is available before the header icon is created.
 - Added the repository image `images (1).png` as the PulseCore header icon.
 - Added an orange `BETA` badge with a white outline next to the version.
 - The icon is stored locally under `Real\\workspace\\PulseCore\\assets\\images (1).png` and loaded through the executor asset API.
