@@ -1277,8 +1277,9 @@ function isCoolVideoFileAvailable(path)
 
     if type(isFileApi) == "function" then
         local ok, exists = pcall(isFileApi, path)
-        if ok then
-            return exists == true
+
+        if not ok or exists ~= true then
+            return false
         end
     end
 
@@ -1286,7 +1287,14 @@ function isCoolVideoFileAvailable(path)
 
     if type(readFileApi) == "function" then
         local ok, contents = pcall(readFileApi, path)
-        return ok and type(contents) == "string" and #contents > 0
+
+        if not ok or type(contents) ~= "string" or #contents < 16 then
+            return false
+        end
+
+        -- ISO Base Media / MP4 files normally contain the "ftyp" box
+        -- at bytes 5..8. Reject HTML/error pages accidentally saved as .mp4.
+        return string.sub(contents, 5, 8) == "ftyp"
     end
 
     return false
@@ -1295,6 +1303,14 @@ end
 function downloadCoolVideo()
     if isCoolVideoFileAvailable(COOL_VIDEO_PATH) then
         return true, nil
+    end
+
+    local deleteFileApi = getPulseCoreFileApi("delfile")
+
+    if type(deleteFileApi) == "function" then
+        pcall(function()
+            deleteFileApi(COOL_VIDEO_PATH)
+        end)
     end
 
     local folderOk, folderError = ensureCoolVideoFolder()
@@ -1375,6 +1391,8 @@ function prepareCoolVideo()
 end
 
 function getCoolVideoAsset(path)
+    -- Real documents getcustomasset as the supported way to convert a
+    -- workspace file into an rbxasset:// ContentId.
     local resolvers = {
         function()
             return getcustomasset
@@ -1387,11 +1405,13 @@ function getCoolVideoAsset(path)
         end,
     }
 
+    local normalizedPath = string.gsub(path, "\\", "/")
+
     for _, getResolver in ipairs(resolvers) do
         local okResolver, resolver = pcall(getResolver)
 
         if okResolver and type(resolver) == "function" then
-            local ok, asset = pcall(resolver, path)
+            local ok, asset = pcall(resolver, normalizedPath)
 
             if ok and type(asset) == "string" and asset ~= "" then
                 return asset
@@ -1523,23 +1543,40 @@ function playCoolVideo()
 
     coolVideoState.video = video
 
-    -- Roblox has a known VideoFrame loading workaround:
-    -- put VideoFrame into PlayerGui first, then assign Video.
-    local videoLoadedConnection
-    videoLoadedConnection = video.Loaded:Connect(function()
-        if videoLoadedConnection then
-            videoLoadedConnection:Disconnect()
-            videoLoadedConnection = nil
-        end
+    -- VideoFrame must be parented before its ContentId is assigned.
+    -- Real's getcustomasset returns the local asset as rbxasset://...
+    local loaded = false
+    local failedReason = nil
+
+    local videoLoadedConnection = video.Loaded:Connect(function()
+        loaded = true
 
         if coolVideoState.video == video and video.Parent then
-            video:Play()
+            pcall(function()
+                video:Play()
+            end)
         end
     end)
 
-    pcall(function()
+    local videoPlayedConnection = video.Played:Connect(function()
+        loaded = true
+    end)
+
+    local setVideoOk, setVideoError = pcall(function()
         video.Video = videoAsset
     end)
+
+    if not setVideoOk then
+        failedReason = tostring(setVideoError)
+    end
+
+    -- Newer Roblox builds expose VideoContent as a Content value as well.
+    -- Use it only when the runtime exposes Content.fromUri.
+    if not loaded and type(Content) == "table" and type(Content.fromUri) == "function" then
+        pcall(function()
+            video.VideoContent = Content.fromUri(videoAsset)
+        end)
+    end
 
     local close = create("TextButton", {
         Name = "Close",
@@ -1567,20 +1604,43 @@ function playCoolVideo()
 
     muteGameSounds()
 
-    -- Fallback: some builds may not fire Loaded for a local asset even though
-    -- IsLoaded becomes true after the property is assigned.
+    -- Wait for the local asset to load. If Roblox/Real rejects the file,
+    -- report the actual state instead of leaving an apparently frozen overlay.
     task.spawn(function()
         local deadline = time() + 10
 
         while coolVideoState.video == video and video.Parent and time() < deadline do
             if video.IsLoaded then
+                loaded = true
+
                 pcall(function()
                     video:Play()
                 end)
+
                 break
             end
 
             task.wait(0.1)
+        end
+
+        if videoLoadedConnection then
+            videoLoadedConnection:Disconnect()
+            videoLoadedConnection = nil
+        end
+
+        if videoPlayedConnection then
+            videoPlayedConnection:Disconnect()
+            videoPlayedConnection = nil
+        end
+
+        if coolVideoState.video == video and not loaded then
+            closeCoolVideo()
+
+            setStatus(
+                "Cool Button: Roblox rejected the local video."
+                    .. (failedReason and (" " .. failedReason) or ""),
+                COLORS.Yellow
+            )
         end
     end)
 end
