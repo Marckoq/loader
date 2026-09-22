@@ -3654,7 +3654,9 @@ do
         Text = table.concat({
             "CHANGELOG / LATEST UPDATE",
             "",
-            "• N/A",
+            "• Ability names now use readable names such as Sol Flame, Burning Javelin, Laser Canon, Hammer Throw, and Energy Shield.",
+            "• Added the repository icon to the header and an orange BETA badge.",
+            "• Replaced the header icon with the new meme image and forced a fresh local asset path.",
         }, "\n"),
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
