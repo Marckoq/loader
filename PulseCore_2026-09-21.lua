@@ -4752,6 +4752,7 @@ espInfoScroll = nil
 espInfoLayout = nil
 espInfoRefreshConnection = nil
 espInfoUpdateAccumulator = 0
+espAbilityCacheAccumulator = 0
 espAbilityCooldownCache = {}
 trackedModels = {}
 recordedESPContainers = {}
@@ -7222,6 +7223,7 @@ function startESPInfoWindow()
     end
 
     espInfoUpdateAccumulator = 0
+    espAbilityCacheAccumulator = 0
     espInfoRefreshConnection = RunService.Heartbeat:Connect(function(deltaTime)
         if guiDestroyed then
             return
@@ -7233,18 +7235,20 @@ function startESPInfoWindow()
         end
 
         espInfoUpdateAccumulator = espInfoUpdateAccumulator + deltaTime
+        espAbilityCacheAccumulator = espAbilityCacheAccumulator + deltaTime
 
-        if espInfoUpdateAccumulator < 0.25 then
-            return
+        if espAbilityCacheAccumulator >= 1 then
+            espAbilityCacheAccumulator = 0
+
+            if espAbilitiesEnabled then
+                refreshESPAbilityCooldownCache()
+            end
         end
 
-        espInfoUpdateAccumulator = 0
-
-        if espAbilitiesEnabled then
-            refreshESPAbilityCooldownCache()
+        if espInfoUpdateAccumulator >= 0.25 then
+            espInfoUpdateAccumulator = 0
+            refreshESPInfoWindow()
         end
-
-        refreshESPInfoWindow()
     end)
 
     if espAbilitiesEnabled then
