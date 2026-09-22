@@ -1316,7 +1316,6 @@ function getScriptIconAsset()
     return nil
 end
 
-task.spawn(ensureScriptIconFile)
 local scriptIconAsset = getScriptIconAsset()
 
 if not scriptIconAsset then
