@@ -1328,8 +1328,8 @@ if scriptIconAsset then
         Name = "ScriptIcon",
         Position = UDim2.fromOffset(10, 8),
         Size = UDim2.fromOffset(40, 40),
-        BackgroundColor3 = COLORS.CyanDeep,
-        BackgroundTransparency = 0.16,
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Image = scriptIconAsset,
         ImageColor3 = COLORS.White,
@@ -1391,7 +1391,7 @@ local betaBadge = create("Frame", {
     ZIndex = 7,
 }, topBar)
 addCorner(betaBadge, 6)
-addStroke(betaBadge, COLORS.White, 0, 1)
+addStroke(betaBadge, COLORS.White, 0, 1.6)
 
 create("TextLabel", {
     Name = "Text",
@@ -3728,11 +3728,11 @@ do
         Text = table.concat({
             "CHANGELOG / LATEST UPDATE",
             "",
-            "• Reworked the Info page: it now contains only the creator, current version, and latest changelog.",
-            "• Added local config file storage in the executor workspace under AppData\\Local.",
-            "• Each config is saved as its own JSON file using the config name as the file name.",
-            "• Configs now survive a full Roblox restart; save, load, rename, delete, and Auto Load are synchronized with the files.",
-            "• Increased the main interface height for more comfortable Settings and config management.",
+            "• Added ESP Distance, role-colored Tracers, Survivor HP + Status, and the separate ESP INFO panel.",
+            "• ESP INFO now stays visible when the main interface is minimized and refreshes at a reduced rate for better performance.",
+            "• Ability names now use readable names such as Sol Flame, Burning Javelin, Laser Canon, Hammer Throw, and Energy Shield.",
+            "• Dead character models are excluded from ESP.",
+            "• Added the repository icon to the header and an orange BETA badge.",
         }, "\n"),
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
