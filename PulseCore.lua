@@ -122,8 +122,8 @@ function getPulseCoreEnvironment()
 end
 
 function getPulseCoreFileApi(functionName)
-    -- First try direct global references. Real exposes its filesystem API
-    -- as normal globals, and this avoids executor-specific environment quirks.
+
+
     local directResolvers = {
         readfile = function()
             return readfile
@@ -234,8 +234,8 @@ function getPulseCoreLocalAppData()
         end
     end
 
-    -- Some executors sandbox their filesystem to their own workspace and
-    -- do not expose Windows environment variables to Luau.
+
+
     return "PulseCore\\Configs", true
 end
 
@@ -284,9 +284,9 @@ function initializePulseCoreConfigPath()
         return false, "Missing file API: makefolder"
     end
 
-    -- Real resolves all filesystem paths relative to its workspace.
-    -- Its makefolder implementation is recursive, so creating the final path
-    -- is sufficient and also creates missing parent directories.
+
+
+
     local created, createError = pcall(function()
         makeFolderApi(CONFIG_ROOT_PATH)
     end)
@@ -366,7 +366,7 @@ end
 
 ESP_HIGHLIGHT_NAME = "SpeedBoostVisualESP"
 
--- Имена нормализуются: пробелы, дефисы и подчёркивания не учитываются.
+
 EXECUTIONER_NAMES = {
     ["2011x"] = true,
     ["kolossos"] = true,
@@ -387,7 +387,7 @@ SURVIVOR_NAMES = {
 }
 
 COLORS = {
-    -- Black / graphite interface palette.
+
     Cyan = Color3.fromRGB(210, 210, 210),
     CyanDark = Color3.fromRGB(68, 68, 68),
     CyanDeep = Color3.fromRGB(18, 18, 18),
@@ -671,8 +671,8 @@ function isPulseCoreLogMessage(message)
         return false
     end
 
-    -- Only accept messages explicitly associated with PulseCore / its features.
-    -- This intentionally rejects unrelated game Output, Info, Warning and Error messages.
+
+
     return string.find(text, "[PulseCore]", 1, true) ~= nil
         or string.find(text, "[Speed Boost]", 1, true) ~= nil
         or string.find(text, "PulseCore", 1, true) ~= nil
@@ -1053,8 +1053,8 @@ function runLiveConsoleMode()
         localPlayer:SetAttribute(CONSOLE_MODE_ATTRIBUTE_NAME, false)
     end))
 
-    -- Never import the game's global LogHistory: the console is intended to show
-    -- PulseCore-related diagnostics only. Re-display our own buffered records instead.
+
+
     local bufferedLogs = table.clone(liveConsoleState.pendingLogs)
     table.clear(liveConsoleState.records)
 
@@ -1127,7 +1127,7 @@ create("UIGradient", {
 }, mainFrame)
 
 
--- Main interface starts immediately; no Key System is used.
+
 topBar = create("Frame", {
     Name = "TopBar",
     Size = UDim2.new(1, 0, 0, 56),
@@ -1139,7 +1139,7 @@ topBar = create("Frame", {
 }, mainFrame)
 addCorner(topBar, 14)
 
--- Заполняет нижнюю часть TopBar, оставляя округление только сверху.
+
 create("Frame", {
     Name = "TopBarBottomFill",
     AnchorPoint = Vector2.new(0, 1),
@@ -1166,14 +1166,14 @@ function ensureScriptIconFile()
     end
 
     if not pcall(function() makeFolderApi("PulseCore") end) then
-        -- The assets folder may still already exist.
+
     end
 
     pcall(function()
         makeFolderApi(SCRIPT_ICON_FOLDER)
     end)
 
-    -- Always refresh the icon so an older local asset is not reused.
+
     local requestResolvers = {
         function()
             return request
@@ -1372,8 +1372,8 @@ bodyFrame = create("Frame", {
     ClipsDescendants = true,
 }, mainFrame)
 
--- CanvasGroups let the whole interface and body fade without individually
--- tweening every label/button.
+
+
 interfaceCanvasGroup = create("CanvasGroup", {
     Name = "InterfaceAnimationGroup",
     Position = UDim2.fromScale(0, 0),
@@ -1398,7 +1398,7 @@ sidebar = create("Frame", {
 }, bodyFrame)
 addCorner(sidebar, 14)
 
--- Preserve square internal edges while leaving only the outer lower-left corner rounded.
+
 create("Frame", {
     Name = "SidebarTopFill",
     Position = UDim2.fromOffset(0, 0),
@@ -1419,7 +1419,7 @@ create("Frame", {
     ZIndex = 1,
 }, sidebar)
 
--- The sidebar uses one shared animated selection background and indicator.
+
 function createTabButton(name, text, y)
     local button = create("TextButton", {
         Name = name,
@@ -1557,7 +1557,7 @@ clientModules = {
         noclipEnabled = false,
         infinityJumpEnabled = false,
 
-        -- Sharp Movement / Anti-Slide.
+
         sharpMovementEnabled = false,
         sharpMovementConnection = nil,
 
@@ -1798,7 +1798,7 @@ visualsPage = createScrollingPage("VisualsPage")
 clientModules.pages.combat = createScrollingPage("CombatPage")
 clientModules.pages.fun = createScrollingPage("FunPage")
 clientModules.pages.camera = createScrollingPage("CameraPage")
--- Legacy pages stay hidden so old configs can be read without exposing removed tabs.
+
 clientModules.pages.performance = createScrollingPage("PerformancePage")
 clientModules.pages.hud = createScrollingPage("HudPage")
 clientModules.pages.autoSelect = createScrollingPage("AutoSelectPage")
@@ -1999,10 +1999,10 @@ function createToggleRow(parent, labelText, layoutOrder)
     return button, dot
 end
 
---==================================================
--- COMBAT
--- Built against the supplied save.rbxl character/animation layout.
---==================================================
+
+
+
+
 
 function clientModules.combat.normalize(value)
     return string.lower(tostring(value or "")):gsub("[%s_%-%.]", "")
@@ -2084,9 +2084,9 @@ function clientModules.combat.detectCharacter(model)
         end
     end
 
-    -- First use character-specific markers. This must happen before the
-    -- generic ESP classifier because Fleetway/Tripwire can inherit Sonic's
-    -- dodge/brake animation markers.
+
+
+
     local markerCharacters = {
         tripwire = "Tripwire",
         tailsdoll = "Tripwire",
@@ -2144,9 +2144,9 @@ function clientModules.combat.detectCharacter(model)
         end
     end
 
-    -- Tripwire/TailsDoll has unique Glorbwire animation asset IDs in the rbxl.
-    -- Check them before the generic Sonic fallback because Tripwire inherits
-    -- Sonic Dodge/Brake animation names.
+
+
+
     local tripwireAnimationIds = {
         ["79953933012214"] = true,
         ["85598394392380"] = true,
@@ -2163,7 +2163,7 @@ function clientModules.combat.detectCharacter(model)
         end
     end
 
-    -- The supplied rbxl has stable, character-specific animation templates.
+
     local names = clientModules.combat.animNames(model)
 
     if names.chargedash or names.missdash or names.grabhold or names.toss then
@@ -2202,8 +2202,8 @@ function clientModules.combat.detectCharacter(model)
         return "Eggman"
     end
 
-    -- Only after all character-specific evidence do we fall back to the
-    -- general ESP classifier (which may see inherited Sonic markers).
+
+
     local group, displayName = getESPAbilityClassification(model)
     if displayName and displayName ~= "Unknown" then
         return displayName
@@ -2584,8 +2584,8 @@ function clientModules.combat.refreshCharacterHooks()
                 }
 
                 if allowed[animationName] then
-                    -- Do not use a fixed timer. Keep attack aim alive for the
-                    -- actual animation track so long attacks are fully guided.
+
+
                     if clientModules.combat.attackStopConnection then
                         clientModules.combat.attackStopConnection:Disconnect()
                         clientModules.combat.attackStopConnection = nil
@@ -2603,8 +2603,8 @@ function clientModules.combat.refreshCharacterHooks()
                         end
                     end)
 
-                    -- Keep this non-zero for executors/animations that do not
-                    -- report Stopped reliably.
+
+
                     clientModules.combat.aimActiveUntil = time() + 1
                 end
             end)
@@ -2683,10 +2683,10 @@ function clientModules.combat.isEnemyAttack(model, track, markerName)
         return false
     end
 
-    -- Auto Block / Counter on the survivor side reacts only to these attack
-    -- families. Fleetway's rbxl uses ChargeDash/MissDash for Chaos Dash and
-    -- GrabHold/Toss for Fateful Drain, so those internal animation markers
-    -- are accepted as the corresponding abilities.
+
+
+
+
     if normalized == "attack"
         or normalized == "attack1"
         or normalized == "attack2"
@@ -2726,7 +2726,7 @@ function clientModules.combat.bindEnemyModel(model)
             return
         end
 
-        -- This feature is for survivor-side Counter / Block / Energy Shield.
+
         local defenseCharacter = clientModules.combat.detectDefenseCharacter(localPlayer.Character)
         if not defenseCharacter then
             return
@@ -2738,14 +2738,14 @@ function clientModules.combat.bindEnemyModel(model)
 
         local distance = clientModules.combat.getDistance(model)
 
-        -- Exact requested reaction window: 1–8 studs.
+
         if distance < 1 or distance > 8 then
             return
         end
 
         local now = time()
-        -- No delay before the first key press. The small guard only prevents
-        -- duplicate marker/animation signals from hammering the same defense.
+
+
         if now - clientModules.combat.lastCounterAt < 0.10 then
             return
         end
@@ -2758,8 +2758,8 @@ function clientModules.combat.bindEnemyModel(model)
         tryDefend(track, nil)
     end))
 
-    -- Some attacks expose their ability name as a runtime descendant instead
-    -- of the AnimationTrack name. Catch those markers as soon as they appear.
+
+
     table.insert(connections, model.DescendantAdded:Connect(function(instance)
         if not instance or not instance.Parent then
             return
@@ -2916,8 +2916,8 @@ function clientModules.combat.initialize()
             if clientModules.combat.autoAimEnabled
                 and attackActive
                 and time() <= clientModules.combat.aimActiveUntil then
-                -- Guide the actual attack direction while the supported ability
-                -- is playing. The physical mouse is never moved.
+
+
                 local target = clientModules.combat.refreshTarget()
                 local camera = workspace.CurrentCamera
                 local root = target and clientModules.combat.getRoot(target.model)
@@ -2927,9 +2927,9 @@ function clientModules.combat.initialize()
                 if root then
                     local targetPosition = root.Position
 
-                    -- Many movement/melee abilities use the character's facing
-                    -- direction rather than the cursor. Face the character
-                    -- toward the selected target during the attack.
+
+
+
                     if characterRoot then
                         local characterPosition = characterRoot.Position
                         local flatTarget = Vector3.new(
@@ -2946,8 +2946,8 @@ function clientModules.combat.initialize()
                         end
                     end
 
-                    -- Ranged abilities commonly take their direction from the
-                    -- camera/mouse ray. Match the camera to the same target.
+
+
                     if camera then
                         local cameraPosition = camera.CFrame.Position
                         local desired = CFrame.lookAt(cameraPosition, targetPosition)
@@ -3021,7 +3021,7 @@ function clientModules.combat.shutdown()
     table.clear(clientModules.combat.activeMarkers)
 end
 
--- COMBAT UI
+
 createSectionLabel(clientModules.pages.combat, "COMBAT / ASSIST", 1)
 
 clientModules.combat.autoAimButton, clientModules.combat.autoAimDot =
@@ -3141,7 +3141,7 @@ create("TextLabel", {
 }, clientModules.pages.combat)
 
 
--- FUN / PLACE-SPECIFIC UI
+
 
 function clientModules.fun.findFirstByName(name, className)
     for _, instance in ipairs(game:GetDescendants()) do
@@ -3359,7 +3359,7 @@ function clientModules.fun.playPlaceAnimation(animationName)
 
     local animation = nil
 
-    -- Prefer an existing animation object from this place.
+
     pcall(function()
         animation = clientModules.fun.findFirstByName(animationName, "Animation")
     end)
@@ -4096,7 +4096,7 @@ function clientModules.createActionButton(parent, textValue, position, size, bac
     return button
 end
 
--- CAMERA: всё меняется только у локального игрока и его CurrentCamera.
+
 createSectionLabel(clientModules.pages.camera, "CAMERA  /  VIEW SETTINGS", 1)
 clientModules.camera.fovBox = createInputRow(
     clientModules.pages.camera,
@@ -4157,7 +4157,7 @@ create("UIPadding", {
     PaddingRight = UDim.new(0, 14),
 }, clientModules.camera.statusLabel)
 
--- PERFORMANCE: visible optimization and FPS controls.
+
 createSectionLabel(clientModules.pages.performance, "PERFORMANCE  /  OPTIMIZATION", 1)
 
 clientModules.performance.modeButton, clientModules.performance.modeDot = createToggleRow(
@@ -4320,7 +4320,7 @@ create("UIPadding", {
     PaddingRight = UDim.new(0, 14),
 }, clientModules.performance.hintLabel)
 
--- HUD: локальный информационный оверлей.
+
 createSectionLabel(clientModules.pages.hud, "HUD  /  INFORMATION", 1)
 clientModules.hud.fpsButton, clientModules.hud.fpsDot = createToggleRow(
     clientModules.pages.hud,
@@ -4384,8 +4384,8 @@ create("UIPadding", {
 }, clientModules.hud.overlay)
 
 
--- KEY LIST: all hotkeys in one place. Keep these references in a table instead of
--- creating many top-level locals; Luau has a 200-register limit for a chunk.
+
+
 clientModules.keyList = clientModules.keyList or {}
 clientModules.keyList.buttons = clientModules.keyList.buttons or {}
 clientModules.keyList.abilityButtons = clientModules.keyList.abilityButtons or {}
@@ -4455,7 +4455,7 @@ clientModules.keyList.state = clientModules.keyList.state or {
 }
 
 
--- AUTO SELECT: автоматизирует только клиентское нажатие выбора персонажа.
+
 createSectionLabel(clientModules.pages.autoSelect, "AUTO SELECT  /  CHARACTER SELECTION", 1)
 clientModules.autoSelect.toggleButton, clientModules.autoSelect.toggleDot = createToggleRow(
     clientModules.pages.autoSelect,
@@ -4879,8 +4879,8 @@ function setSwitchVisual(button, dot, enabled)
     }):Play()
 end
 
--- Centralized interface motion. The CanvasGroups keep the animations smooth
--- even though the UI contains many nested controls.
+
+
 interfaceAnimationSerial = 0
 
 function animateMainInterfaceVisibility(visible)
@@ -5613,8 +5613,8 @@ function clientModules.autoSelect.selectCharacter(gameName, silent)
         clientModules.autoSelect.statusLabel.TextColor3 = COLORS.Green
     end
 
-    -- Если экран выбора уже открыт, новый персонаж должен заменить предыдущую
-    -- незавершённую попытку сразу, без ожидания следующего события ClientUI.
+
+
     if clientModules.autoSelect.enabled and clientModules.autoSelect.currentPayload then
         local payload = clientModules.autoSelect.currentPayload
         task.defer(function()
@@ -5643,8 +5643,8 @@ function clientModules.autoSelect.setEnabled(enabled, silent)
         end
     end
 
-    -- Функцию можно включить уже после появления игрового меню выбора.
-    -- В таком случае используем сохранённый актуальный payload.
+
+
     if clientModules.autoSelect.enabled
         and clientModules.autoSelect.selectedCharacter
         and clientModules.autoSelect.currentPayload then
@@ -5702,9 +5702,9 @@ function clientModules.autoSelect.handleCharacterSelect(payload)
     clientModules.autoSelect.statusLabel.TextColor3 = COLORS.Yellow
 
     task.spawn(function()
-        -- В прикреплённой игре обработчик ClientUI сначала ждёт карту, затем
-        -- проигрывает переходы и только после этого показывает SelectScreen.
-        -- Старый вариант отправлял Voted через 0.45 секунды, то есть слишком рано.
+
+
+
         local deadline = time() + 15
         local selectScreenReady = false
 
@@ -5748,7 +5748,7 @@ function clientModules.autoSelect.handleCharacterSelect(payload)
             return
         end
 
-        -- Даём штатному LocalScript один кадр для создания обработчиков выбора.
+
         RunService.Heartbeat:Wait()
 
         if guiDestroyed
@@ -5795,8 +5795,8 @@ function clientModules.autoSelect.handleClientUI(payload)
         clientModules.autoSelect.currentPayload = payload
         clientModules.autoSelect.handleCharacterSelect(payload)
     elseif payload[1] == "TitleCard" then
-        -- TitleCard означает завершение окна выбора. Старый payload больше
-        -- нельзя использовать при последующем включении функции.
+
+
         clientModules.autoSelect.currentPayload = nil
         clientModules.autoSelect.selectionSerial = clientModules.autoSelect.selectionSerial + 1
     end
@@ -6106,7 +6106,7 @@ function relayoutSidebarTabs()
         end
     end
 
-    -- Keep the animated selection in sync with the compacted sidebar.
+
     local selectedName = clientModules.tabAnimation.currentName
     local selectedButton = selectedName and ({
         Info = clientModules.tabs.info,
@@ -6181,7 +6181,7 @@ function clientModules.infFlight.isCharacterFlying(character, rootPart)
         return true
     end
 
-    -- Silver/Fleetway create these two objects only while their flight is active.
+
     return rootPart:FindFirstChildOfClass("BodyVelocity") ~= nil
         and rootPart:FindFirstChildOfClass("BodyGyro") ~= nil
 end
@@ -6272,8 +6272,8 @@ function clientModules.infFlight.runTagLoop(serial)
                 character:AddTag("Kill")
             end)
 
-            -- The game adds a large amount of flight energy on each tag event.
-            -- Pulsing every frame is unnecessary and can interfere with movement scripts.
+
+
             task.wait(0.05)
             clientModules.infFlight.removeKillTag(character)
             task.wait(0.45)
@@ -6547,7 +6547,7 @@ function clientModules.flight.startController(character)
             direction = direction - Vector3.yAxis
         end
 
-        -- Gamepad / touch movement can still come through Humanoid.MoveDirection.
+
         if direction.Magnitude <= 0.001 and humanoid.MoveDirection.Magnitude > 0.001 then
             direction = humanoid.MoveDirection
         end
@@ -6622,24 +6622,24 @@ function clientModules.flight.shutdown()
     end
 end
 
--- ============================================================================
--- PulseCore ESP: MODEL-NAME MODE
--- ============================================================================
--- The ESP does NOT depend on folders such as Players / Survivors / EXE.
--- It searches every Model in Workspace and classifies it by its exact
--- normalized model name.
---
--- Survivors:
---   Sonic, Tails, Knuckles, Eggman, Amy, Cream, Blaze, Silver, Metal Sonic
---
--- Executioners:
---   2011X, Kolossos, Tripwire, Fleetway, MSS
---
--- Temporary mode: classification uses ONLY the normalized model name.
--- ============================================================================
 
--- ESP classification mode: ability markers only.
--- Internal aliases below are based on the supplied game's .rbxl structure.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ESP_MODEL_ROLE_NAMES = {
     sonic = "Survivor",
     tails = "Survivor",
@@ -6658,9 +6658,9 @@ ESP_MODEL_ROLE_NAMES = {
     mss = "Executioner",
 }
 
--- ESP classification is ability-name-only.
+
 function normalizeESPModelName(name)
-    -- Normalize model names case-insensitively and ignore punctuation.
+
     return string.lower(tostring(name or "")):gsub("[^%w]+", "")
 end
 
@@ -6668,8 +6668,8 @@ function getESPGroupByModelName(name)
     return ESP_MODEL_ROLE_NAMES[normalizeESPModelName(name)]
 end
 
--- Keep the old function name for compatibility with any existing PulseCore
--- code, but now it classifies MODEL NAMES rather than folder names.
+
+
 function normalizeESPContainerName(name)
     return normalizeESPModelName(name)
 end
@@ -6687,7 +6687,7 @@ function isLocalCharacterModel(model)
         return true
     end
 
-    -- Roblox can expose the same player character through another container.
+
     local okPlayer, owner = pcall(function()
         return Players:GetPlayerFromCharacter(model)
     end)
@@ -6696,8 +6696,8 @@ function isLocalCharacterModel(model)
         return true
     end
 
-    -- Some custom character systems clone Player.Character into Workspace.Players
-    -- without registering it through Players:GetPlayerFromCharacter().
+
+
     if model.Name == localPlayer.Name then
         return true
     end
@@ -6711,7 +6711,7 @@ function isLocalCharacterModel(model)
         end
     end
 
-    -- Custom games sometimes keep an ObjectValue pointing back to the Player.
+
     for _, descendant in ipairs(model:GetDescendants()) do
         if descendant:IsA("ObjectValue") and descendant.Value == localPlayer then
             return true
@@ -6967,7 +6967,7 @@ function getOrCreateESPHighlight(model, record)
         record.highlight = nil
     end
 
-    -- A dedicated local folder keeps ESP objects separate from game models.
+
     local highlightFolder = workspace:FindFirstChild("PulseCoreESPHighlights")
     if not highlightFolder then
         highlightFolder = Instance.new("Folder")
@@ -7139,7 +7139,7 @@ function getESPScanRoot()
 end
 
 ESP_ABILITY_ROLE_NAMES = {
-    -- Executioners
+
     step = "Executioner",
     brighterday = "Executioner",
     reachout = "Executioner",
@@ -7157,7 +7157,7 @@ ESP_ABILITY_ROLE_NAMES = {
     block = "Executioner",
     indicator = "Executioner",
 
-    -- Survivors
+
     dropdash = "Survivor",
     peelout = "Survivor",
     lasercanon = "Survivor",
@@ -7182,7 +7182,7 @@ ESP_ABILITY_ROLE_NAMES = {
     timereversal = "Survivor",
     roundhousekick = "Survivor",
 
-    -- Internal ability markers confirmed from the supplied .rbxl.
+
     canon = "Survivor",
     jetpack = "Survivor",
     rage = "Executioner",
@@ -7192,7 +7192,7 @@ ESP_ABILITY_ROLE_NAMES = {
     chargewarn = "Executioner",
     killold = "Executioner",
 
-    -- Stable animation markers from the supplied rbxl.
+
     dodge1 = "Survivor",
     dodge2 = "Survivor",
     dodge3 = "Survivor",
@@ -7206,7 +7206,7 @@ ESP_ABILITY_ROLE_NAMES = {
 }
 
 ESP_ABILITY_CHARACTER_NAMES = {
-    -- Executioners
+
     step = "Tripwire",
     brighterday = "Tripwire",
     reachout = "Tripwire",
@@ -7224,7 +7224,7 @@ ESP_ABILITY_CHARACTER_NAMES = {
     block = "Kolossos",
     indicator = "Kolossos",
 
-    -- Survivors
+
     dropdash = "Sonic",
     peelout = "Sonic",
     lasercanon = "Tails",
@@ -7249,7 +7249,7 @@ ESP_ABILITY_CHARACTER_NAMES = {
     timereversal = "Silver",
     roundhousekick = "Blaze",
 
-    -- Internal ability markers confirmed from the supplied .rbxl.
+
     canon = "Tails",
     jetpack = "Eggman",
     rage = "2011x",
@@ -7271,7 +7271,7 @@ ESP_ABILITY_CHARACTER_NAMES = {
 }
 
 ESP_CHARACTER_ABILITY_SETS = {
-    -- Stable internal markers observed in the supplied rbxl character templates.
+
     Tripwire = {"step", "brighterday", "reachout"},
     Fleetway = {"chargedash", "missdash", "grabhold", "toss"},
     ["2011x"] = {"rage", "invis", "godstrickery", "invisiblity", "invisibility", "ragemode"},
@@ -7288,8 +7288,8 @@ ESP_CHARACTER_ABILITY_SETS = {
     Blaze = {"flamestart", "float", "flameloop", "flameend"},
 }
 
--- These markers occur on several different character templates and therefore
--- must never identify a character by themselves.
+
+
 ESP_GENERIC_ABILITY_NAMES = {
     canon = true,
     peelout = true,
@@ -7341,7 +7341,7 @@ function isESPAbilityNameCandidate(instance)
         return false
     end
 
-    -- Physical/visual objects are not considered ability-name objects.
+
     if instance:IsA("BasePart")
         or instance:IsA("Attachment")
         or instance:IsA("Decal")
@@ -7357,7 +7357,7 @@ function isESPAbilityNameCandidate(instance)
         return false
     end
 
-    -- Animation objects in Animate.Anims are valid ability markers for this game.
+
 
     return true
 end
@@ -7382,17 +7382,17 @@ function getESPAbilityClassification(model)
             return
         end
 
-        -- First test the exact normalized name against the known ability table.
-        -- Some real ability markers (for example Tripwire's Reachout) are
-        -- stored as Sounds, so their class cannot be used as a blanket filter.
+
+
+
         local normalized = normalizeESPMarkerName(instance.Name)
         if ESP_ABILITY_ROLE_NAMES[normalized] then
             found[normalized] = true
             return
         end
 
-        -- Unknown physical/visual objects are ignored to avoid false positives
-        -- such as a Sound named Rock being mistaken for Silver's ability.
+
+
         if instance:IsA("Sound")
             or instance:IsA("BasePart")
             or instance:IsA("Attachment")
@@ -7409,8 +7409,8 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Scan the character's Animate/Anims tree, where the rbxl shows the
-    -- character-specific move markers actually live.
+
+
     local animate = model:FindFirstChild("Animate")
     local anims = animate and animate:FindFirstChild("Anims")
 
@@ -7430,8 +7430,8 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Some characters expose their current ability marker directly on the
-    -- character root (for example Amy/Hammer, Eggman/jetpack, 2011x/Rage).
+
+
     for _, child in ipairs(model:GetChildren()) do
         if child:IsA("Model")
             or child:IsA("Folder")
@@ -7458,19 +7458,19 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Generic markers are intentionally not character evidence.
+
     for genericName in pairs(ESP_GENERIC_ABILITY_NAMES) do
         found[genericName] = nil
     end
 
-    -- The supplied rbxl stores Tripwire under TailsDoll and uses the
-    -- CustomAnimation/Glorbwire set. Several Glorbwire animations have unique
-    -- asset IDs, so the IDs are a stronger signal than inherited Sonic names.
+
+
+
     local tripwireAnimationIds = {
-        ["79953933012214"] = true, -- Glorbwire Default Idle
-        ["85598394392380"] = true, -- Glorbwire Default Run/Walk
-        ["132547926723713"] = true, -- Glorbwire Jump
-        ["80215516605216"] = true, -- Glorbwire Kill
+        ["79953933012214"] = true,
+        ["85598394392380"] = true,
+        ["132547926723713"] = true,
+        ["80215516605216"] = true,
     }
 
     local customAnimation = model:FindFirstChild("CustomAnimation")
@@ -7493,14 +7493,14 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Tripwire can inherit Sonic animation markers such as dodge/brake.
-    -- Its own ability markers must therefore win before the normal score pass.
+
+
     if found.step or found.brighterday or found.reachout then
         return "Executioner", "Tripwire"
     end
 
-    -- Fleetway can also inherit Sonic markers. Its actual ability names are
-    -- stored in ESP_ABILITY_CHARACTER_NAMES, so use those as direct evidence.
+
+
     if found.chaosdash
         or found.fatefuldrain
         or found.lasersofdestrucation
@@ -7534,8 +7534,8 @@ function getESPAbilityClassification(model)
         end
     end
 
-    -- Skins can inherit survivor animations. Once a real executioner marker
-    -- exists, survivor animation matches must not override the executioner.
+
+
     if hasExecutionerEvidence then
         for characterName in pairs(scores) do
             if characterName ~= "Tripwire"
@@ -7593,8 +7593,8 @@ function getESPGroupForModel(model)
         return nil, nil
     end
 
-    -- The character model's username/name is intentionally ignored.
-    -- Classification is based only on recognized ability markers.
+
+
     local group, displayName = getESPAbilityClassification(model)
 
     if not group then
@@ -7610,8 +7610,8 @@ function scanESPContainers()
 
     local validModels = {}
 
-    -- First scan the game's player-model container. This is the important
-    -- path for skins whose model names differ from their base character.
+
+
     local playersFolder = workspace:FindFirstChild("Players")
 
     if playersFolder then
@@ -7633,8 +7633,8 @@ function scanESPContainers()
         end
     end
 
-    -- Also scan actual Player characters in case the game uses Player.Character
-    -- directly instead of a Workspace.Players model.
+
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
             local character = player.Character
@@ -7656,8 +7656,8 @@ function scanESPContainers()
         end
     end
 
-    -- Also scan Workspace for top-level character models that are not
-    -- exposed through Player.Character or Workspace.Players.
+
+
     for _, instance in ipairs(workspace:GetChildren()) do
         if instance:IsA("Model") and not isLocalCharacterModel(instance) then
             if isESPModelDead(instance) then
@@ -7753,8 +7753,8 @@ function initializeESP()
         updateESPNameTags()
     end)
 
-    -- A new model can appear anywhere in Workspace, so no folder-specific
-    -- condition is used here.
+
+
     espWorkspaceAddedConnection = workspace.DescendantAdded:Connect(function(instance)
         if guiDestroyed then
             return
@@ -7789,7 +7789,7 @@ function initializeESP()
     end)
 
     scanESPContainers()
-    
+
     if espNameTagConnection then
         espNameTagConnection:Disconnect()
         espNameTagConnection = nil
@@ -7855,9 +7855,9 @@ function shutdownESP()
 end
 
 function normalizeNumberText(text)
-    -- string.gsub возвращает два значения: строку и количество замен.
-    -- Сохраняем результат в переменную, чтобы tonumber не получил
-    -- количество замен как второй аргумент (основание системы счисления).
+
+
+
     local normalized = string.gsub(text, ",", ".")
     normalized = string.gsub(normalized, "%s+", "")
     return normalized
@@ -7995,8 +7995,8 @@ function clientModules.speedControl.applyVelocity(humanoid, rootPart)
     local currentSpeed = currentHorizontal.Magnitude
     local targetSpeed = math.max(tonumber(expectedWalkSpeed) or 0, 0)
 
-    -- Never clamp, cancel or redirect motion that is already faster than the
-    -- boost target. This preserves the game's own dash / slide / knockback.
+
+
     if currentSpeed >= targetSpeed - 0.01 then
         return
     end
@@ -8016,7 +8016,7 @@ function clientModules.characterTools.applySharpMovement()
         return
     end
 
-    -- Inf Flight already owns velocity; do not fight its controller.
+
     if clientModules.infFlight.enabled or clientModules.flight.enabled then
         return
     end
@@ -8045,14 +8045,14 @@ function clientModules.characterTools.applySharpMovement()
         horizontalDirection = horizontalDirection.Unit
         local horizontalVelocity = horizontalDirection * targetSpeed
 
-        -- Keep Y unchanged so jumps and falls keep their vertical motion.
+
         rootPart.AssemblyLinearVelocity = Vector3.new(
             horizontalVelocity.X,
             velocity.Y,
             horizontalVelocity.Z
         )
     elseif grounded then
-        -- No ground input means no leftover horizontal slide.
+
         rootPart.AssemblyLinearVelocity = Vector3.new(
             0,
             velocity.Y,
@@ -8239,8 +8239,8 @@ function clientModules.inventoryOrder.capture()
         end
     end
 
-    -- An equipped Tool is parented to Character. Keep it in the snapshot as well.
-    -- If it is not already represented, append it so it is not lost after respawn.
+
+
     local character = localPlayer.Character
     if character then
         for _, child in ipairs(character:GetChildren()) do
@@ -8291,7 +8291,7 @@ function clientModules.inventoryOrder.restore()
     local ordered = {}
     local used = setmetatable({}, { __mode = "k" })
 
-    -- Match duplicate tool names one-by-one in their saved slot order.
+
     for _, savedName in ipairs(clientModules.inventoryOrder.savedNames) do
         for _, tool in ipairs(tools) do
             if not used[tool] and tool.Name == savedName then
@@ -8302,7 +8302,7 @@ function clientModules.inventoryOrder.restore()
         end
     end
 
-    -- Keep newly granted / unknown tools after the restored slots.
+
     for _, tool in ipairs(tools) do
         if not used[tool] then
             table.insert(ordered, tool)
@@ -8315,8 +8315,8 @@ function clientModules.inventoryOrder.restore()
 
     clientModules.inventoryOrder.restoring = true
 
-    -- Roblox's default Backpack hotbar follows Tool insertion order.
-    -- Temporarily remove the Tools locally, then add them back in the saved order.
+
+
     local tempFolder = Instance.new("Folder")
     tempFolder.Name = "PulseCoreInventoryReorderTemp"
     tempFolder.Parent = localPlayer
@@ -8342,7 +8342,7 @@ function clientModules.inventoryOrder.scheduleRestore()
     clientModules.inventoryOrder.restoreSerial = clientModules.inventoryOrder.restoreSerial + 1
     local serial = clientModules.inventoryOrder.restoreSerial
 
-    -- Games often give Tools in several waves after respawn. Retry a few times.
+
     for _, delaySeconds in ipairs({0.8, 1.8, 3.5, 5.5}) do
         task.delay(delaySeconds, function()
             if guiDestroyed
@@ -8408,7 +8408,7 @@ function clientModules.inventoryOrder.setEnabled(enabled, silent)
                 if clientModules.inventoryOrder.enabled
                     and child:IsA("Tool")
                     and not clientModules.inventoryOrder.restoring then
-                    -- Late-granted Tools get another restore attempt after the grant settles.
+
                     task.delay(0.35, function()
                         if clientModules.inventoryOrder.enabled and not guiDestroyed then
                             clientModules.inventoryOrder.restore()
@@ -8515,8 +8515,8 @@ function clientModules.animationLock.isMovementTrack(track)
         tostring(track.Name or "") .. " " .. tostring(animation and animation.Name or "")
     )
 
-    -- Core is also used by idle, jump, fall, emote, and other non-locomotion
-    -- tracks. Treating every Core track as movement makes all of them speed up.
+
+
     local excludedNames = {
         "idle", "jump", "fall", "climb", "swim", "emote", "dance",
         "sit", "tool", "attack", "hit", "hurt", "death", "die", "fly",
@@ -8548,7 +8548,7 @@ function clientModules.animationLock.disconnect()
         clientModules.animationLock.animationPlayedConnection = nil
     end
 
-    -- Restore the exact playback speed that existed before the Boost touched the track.
+
     for track, record in pairs(clientModules.animationLock.tracks) do
         local neutralSpeed = record and tonumber(record.neutralSpeed) or 1
 
@@ -8565,8 +8565,8 @@ function clientModules.animationLock.disconnect()
 end
 
 function clientModules.animationLock.getBoostAnimationSpeed()
-    -- Match movement animation speed to the WalkSpeed multiplier.
-    -- A cap keeps animations readable even when a very large boost is selected.
+
+
     local normalSpeed = tonumber(baseWalkSpeed) or 16
     local boostedSpeed = tonumber(expectedWalkSpeed) or normalSpeed
 
@@ -8574,7 +8574,7 @@ function clientModules.animationLock.getBoostAnimationSpeed()
         normalSpeed = 16
     end
 
-    -- Set mode may intentionally choose a value below the base WalkSpeed.
+
     return math.clamp(boostedSpeed / normalSpeed, 0.1, 4)
 end
 
@@ -8633,7 +8633,7 @@ function clientModules.animationLock.attach(humanoid)
     clientModules.animationLock.humanoid = humanoid
     clientModules.animationLock.animator = animator
 
-    -- Capture currently playing movement tracks before WalkSpeed is boosted.
+
     for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
         clientModules.animationLock.captureTrack(track, nil, false)
     end
@@ -8744,7 +8744,7 @@ function attachBoostToHumanoid(humanoid)
             return
         end
 
-        -- Внешнее значение считаем новой стандартной скоростью.
+
         baseWalkSpeed = currentWalkSpeed
         applyBoostedWalkSpeed()
     end)
@@ -9211,7 +9211,7 @@ function stopBoost(message, options)
     stopStatusUpdater()
 
     if options.preserveCooldownArm then
-        -- Standard Boost временно приостановлен способностью; его cooldown начнётся после окончательного отключения.
+
     elseif options.suppressCooldown then
         clientModules.cooldown.clearArm(stoppedOwner)
     else
@@ -9640,7 +9640,7 @@ function requestBoost()
     end
 
     if boostActive or boostPending then
-        -- Явное включение стандартного буста отменяет текущую способность.
+
         resumeStandardAfterAbility = false
         standardResumeSnapshot = nil
         stopBoost("Current ability disabled.", {
@@ -9699,7 +9699,7 @@ function requestAbilityBoost(ability)
             preserveCooldownArm = true,
         })
     elseif boostActive or boostPending then
-        -- Переключение между способностями не включает стандартный буст между ними.
+
         stopBoost("Previous ability disabled.", {
             suppressStandardResume = true,
             preserveStandardResume = true,
@@ -10562,7 +10562,7 @@ function configManager.persistConfigs()
         end
     end
 
-    -- Optional cleanup for executors that expose directory enumeration/deletion.
+
     if listFilesApi and deleteFileApi then
         local listedOk, files = pcall(listFilesApi, CONFIG_ROOT_PATH)
 
@@ -10686,7 +10686,7 @@ function configManager.loadStoredConfigs()
             end
         end
 
-        -- Fallback for executors that expose listfiles but have no manifest yet.
+
         if not loadedFromIndex and listFilesApi then
             local listedOk, files = pcall(listFilesApi, CONFIG_ROOT_PATH)
 
@@ -10740,7 +10740,7 @@ function configManager.loadStoredConfigs()
             end
         end
 
-        -- One-time migration from the old LocalPlayer attribute storage.
+
         if configManager.countSavedConfigs() == 0 then
             local legacyEncoded = localPlayer:GetAttribute(CONFIG_ATTRIBUTE_NAME)
 
@@ -11498,7 +11498,7 @@ end)
 
 espExecutionersButton.Activated:Connect(function()
     espExecutionersEnabled = not espExecutionersEnabled
-    -- Сама подсветка Executioners остаётся красной, но активный переключатель зелёный.
+
     setSwitchVisual(espExecutionersButton, espExecutionersDot, espExecutionersEnabled)
     if espSurvivorsEnabled or espExecutionersEnabled then
         initializeESP()
@@ -11688,9 +11688,9 @@ function shutdownMainScript(reason)
     end
 end
 
--- Destroying the old ScreenGui is how a later script run replaces this UI.
--- Treat that as a full shutdown so the old run cannot retain hotkeys, loops,
--- character modifiers, or cached visual effects in the background.
+
+
+
 clientModules.screenGuiAncestryConnection = screenGui.AncestryChanged:Connect(function(_, parent)
     if parent == nil and not guiDestroyed then
         shutdownMainScript("Interface was replaced or removed.")
@@ -11778,7 +11778,7 @@ closeButton.Activated:Connect(function()
     shutdownMainScript("Interface closed.")
 end)
 
--- Перетаскивание окна мышью или касанием.
+
 do
     local dragging = false
     local dragInput = nil
@@ -11821,14 +11821,14 @@ do
     end)
 end
 
--- Глобальные горячие клавиши продолжают работать, даже когда ScreenGui скрыт.
+
 globalInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if guiDestroyed or input.UserInputType ~= Enum.UserInputType.Keyboard then
         return
     end
 
 
-    -- Во время назначения клавиши принимаем нажатие даже из выбранного GUI-элемента.
+
     if clientModules.keyList.state.bindingTarget then
         if input.KeyCode ~= Enum.KeyCode.Unknown then
             finishBinding(input.KeyCode)
@@ -11836,13 +11836,13 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
         return
     end
 
-    -- Не используем нажатие повторно, если его уже обработал Roblox/CoreGui
-    -- или пользователь активирует выбранную GUI-кнопку с клавиатуры.
+
+
     if gameProcessedEvent or game:GetService("GuiService").SelectedObject ~= nil then
         return
     end
 
-    -- Не срабатываем, пока пользователь печатает число или сообщение в чате.
+
     if UserInputService:GetFocusedTextBox() then
         return
     end
@@ -11972,11 +11972,11 @@ function initializeMainInterface()
     end
 end
 
--- Показываем интерфейс до тяжёлой инициализации, чтобы UI успел отрисоваться
--- даже если отдельная функция настройки опционального модуля выдаст ошибку.
+
+
 mainFrame.Visible = true
 
--- Первый запуск также использует ту же плавную анимацию, что и горячая клавиша.
+
 interfaceCanvasGroup.GroupTransparency = 1
 mainFrame.BackgroundTransparency = 1
 uiScale.Scale = 0.94
