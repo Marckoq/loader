@@ -1222,9 +1222,9 @@ create("Frame", {
 }, topBar)
 
 local SCRIPT_ICON_FOLDER = "PulseCore\\assets"
-local SCRIPT_ICON_PATH = SCRIPT_ICON_FOLDER .. "\\images (1).png"
+local SCRIPT_ICON_PATH = SCRIPT_ICON_FOLDER .. "\\pulse_meme.jpg"
 local SCRIPT_ICON_URL =
-    "https://raw.githubusercontent.com/Marckoq/loader/main/images%20%281%29.png"
+    "https://raw.githubusercontent.com/Marckoq/loader/main/pulse_meme.jpg?v=20260922"
 
 function ensureScriptIconFile()
     local makeFolderApi = getPulseCoreFileApi("makefolder")
@@ -1243,13 +1243,7 @@ function ensureScriptIconFile()
         makeFolderApi(SCRIPT_ICON_FOLDER)
     end)
 
-    if isFileApi then
-        local ok, exists = pcall(isFileApi, SCRIPT_ICON_PATH)
-        if ok and exists == true then
-            return true
-        end
-    end
-
+    -- Always refresh the icon so an older local asset is not reused.
     local requestResolvers = {
         function()
             return request
@@ -3733,6 +3727,7 @@ do
             "• Ability names now use readable names such as Sol Flame, Burning Javelin, Laser Canon, Hammer Throw, and Energy Shield.",
             "• Dead character models are excluded from ESP.",
             "• Added the repository icon to the header and an orange BETA badge.",
+            "• Replaced the header icon with the new meme image and forced a fresh local asset path.",
         }, "\n"),
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
