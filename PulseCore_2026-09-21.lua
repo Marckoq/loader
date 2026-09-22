@@ -1221,18 +1221,191 @@ create("Frame", {
     ZIndex = 5,
 }, topBar)
 
+local SCRIPT_ICON_FOLDER = "PulseCore\\assets"
+local SCRIPT_ICON_PATH = SCRIPT_ICON_FOLDER .. "\\images (1).png"
+local SCRIPT_ICON_URL =
+    "https://raw.githubusercontent.com/Marckoq/loader/main/images%20%281%29.png"
+
+function ensureScriptIconFile()
+    local makeFolderApi = getPulseCoreFileApi("makefolder")
+    local isFileApi = getPulseCoreFileApi("isfile")
+    local writeFileApi = getPulseCoreFileApi("writefile")
+
+    if not makeFolderApi or not writeFileApi then
+        return false
+    end
+
+    if not pcall(function() makeFolderApi("PulseCore") end) then
+        -- The assets folder may still already exist.
+    end
+
+    pcall(function()
+        makeFolderApi(SCRIPT_ICON_FOLDER)
+    end)
+
+    if isFileApi then
+        local ok, exists = pcall(isFileApi, SCRIPT_ICON_PATH)
+        if ok and exists == true then
+            return true
+        end
+    end
+
+    local requestResolvers = {
+        function()
+            return request
+        end,
+        function()
+            return http_request
+        end,
+        function()
+            return syn and syn.request
+        end,
+    }
+
+    for _, getRequest in ipairs(requestResolvers) do
+        local okResolver, requestApi = pcall(getRequest)
+
+        if okResolver and type(requestApi) == "function" then
+            local okRequest, response = pcall(requestApi, {
+                Url = SCRIPT_ICON_URL,
+                Method = "GET",
+            })
+
+            if okRequest
+                and type(response) == "table"
+                and type(response.Body) == "string"
+                and #response.Body > 0
+            then
+                local okWrite = pcall(writeFileApi, SCRIPT_ICON_PATH, response.Body)
+
+                if okWrite then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+function getScriptIconAsset()
+    local resolvers = {
+        function()
+            return getcustomasset
+        end,
+        function()
+            return getsynasset
+        end,
+        function()
+            return getasset
+        end,
+    }
+
+    for _, getResolver in ipairs(resolvers) do
+        local okResolver, resolver = pcall(getResolver)
+
+        if okResolver and type(resolver) == "function" then
+            local ok, asset = pcall(resolver, SCRIPT_ICON_PATH)
+
+            if ok and type(asset) == "string" and asset ~= "" then
+                return asset
+            end
+        end
+    end
+
+    return nil
+end
+
+task.spawn(ensureScriptIconFile)
+local scriptIconAsset = getScriptIconAsset()
+
+if not scriptIconAsset then
+    pcall(ensureScriptIconFile)
+    scriptIconAsset = getScriptIconAsset()
+end
+
+if scriptIconAsset then
+    create("ImageLabel", {
+        Name = "ScriptIcon",
+        Position = UDim2.fromOffset(10, 8),
+        Size = UDim2.fromOffset(40, 40),
+        BackgroundColor3 = COLORS.CyanDeep,
+        BackgroundTransparency = 0.16,
+        BorderSizePixel = 0,
+        Image = scriptIconAsset,
+        ImageColor3 = COLORS.White,
+        ScaleType = Enum.ScaleType.Crop,
+        ZIndex = 6,
+    }, topBar)
+else
+    create("Frame", {
+        Name = "ScriptIconFallback",
+        Position = UDim2.fromOffset(10, 8),
+        Size = UDim2.fromOffset(40, 40),
+        BackgroundColor3 = COLORS.CyanDark,
+        BorderSizePixel = 0,
+        ZIndex = 6,
+    }, topBar)
+end
+
+addCorner(topBar:FindFirstChild("ScriptIcon") or topBar:FindFirstChild("ScriptIconFallback"), 9)
+addStroke(
+    topBar:FindFirstChild("ScriptIcon") or topBar:FindFirstChild("ScriptIconFallback"),
+    COLORS.Border,
+    0.22,
+    1
+)
+
 create("TextLabel", {
     Name = "Title",
-    Position = UDim2.fromOffset(24, 0),
-    Size = UDim2.new(1, -150, 1, 0),
+    Position = UDim2.fromOffset(60, 2),
+    Size = UDim2.fromOffset(130, 26),
     BackgroundTransparency = 1,
-    Text = "✥  PULSECORE     " .. SCRIPT_VERSION,
+    Text = "PULSECORE",
     Font = Enum.Font.GothamBold,
     TextSize = 17,
     TextColor3 = COLORS.Cyan,
     TextXAlignment = Enum.TextXAlignment.Left,
     ZIndex = 6,
 }, topBar)
+
+create("TextLabel", {
+    Name = "Version",
+    Position = UDim2.fromOffset(60, 28),
+    Size = UDim2.fromOffset(130, 18),
+    BackgroundTransparency = 1,
+    Text = SCRIPT_VERSION,
+    Font = Enum.Font.GothamMedium,
+    TextSize = 10,
+    TextColor3 = COLORS.MutedText,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 6,
+}, topBar)
+
+local betaBadge = create("Frame", {
+    Name = "BetaBadge",
+    Position = UDim2.fromOffset(142, 25),
+    Size = UDim2.fromOffset(48, 22),
+    BackgroundColor3 = Color3.fromRGB(220, 120, 35),
+    BackgroundTransparency = 0.03,
+    BorderSizePixel = 0,
+    ZIndex = 7,
+}, topBar)
+addCorner(betaBadge, 6)
+addStroke(betaBadge, COLORS.White, 0, 1)
+
+create("TextLabel", {
+    Name = "Text",
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Text = "BETA",
+    Font = Enum.Font.GothamBold,
+    TextSize = 9,
+    TextColor3 = COLORS.White,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    TextYAlignment = Enum.TextYAlignment.Center,
+    ZIndex = 8,
+}, betaBadge)
 
 minimizeButton = create("TextButton", {
     Name = "Minimize",
