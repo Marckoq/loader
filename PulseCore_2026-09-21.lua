@@ -1194,6 +1194,9 @@ coolVideoState = {
     gui = nil,
     video = nil,
     preparing = false,
+    mutedSounds = {},
+    soundAddedConnection = nil,
+    videoEndedConnection = nil,
 }
 
 function getPulseCoreHttpRequestApi()
@@ -1399,12 +1402,75 @@ function getCoolVideoAsset(path)
     return nil
 end
 
+function muteGameSounds()
+    table.clear(coolVideoState.mutedSounds)
+
+    local function muteSound(sound)
+        if not sound or not sound:IsA("Sound") then
+            return
+        end
+
+        if coolVideoState.mutedSounds[sound] == nil then
+            coolVideoState.mutedSounds[sound] = sound.Volume
+        end
+
+        pcall(function()
+            sound.Volume = 0
+        end)
+    end
+
+    pcall(function()
+        for _, descendant in ipairs(game:GetDescendants()) do
+            if descendant:IsA("Sound") then
+                muteSound(descendant)
+            end
+        end
+    end)
+
+    if coolVideoState.soundAddedConnection then
+        coolVideoState.soundAddedConnection:Disconnect()
+        coolVideoState.soundAddedConnection = nil
+    end
+
+    coolVideoState.soundAddedConnection = game.DescendantAdded:Connect(function(descendant)
+        if coolVideoState.gui and descendant:IsA("Sound") then
+            muteSound(descendant)
+        end
+    end)
+end
+
+function restoreGameSounds()
+    if coolVideoState.soundAddedConnection then
+        coolVideoState.soundAddedConnection:Disconnect()
+        coolVideoState.soundAddedConnection = nil
+    end
+
+    for sound, originalVolume in pairs(coolVideoState.mutedSounds) do
+        if sound and sound.Parent then
+            pcall(function()
+                sound.Volume = originalVolume
+            end)
+        end
+    end
+
+    table.clear(coolVideoState.mutedSounds)
+end
+
 function closeCoolVideo()
+    if coolVideoState.videoEndedConnection then
+        coolVideoState.videoEndedConnection:Disconnect()
+        coolVideoState.videoEndedConnection = nil
+    end
+
+    restoreGameSounds()
+
     if coolVideoState.gui then
         coolVideoState.gui:Destroy()
         coolVideoState.gui = nil
         coolVideoState.video = nil
     end
+
+    coolVideoState.preparing = false
 end
 
 function playCoolVideo()
@@ -1449,14 +1515,31 @@ function playCoolVideo()
         Position = UDim2.fromScale(0, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Video = videoAsset,
         Looped = false,
-        Playing = true,
+        Playing = false,
         Volume = 1,
         ZIndex = 2,
     }, background)
 
     coolVideoState.video = video
+
+    -- Roblox has a known VideoFrame loading workaround:
+    -- put VideoFrame into PlayerGui first, then assign Video.
+    local videoLoadedConnection
+    videoLoadedConnection = video.Loaded:Connect(function()
+        if videoLoadedConnection then
+            videoLoadedConnection:Disconnect()
+            videoLoadedConnection = nil
+        end
+
+        if coolVideoState.video == video and video.Parent then
+            video:Play()
+        end
+    end)
+
+    pcall(function()
+        video.Video = videoAsset
+    end)
 
     local close = create("TextButton", {
         Name = "Close",
@@ -1478,8 +1561,27 @@ function playCoolVideo()
 
     close.Activated:Connect(closeCoolVideo)
 
-    video.Ended:Connect(function()
+    coolVideoState.videoEndedConnection = video.Ended:Connect(function()
         task.delay(0.25, closeCoolVideo)
+    end)
+
+    muteGameSounds()
+
+    -- Fallback: some builds may not fire Loaded for a local asset even though
+    -- IsLoaded becomes true after the property is assigned.
+    task.spawn(function()
+        local deadline = time() + 10
+
+        while coolVideoState.video == video and video.Parent and time() < deadline do
+            if video.IsLoaded then
+                pcall(function()
+                    video:Play()
+                end)
+                break
+            end
+
+            task.wait(0.1)
+        end
     end)
 end
 
