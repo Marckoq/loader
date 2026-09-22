@@ -49,7 +49,7 @@ CONFIG_PATH_FALLBACK = false
 -- Only these player nicknames receive the Fun and Combat tabs.
 -- Add approved Roblox usernames/display names here.
 SPECIAL_TAB_NICKNAMES = {
-    "CommunityGame125",
+    "NICKNAME",
 }
 
 function normalizeSpecialTabNickname(value)
