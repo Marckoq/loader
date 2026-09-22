@@ -487,6 +487,11 @@ if oldConsoleGui then
     oldConsoleGui:Destroy()
 end
 
+oldESPInfoGui = playerGui:FindFirstChild("PulseCoreESPInfoUI")
+if oldESPInfoGui then
+    oldESPInfoGui:Destroy()
+end
+
 function create(className, properties, parent)
     local object = Instance.new(className)
 
@@ -6842,167 +6847,411 @@ function getESPHealthText(model)
     )
 end
 
-function humanizeESPAbilityName(name)
-    local text = tostring(name or "")
-        :gsub("([a-z])([A-Z])", "%1 %2")
-        :gsub("_", " ")
-        :gsub("%-", " ")
-
-    if text == "" then
-        return "Unknown"
-    end
-
-    return text:gsub("^%l", string.upper)
-end
+ESP_DISPLAY_ABILITY_SETS = {
+    Sonic = {
+        { label = "Drop Dash", markers = {"dropdash"} },
+        { label = "Peelout", markers = {"peelout"} },
+    },
+    Tails = {
+        { label = "Laser Canon", markers = {"lasercanon", "lasercannon", "canon"} },
+        { label = "Glide", markers = {"glide"} },
+    },
+    Knuckles = {
+        { label = "Punch", markers = {"punch"} },
+        { label = "Counter", markers = {"counter"} },
+    },
+    Eggman = {
+        { label = "Jetpack Boost", markers = {"jetpackboost", "jetpack"} },
+        { label = "Energy Shield", markers = {"energyshield"} },
+    },
+    Amy = {
+        { label = "Hammer Throw", markers = {"hammerthrow", "hammer"} },
+        { label = "Reroll", markers = {"reroll"} },
+    },
+    Cream = {
+        { label = "Heal", markers = {"heal", "healloop"} },
+        { label = "Dash", markers = {"dash"} },
+    },
+    Blaze = {
+        { label = "Sol Flame", markers = {"flamestart", "flameloop", "flameend"} },
+        { label = "Burning Javelin", markers = {"float"} },
+    },
+    Silver = {
+        { label = "Rock", markers = {"aim", "rocksr", "rocks", "rock"} },
+        { label = "Suspension", markers = {"timereversal", "timereversall"} },
+    },
+    ["Metal Sonic"] = {
+        { label = "Destructive Charge", markers = {"destructivecharge", "desturctivecharge", "dashstart"} },
+        { label = "Self Repair", markers = {"selfrepair"} },
+    },
+    Tripwire = {
+        { label = "Brighter Day", markers = {"brighterday"} },
+        { label = "Reachout", markers = {"reachout"} },
+    },
+    Fleetway = {
+        { label = "Lasers of Destrucation", markers = {"lasersofdestrucation", "lasersofdestruction"} },
+        { label = "Chaos Dash", markers = {"chaosdash", "chargedash"} },
+        { label = "Fateful Drain", markers = {"fatefuldrain"} },
+        { label = "Burst", markers = {"burst"} },
+    },
+    ["2011x"] = {
+        { label = "Charge", markers = {"charge"} },
+        { label = "God's Trickery", markers = {"godstrickery"} },
+        { label = "Invisibility", markers = {"invisibility", "invisiblity", "invis"} },
+        { label = "Rage Mode", markers = {"ragemode", "rage"} },
+    },
+    Kolossos = {
+        { label = "Grab", markers = {"grab"} },
+        { label = "Block", markers = {"block"} },
+    },
+}
 
 function getESPCharacterAbilityNames(characterName)
-    local set = ESP_CHARACTER_ABILITY_SETS[characterName]
-
-    if not set then
-        return {}
-    end
-
-    local result = {}
-
-    for _, abilityName in ipairs(set) do
-        table.insert(result, abilityName)
-    end
-
-    return result
+    return ESP_DISPLAY_ABILITY_SETS[characterName] or {}
 end
 
-function readESPNumberLikeValue(instance)
-    if not instance then
-        return nil
+function getESPAbilityCooldownInfo(model, abilityDefinition)
+    if not model or not abilityDefinition then
+        return nil, false
     end
 
-    if instance:IsA("NumberValue") or instance:IsA("IntValue") then
-        return tonumber(instance.Value)
+    local cache = espAbilityCooldownCache[model]
+    if not cache then
+        return nil, false
     end
 
-    return nil
+    local remaining = 0
+    local cooldownWithoutTimer = false
+
+    for _, marker in ipairs(abilityDefinition.markers or {}) do
+        local key = normalizeESPMarkerName(marker)
+        local value = cache[key]
+
+        if type(value) == "number" then
+            local seconds = value - time()
+
+            if seconds > remaining then
+                remaining = seconds
+            end
+        elseif value == true then
+            cooldownWithoutTimer = true
+        end
+    end
+
+    if remaining > 0 then
+        return remaining, true
+    end
+
+    if cooldownWithoutTimer then
+        return nil, true
+    end
+
+    return 0, false
 end
 
-function parseESPCooldownNumber(value)
-    local number = tonumber(value)
+function formatESPAbilityState(abilityName, remaining, cooldownActive)
+    if cooldownActive then
+        if remaining and remaining > 0 then
+            return abilityName .. "  |  CD " .. string.format("%.1fs", remaining)
+        end
 
-    if not number then
-        return nil
+        return abilityName .. "  |  CD"
     end
 
-    -- Values far in the future are more likely to be an end timestamp.
-    if number > time() + 1 then
-        return math.max(0, number - time())
-    end
-
-    return math.max(0, number)
+    return abilityName .. "  |  READY"
 end
 
-function getESPAbilityCooldownInfo(model, abilityName)
-    local normalizedAbility = normalizeESPMarkerName(abilityName)
-    local cooldownFound = false
-    local remaining = nil
-    local searchObjects = {model}
-
-    for _, descendant in ipairs(model:GetDescendants()) do
-        table.insert(searchObjects, descendant)
+function refreshESPInfoWindow()
+    if not (espInfoGui and espInfoWindow and espInfoScroll) then
+        return
     end
 
-    local function inspectObject(object)
-        if not object then
+    for _, child in ipairs(espInfoScroll:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+
+    local localRoot = getESPRootPart(localPlayer.Character)
+    local ordered = {}
+
+    for model, record in pairs(trackedModels) do
+        if model
+            and model.Parent
+            and record
+            and not isESPModelDead(model)
+        then
+            table.insert(ordered, {
+                model = model,
+                record = record,
+            })
+        end
+    end
+
+    table.sort(ordered, function(left, right)
+        return string.lower(left.record.displayName or left.model.Name)
+            < string.lower(right.record.displayName or right.model.Name)
+    end)
+
+    if #ordered == 0 then
+        addESPInfoEntry(
+            "No living tracked characters.",
+            COLORS.MutedText,
+            1
+        )
+        return
+    end
+
+    for index, item in ipairs(ordered) do
+        local model = item.model
+        local record = item.record
+        local root = getESPRootPart(model)
+        local lines = {
+            record.displayName .. "  [" .. record.group .. "]",
+        }
+
+        if espDistanceEnabled and localRoot and root then
+            local distance = (localRoot.Position - root.Position).Magnitude
+            table.insert(lines, string.format("Distance: %.1f studs", distance))
+        end
+
+        if record.group == "Survivor" and espSurvivorInfoEnabled then
+            table.insert(lines, getESPHealthText(model))
+            table.insert(lines, "Status: " .. getESPStatusText(model))
+        end
+
+        if espAbilitiesEnabled then
+            local abilityDefinitions = getESPCharacterAbilityNames(record.displayName)
+
+            if #abilityDefinitions > 0 then
+                table.insert(lines, "")
+
+                for _, abilityDefinition in ipairs(abilityDefinitions) do
+                    local remaining, cooldownActive =
+                        getESPAbilityCooldownInfo(model, abilityDefinition)
+
+                    table.insert(
+                        lines,
+                        formatESPAbilityState(
+                            abilityDefinition.label,
+                            remaining,
+                            cooldownActive
+                        )
+                    )
+                end
+            end
+        end
+
+        addESPInfoEntry(
+            table.concat(lines, "\n"),
+            record.group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue,
+            index
+        )
+    end
+end
+
+function refreshESPAbilityCooldownCache()
+    table.clear(espAbilityCooldownCache)
+
+    local now = time()
+
+    for model, record in pairs(trackedModels) do
+        if model
+            and model.Parent
+            and record
+            and not isESPModelDead(model)
+        then
+            local characterAbilities = getESPCharacterAbilityNames(record.displayName)
+            local modelCache = {}
+            local markerSet = {}
+
+            for _, abilityDefinition in ipairs(characterAbilities) do
+                for _, marker in ipairs(abilityDefinition.markers or {}) do
+                    markerSet[normalizeESPMarkerName(marker)] = true
+                end
+            end
+
+            -- Exactly one descendant walk per tracked model per refresh.
+            for _, object in ipairs(model:GetDescendants()) do
+                local objectName = normalizeESPMarkerName(object.Name)
+                local objectAbilityMarkers = {}
+
+                for marker in pairs(markerSet) do
+                    if objectName == marker
+                        or objectName:find(marker, 1, true)
+                    then
+                        table.insert(objectAbilityMarkers, marker)
+                    end
+                end
+
+                for attributeName, attributeValue in pairs(object:GetAttributes()) do
+                    local key = normalizeESPMarkerName(attributeName)
+
+                    local isCooldownKey =
+                        key == "cooldown"
+                        or key == "cd"
+                        or key:find("cooldown", 1, true) ~= nil
+                        or key:find("remaining", 1, true) ~= nil
+
+                    if isCooldownKey then
+                        local targets = objectAbilityMarkers
+
+                        if #targets == 0 then
+                            for marker in pairs(markerSet) do
+                                if key:find(marker, 1, true) then
+                                    table.insert(targets, marker)
+                                end
+                            end
+                        end
+
+                        if type(attributeValue) == "number" then
+                            local number = tonumber(attributeValue)
+                            local cooldownUntil
+
+                            if number and number > 0 then
+                                if number > now + 1 then
+                                    cooldownUntil = number
+                                else
+                                    cooldownUntil = now + number
+                                end
+                            end
+
+                            if cooldownUntil then
+                                if #targets == 0 then
+                                    for marker in pairs(markerSet) do
+                                        modelCache[marker] = math.max(
+                                            modelCache[marker] or 0,
+                                            cooldownUntil
+                                        )
+                                    end
+                                else
+                                    for _, marker in ipairs(targets) do
+                                        modelCache[marker] = math.max(
+                                            modelCache[marker] or 0,
+                                            cooldownUntil
+                                        )
+                                    end
+                                end
+                            end
+                        elseif attributeValue == true then
+                            if #targets == 0 then
+                                for marker in pairs(markerSet) do
+                                    modelCache[marker] = true
+                                end
+                            else
+                                for _, marker in ipairs(targets) do
+                                    modelCache[marker] = true
+                                end
+                            end
+                        end
+                    end
+                end
+
+                for _, child in ipairs(object:GetChildren()) do
+                    local childName = normalizeESPMarkerName(child.Name)
+
+                    if childName == "cooldown"
+                        or childName == "cd"
+                        or childName:find("cooldown", 1, true)
+                        or childName:find("remaining", 1, true)
+                    then
+                        local number = nil
+
+                        if child:IsA("NumberValue") or child:IsA("IntValue") then
+                            number = tonumber(child.Value)
+                        end
+
+                        if number then
+                            local cooldownUntil
+
+                            if number > 0 then
+                                if number > now + 1 then
+                                    cooldownUntil = number
+                                else
+                                    cooldownUntil = now + number
+                                end
+                            end
+
+                            if cooldownUntil then
+                                if #objectAbilityMarkers == 0 then
+                                    for marker in pairs(markerSet) do
+                                        modelCache[marker] = math.max(
+                                            modelCache[marker] or 0,
+                                            cooldownUntil
+                                        )
+                                    end
+                                else
+                                    for _, marker in ipairs(objectAbilityMarkers) do
+                                        modelCache[marker] = math.max(
+                                            modelCache[marker] or 0,
+                                            cooldownUntil
+                                        )
+                                    end
+                                end
+                            end
+                        elseif child:IsA("BoolValue") and child.Value then
+                            if #objectAbilityMarkers == 0 then
+                                for marker in pairs(markerSet) do
+                                    modelCache[marker] = true
+                                end
+                            else
+                                for _, marker in ipairs(objectAbilityMarkers) do
+                                    modelCache[marker] = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            espAbilityCooldownCache[model] = modelCache
+        end
+    end
+end
+
+function startESPInfoWindow()
+    if not (espDistanceEnabled or espSurvivorInfoEnabled or espAbilitiesEnabled) then
+        destroyESPInfoWindow()
+        return
+    end
+
+    createESPInfoWindow()
+
+    if espInfoRefreshConnection then
+        espInfoRefreshConnection:Disconnect()
+    end
+
+    espInfoUpdateAccumulator = 0
+    espInfoRefreshConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if guiDestroyed then
             return
         end
 
-        for attributeName, attributeValue in pairs(object:GetAttributes()) do
-            local key = normalizeESPMarkerName(attributeName)
-            local related = key:find("cooldown", 1, true)
-                or key:find("remaining", 1, true)
-                or key == "cd"
-                or key:find("cd", 1, true)
-
-            local abilityRelated = key:find(normalizedAbility, 1, true)
-
-            if related and (abilityRelated or object == model) then
-                if type(attributeValue) == "number" then
-                    local value = parseESPCooldownNumber(attributeValue)
-
-                    if value and value > 0 then
-                        cooldownFound = true
-                        remaining = math.max(remaining or 0, value)
-                    end
-                elseif type(attributeValue) == "boolean" and attributeValue then
-                    cooldownFound = true
-                end
-            end
+        if not (espDistanceEnabled or espSurvivorInfoEnabled or espAbilitiesEnabled) then
+            destroyESPInfoWindow()
+            return
         end
 
-        local objectName = normalizeESPModelName(object.Name)
-        local isAbilityObject = objectName == normalizedAbility
-            or objectName:find(normalizedAbility, 1, true) ~= nil
+        espInfoUpdateAccumulator = espInfoUpdateAccumulator + deltaTime
 
-        if isAbilityObject or object == model then
-            for _, child in ipairs(object:GetChildren()) do
-                local childName = normalizeESPModelName(child.Name)
-
-                if childName:find("cooldown", 1, true)
-                    or childName:find("remaining", 1, true)
-                    or childName == "cd"
-                then
-                    local number = readESPNumberLikeValue(child)
-
-                    if number then
-                        local value = parseESPCooldownNumber(number)
-
-                        if value and value > 0 then
-                            cooldownFound = true
-                            remaining = math.max(remaining or 0, value)
-                        elseif value == 0 then
-                            cooldownFound = false
-                        end
-                    elseif child:IsA("BoolValue") and child.Value then
-                        cooldownFound = true
-                    end
-                end
-            end
-        end
-    end
-
-    for _, object in ipairs(searchObjects) do
-        inspectObject(object)
-    end
-
-    if cooldownFound then
-        return true, remaining
-    end
-
-    return false, 0
-end
-
-function getESPAbilityDisplayLines(model, characterName)
-    local lines = {}
-    local abilityNames = getESPCharacterAbilityNames(characterName)
-
-    for _, abilityName in ipairs(abilityNames) do
-        local cooldown, remaining = getESPAbilityCooldownInfo(model, abilityName)
-        local stateText
-
-        if cooldown then
-            if remaining and remaining > 0 then
-                stateText = string.format("CD %.1fs", remaining)
-            else
-                stateText = "CD"
-            end
-        else
-            stateText = "READY"
+        if espInfoUpdateAccumulator < 0.25 then
+            return
         end
 
-        table.insert(
-            lines,
-            humanizeESPAbilityName(abilityName) .. ": " .. stateText
-        )
+        espInfoUpdateAccumulator = 0
+
+        if espAbilitiesEnabled then
+            refreshESPAbilityCooldownCache()
+        end
+
+        refreshESPInfoWindow()
+    end)
+
+    if espAbilitiesEnabled then
+        refreshESPAbilityCooldownCache()
     end
 
-    return lines
+    refreshESPInfoWindow()
 end
 
 function destroyESPInfoWindow()
