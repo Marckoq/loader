@@ -3902,8 +3902,32 @@ espExecutionersButton, espExecutionersDot = createToggleRow(
     3
 )
 
+espDistanceButton, espDistanceDot = createToggleRow(
+    visualsPage,
+    "ESP Distance — studs",
+    4
+)
+
+espTracersButton, espTracersDot = createToggleRow(
+    visualsPage,
+    "ESP Tracers — role color",
+    5
+)
+
+espSurvivorInfoButton, espSurvivorInfoDot = createToggleRow(
+    visualsPage,
+    "ESP Survivor HP + status",
+    6
+)
+
+espAbilitiesButton, espAbilitiesDot = createToggleRow(
+    visualsPage,
+    "ESP Abilities + cooldown",
+    7
+)
+
 visualsStatusLabel = create("TextLabel", {
-    LayoutOrder = 4,
+    LayoutOrder = 8,
     Size = UDim2.new(1, 0, 0, 48),
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.32,
@@ -3923,8 +3947,8 @@ create("UIPadding", {
 }, visualsStatusLabel)
 
 visualsHint = create("TextLabel", {
-    LayoutOrder = 5,
-    Size = UDim2.new(1, 0, 0, 92),
+    LayoutOrder = 9,
+    Size = UDim2.new(1, 0, 0, 108),
     BackgroundColor3 = COLORS.CyanDeep,
     BackgroundTransparency = 0.32,
     BorderSizePixel = 0,
@@ -4713,6 +4737,10 @@ globalInputConnection = nil
 
 espSurvivorsEnabled = false
 espExecutionersEnabled = false
+espDistanceEnabled = false
+espTracersEnabled = false
+espSurvivorInfoEnabled = false
+espAbilitiesEnabled = false
 trackedModels = {}
 recordedESPContainers = {}
 characterModelsFolder = nil
@@ -6638,6 +6666,542 @@ function isLocalCharacterModel(model)
     return false
 end
 
+function getESPRootPart(model)
+    if not model then
+        return nil
+    end
+
+    local root = model:FindFirstChild("HumanoidRootPart", true)
+        or model:FindFirstChild("UpperTorso", true)
+        or model:FindFirstChild("Torso", true)
+        or model:FindFirstChild("Head", true)
+
+    if root and root:IsA("BasePart") then
+        return root
+    end
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") then
+            return descendant
+        end
+    end
+
+    return nil
+end
+
+function getESPHumanoid(model)
+    if not model then
+        return nil
+    end
+
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        return humanoid
+    end
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("Humanoid") then
+            return descendant
+        end
+    end
+
+    return nil
+end
+
+function isESPModelDead(model)
+    if not model or not model.Parent then
+        return true
+    end
+
+    local humanoid = getESPHumanoid(model)
+
+    if humanoid and humanoid.Health <= 0 then
+        return true
+    end
+
+    local deadAttributeNames = {
+        "Dead",
+        "IsDead",
+        "Died",
+        "Eliminated",
+    }
+
+    for _, attributeName in ipairs(deadAttributeNames) do
+        local value = model:GetAttribute(attributeName)
+
+        if value == true or (type(value) == "string" and string.lower(value) == "dead") then
+            return true
+        end
+    end
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BoolValue") then
+            local normalized = normalizeESPModelName(descendant.Name)
+
+            if (
+                normalized == "dead"
+                or normalized == "isdead"
+                or normalized == "died"
+                or normalized == "eliminated"
+            ) and descendant.Value
+            then
+                return true
+            end
+        elseif descendant:IsA("StringValue") then
+            local normalized = normalizeESPModelName(descendant.Name)
+            local value = string.lower(tostring(descendant.Value or ""))
+
+            if (
+                normalized == "status"
+                or normalized == "state"
+                or normalized == "playerstatus"
+                or normalized == "survivorstatus"
+            ) and value:find("dead", 1, true)
+            then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+function getESPStatusText(model)
+    if isESPModelDead(model) then
+        return "Dead"
+    end
+
+    local statusNames = {
+        "Status",
+        "State",
+        "PlayerStatus",
+        "SurvivorStatus",
+        "CharacterStatus",
+    }
+
+    for _, attributeName in ipairs(statusNames) do
+        local value = model:GetAttribute(attributeName)
+
+        if type(value) == "string" and value ~= "" then
+            return value
+        end
+    end
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("StringValue") then
+            local normalized = normalizeESPModelName(descendant.Name)
+
+            if (
+                normalized == "status"
+                or normalized == "state"
+                or normalized == "playerstatus"
+                or normalized == "survivorstatus"
+                or normalized == "characterstatus"
+            ) and descendant.Value ~= ""
+            then
+                return tostring(descendant.Value)
+            end
+        end
+    end
+
+    local humanoid = getESPHumanoid(model)
+
+    if humanoid then
+        local stateName = humanoid:GetState().Name
+
+        if stateName ~= "Running"
+            and stateName ~= "RunningNoPhysics"
+            and stateName ~= "GettingUp"
+            and stateName ~= "Standing"
+        then
+            return stateName
+        end
+    end
+
+    return "Alive"
+end
+
+function getESPHealthText(model)
+    local humanoid = getESPHumanoid(model)
+
+    if not humanoid then
+        return "HP: ?"
+    end
+
+    return string.format(
+        "HP: %.0f / %.0f",
+        math.max(0, humanoid.Health),
+        math.max(0, humanoid.MaxHealth)
+    )
+end
+
+function humanizeESPAbilityName(name)
+    local text = tostring(name or "")
+        :gsub("([a-z])([A-Z])", "%1 %2")
+        :gsub("_", " ")
+        :gsub("%-", " ")
+
+    if text == "" then
+        return "Unknown"
+    end
+
+    return text:gsub("^%l", string.upper)
+end
+
+function getESPCharacterAbilityNames(characterName)
+    local set = ESP_CHARACTER_ABILITY_SETS[characterName]
+
+    if not set then
+        return {}
+    end
+
+    local result = {}
+
+    for _, abilityName in ipairs(set) do
+        table.insert(result, abilityName)
+    end
+
+    return result
+end
+
+function readESPNumberLikeValue(instance)
+    if not instance then
+        return nil
+    end
+
+    if instance:IsA("NumberValue") or instance:IsA("IntValue") then
+        return tonumber(instance.Value)
+    end
+
+    return nil
+end
+
+function parseESPCooldownNumber(value)
+    local number = tonumber(value)
+
+    if not number then
+        return nil
+    end
+
+    -- Values far in the future are more likely to be an end timestamp.
+    if number > time() + 1 then
+        return math.max(0, number - time())
+    end
+
+    return math.max(0, number)
+end
+
+function getESPAbilityCooldownInfo(model, abilityName)
+    local normalizedAbility = normalizeESPMarkerName(abilityName)
+    local cooldownFound = false
+    local remaining = nil
+    local searchObjects = {model}
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        table.insert(searchObjects, descendant)
+    end
+
+    local function inspectObject(object)
+        if not object then
+            return
+        end
+
+        for attributeName, attributeValue in pairs(object:GetAttributes()) do
+            local key = normalizeESPMarkerName(attributeName)
+            local related = key:find("cooldown", 1, true)
+                or key:find("remaining", 1, true)
+                or key == "cd"
+                or key:find("cd", 1, true)
+
+            local abilityRelated = key:find(normalizedAbility, 1, true)
+
+            if related and (abilityRelated or object == model) then
+                if type(attributeValue) == "number" then
+                    local value = parseESPCooldownNumber(attributeValue)
+
+                    if value and value > 0 then
+                        cooldownFound = true
+                        remaining = math.max(remaining or 0, value)
+                    end
+                elseif type(attributeValue) == "boolean" and attributeValue then
+                    cooldownFound = true
+                end
+            end
+        end
+
+        local objectName = normalizeESPModelName(object.Name)
+        local isAbilityObject = objectName == normalizedAbility
+            or objectName:find(normalizedAbility, 1, true) ~= nil
+
+        if isAbilityObject or object == model then
+            for _, child in ipairs(object:GetChildren()) do
+                local childName = normalizeESPModelName(child.Name)
+
+                if childName:find("cooldown", 1, true)
+                    or childName:find("remaining", 1, true)
+                    or childName == "cd"
+                then
+                    local number = readESPNumberLikeValue(child)
+
+                    if number then
+                        local value = parseESPCooldownNumber(number)
+
+                        if value and value > 0 then
+                            cooldownFound = true
+                            remaining = math.max(remaining or 0, value)
+                        elseif value == 0 then
+                            cooldownFound = false
+                        end
+                    elseif child:IsA("BoolValue") and child.Value then
+                        cooldownFound = true
+                    end
+                end
+            end
+        end
+    end
+
+    for _, object in ipairs(searchObjects) do
+        inspectObject(object)
+    end
+
+    if cooldownFound then
+        return true, remaining
+    end
+
+    return false, 0
+end
+
+function getESPAbilityDisplayLines(model, characterName)
+    local lines = {}
+    local abilityNames = getESPCharacterAbilityNames(characterName)
+
+    for _, abilityName in ipairs(abilityNames) do
+        local cooldown, remaining = getESPAbilityCooldownInfo(model, abilityName)
+        local stateText
+
+        if cooldown then
+            if remaining and remaining > 0 then
+                stateText = string.format("CD %.1fs", remaining)
+            else
+                stateText = "CD"
+            end
+        else
+            stateText = "READY"
+        end
+
+        table.insert(
+            lines,
+            humanizeESPAbilityName(abilityName) .. ": " .. stateText
+        )
+    end
+
+    return lines
+end
+
+function getOrCreateESPInfoTag(model, record)
+    local tag = record.infoTag
+
+    local adornee = record.infoTagAdornee
+
+    if not adornee
+        or not adornee.Parent
+        or not adornee:IsDescendantOf(model)
+    then
+        adornee = getESPRootPart(model)
+        record.infoTagAdornee = adornee
+    end
+
+    if not adornee then
+        return nil
+    end
+
+    if tag and tag.Parent and tag:IsA("BillboardGui") then
+        tag.Adornee = adornee
+        return tag
+    end
+
+    if tag then
+        pcall(function()
+            tag:Destroy()
+        end)
+    end
+
+    tag = Instance.new("BillboardGui")
+    tag.Name = ESP_HIGHLIGHT_NAME .. "_Info"
+    tag.Adornee = adornee
+    tag.AlwaysOnTop = true
+    tag.MaxDistance = 0
+    tag.Size = UDim2.fromOffset(330, 190)
+    tag.StudsOffset = Vector3.new(0, -2.2, 0)
+    tag.Parent = screenGui
+
+    local label = Instance.new("TextLabel")
+    label.Name = "TextLabel"
+    label.BackgroundColor3 = COLORS.Panel
+    label.BackgroundTransparency = 0.25
+    label.BorderSizePixel = 0
+    label.Size = UDim2.fromScale(1, 1)
+    label.Font = Enum.Font.GothamMedium
+    label.TextSize = 12
+    label.TextColor3 = COLORS.Text
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.TextStrokeTransparency = 0.45
+    label.TextWrapped = false
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Top
+    label.Parent = tag
+    addCorner(label, 8)
+    create("UIPadding", {
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+        PaddingTop = UDim.new(0, 6),
+        PaddingBottom = UDim.new(0, 6),
+    }, label)
+
+    record.infoTag = tag
+    return tag
+end
+
+function updateESPInfoTags()
+    local camera = workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    local localCharacter = localPlayer.Character
+    local localRoot = getESPRootPart(localCharacter)
+
+    for model, record in pairs(trackedModels) do
+        if model
+            and model.Parent
+            and record
+        then
+            if isESPModelDead(model) then
+                continue
+            end
+
+            local shouldShowInfo = espDistanceEnabled
+                or (record.group == "Survivor" and espSurvivorInfoEnabled)
+                or espAbilitiesEnabled
+
+            if not shouldShowInfo then
+                if record.infoTag then
+                    record.infoTag.Enabled = false
+                end
+                continue
+            end
+
+            local tag = getOrCreateESPInfoTag(model, record)
+
+            if not tag then
+                continue
+            end
+
+            local adornee = record.infoTagAdornee
+            local lines = {record.displayName}
+
+            if espDistanceEnabled and localRoot and adornee then
+                local studs = (localRoot.Position - adornee.Position).Magnitude
+                table.insert(lines, string.format("Distance: %.1f studs", studs))
+            end
+
+            if record.group == "Survivor" and espSurvivorInfoEnabled then
+                table.insert(lines, getESPHealthText(model))
+                table.insert(lines, "Status: " .. getESPStatusText(model))
+            end
+
+            if espAbilitiesEnabled then
+                local abilityLines = getESPAbilityDisplayLines(
+                    model,
+                    record.displayName
+                )
+
+                if #abilityLines > 0 then
+                    table.insert(lines, "Abilities:")
+
+                    for _, abilityLine in ipairs(abilityLines) do
+                        table.insert(lines, abilityLine)
+                    end
+                end
+            end
+
+            tag.TextLabel.Text = table.concat(lines, "\n")
+            tag.TextLabel.TextColor3 =
+                record.group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+            tag.Enabled = true
+
+            local distance = (camera.CFrame.Position - adornee.Position).Magnitude
+            tag.TextLabel.TextSize = math.clamp(1200 / math.max(distance, 1), 8, 13)
+        end
+    end
+end
+
+function getOrCreateESPTracer(model, record)
+    local tracer = record.tracer
+
+    if tracer and tracer.Parent then
+        return tracer
+    end
+
+    tracer = Instance.new("Frame")
+    tracer.Name = ESP_HIGHLIGHT_NAME .. "_Tracer"
+    tracer.AnchorPoint = Vector2.new(0, 0.5)
+    tracer.BorderSizePixel = 0
+    tracer.BackgroundColor3 =
+        record.group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+    tracer.BackgroundTransparency = 0.08
+    tracer.Size = UDim2.fromOffset(0, 2)
+    tracer.Visible = false
+    tracer.ZIndex = 1
+    tracer.Parent = screenGui
+
+    record.tracer = tracer
+    return tracer
+end
+
+function updateESPTracers()
+    local camera = workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    local viewport = camera.ViewportSize
+    local origin = Vector2.new(viewport.X * 0.5, viewport.Y - 8)
+    local localCharacter = localPlayer.Character
+
+    for model, record in pairs(trackedModels) do
+        local tracer = record.tracer
+
+        if espTracersEnabled and model and model.Parent and not isESPModelDead(model) then
+            local root = getESPRootPart(model)
+            local screenPoint, onScreen = root
+                and camera:WorldToViewportPoint(root.Position)
+                or nil
+
+            if tracer and tracer.Parent or (root and screenPoint) then
+                tracer = getOrCreateESPTracer(model, record)
+            end
+
+            if tracer and root and onScreen and screenPoint.Z > 0 then
+                local target = Vector2.new(screenPoint.X, screenPoint.Y)
+                local delta = target - origin
+                local length = delta.Magnitude
+
+                tracer.Position = UDim2.fromOffset(origin.X, origin.Y)
+                tracer.Size = UDim2.fromOffset(length, 2)
+                tracer.Rotation = math.deg(math.atan2(delta.Y, delta.X))
+                tracer.BackgroundColor3 =
+                    record.group == "Executioner" and COLORS.ESPRed or COLORS.ESPBlue
+                tracer.Visible = true
+            elseif tracer then
+                tracer.Visible = false
+            end
+        elseif tracer then
+            tracer.Visible = false
+        end
+    end
+end
+
 function getOrCreateESPNameTag(model, record, displayName, group)
     local label = record.nameTag
 
@@ -6836,6 +7400,18 @@ function unregisterCharacterModel(model, destroyHighlight)
         end)
     end
 
+    if record.infoTag and record.infoTag.Parent then
+        pcall(function()
+            record.infoTag:Destroy()
+        end)
+    end
+
+    if record.tracer and record.tracer.Parent then
+        pcall(function()
+            record.tracer:Destroy()
+        end)
+    end
+
     trackedModels[model] = nil
 end
 
@@ -6854,7 +7430,21 @@ function refreshAllTrackedModels()
                 end)
             end
 
+            if record and record.infoTag and record.infoTag.Parent then
+                pcall(function()
+                    record.infoTag:Destroy()
+                end)
+            end
+
+            if record and record.tracer and record.tracer.Parent then
+                pcall(function()
+                    record.tracer:Destroy()
+                end)
+            end
+
             trackedModels[model] = nil
+        elseif record and isESPModelDead(model) then
+            unregisterCharacterModel(model, true)
         elseif record then
             local group = record.group
             local espColor = group == "Survivor" and COLORS.ESPBlue or COLORS.ESPRed
@@ -6884,6 +7474,10 @@ function registerCharacterModel(model, group, displayName)
         return
     end
 
+    if isESPModelDead(model) then
+        return
+    end
+
     if group ~= "Survivor" and group ~= "Executioner" then
         return
     end
@@ -6897,6 +7491,9 @@ function registerCharacterModel(model, group, displayName)
             highlight = nil,
             nameTag = nil,
             nameTagAdornee = nil,
+            infoTag = nil,
+            infoTagAdornee = nil,
+            tracer = nil,
         }
         trackedModels[model] = record
     else
@@ -7415,6 +8012,10 @@ function scanESPContainers()
     if playersFolder then
         for _, model in ipairs(playersFolder:GetChildren()) do
             if model:IsA("Model") and not isLocalCharacterModel(model) then
+                if isESPModelDead(model) then
+                    continue
+                end
+
                 local group, displayName = getESPGroupForModel(model)
 
                 if group then
@@ -7434,6 +8035,10 @@ function scanESPContainers()
             local character = player.Character
 
             if character and character:IsA("Model") then
+                if isESPModelDead(character) then
+                    continue
+                end
+
                 local group, displayName = getESPGroupForModel(character)
 
                 if group then
@@ -7450,6 +8055,10 @@ function scanESPContainers()
     -- exposed through Player.Character or Workspace.Players.
     for _, instance in ipairs(workspace:GetChildren()) do
         if instance:IsA("Model") and not isLocalCharacterModel(instance) then
+            if isESPModelDead(instance) then
+                continue
+            end
+
             local group, displayName = getESPGroupForModel(instance)
 
             if group then
@@ -7575,6 +8184,25 @@ function initializeESP()
     end)
 
     scanESPContainers()
+    
+    if espNameTagConnection then
+        espNameTagConnection:Disconnect()
+        espNameTagConnection = nil
+    end
+
+    espNameTagConnection = RunService.RenderStepped:Connect(function()
+        if guiDestroyed then
+            return
+        end
+
+        if espSurvivorsEnabled or espExecutionersEnabled then
+            refreshAllTrackedModels()
+            updateESPNameTags()
+            updateESPInfoTags()
+            updateESPTracers()
+        end
+    end)
+
 end
 
 function shutdownESP()
@@ -11259,6 +11887,32 @@ espSurvivorsButton.Activated:Connect(function()
     refreshAllTrackedModels()
 end)
 
+espDistanceButton.Activated:Connect(function()
+    espDistanceEnabled = not espDistanceEnabled
+    setSwitchVisual(espDistanceButton, espDistanceDot, espDistanceEnabled)
+    updateESPInfoTags()
+end)
+
+espTracersButton.Activated:Connect(function()
+    espTracersEnabled = not espTracersEnabled
+    setSwitchVisual(espTracersButton, espTracersDot, espTracersEnabled)
+    if espSurvivorsEnabled or espExecutionersEnabled then
+        initializeESP()
+    end
+end)
+
+espSurvivorInfoButton.Activated:Connect(function()
+    espSurvivorInfoEnabled = not espSurvivorInfoEnabled
+    setSwitchVisual(espSurvivorInfoButton, espSurvivorInfoDot, espSurvivorInfoEnabled)
+    updateESPInfoTags()
+end)
+
+espAbilitiesButton.Activated:Connect(function()
+    espAbilitiesEnabled = not espAbilitiesEnabled
+    setSwitchVisual(espAbilitiesButton, espAbilitiesDot, espAbilitiesEnabled)
+    updateESPInfoTags()
+end)
+
 clientModules.boostTabs.toggleButton.Activated:Connect(function()
     clientModules.boostTabs.enabled = false
     clientModules.boostTabs.setEnabled(false, true)
@@ -11711,6 +12365,10 @@ function initializeMainInterface()
     )
     setSwitchVisual(espSurvivorsButton, espSurvivorsDot, espSurvivorsEnabled)
     setSwitchVisual(espExecutionersButton, espExecutionersDot, espExecutionersEnabled)
+    setSwitchVisual(espDistanceButton, espDistanceDot, espDistanceEnabled)
+    setSwitchVisual(espTracersButton, espTracersDot, espTracersEnabled)
+    setSwitchVisual(espSurvivorInfoButton, espSurvivorInfoDot, espSurvivorInfoEnabled)
+    setSwitchVisual(espAbilitiesButton, espAbilitiesDot, espAbilitiesEnabled)
     clientModules.boostTabs.refreshVisuals()
     clientModules.boostTabs.update()
     clientModules.infFlight.refreshVisuals()
