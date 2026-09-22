@@ -1694,8 +1694,7 @@ clientModules = {
 clientModules.tabs.info = createTabButton("InfoTab", "INFO", 14)
 localTab = createTabButton("LocalTab", "LOCAL", 66)
 visualsTab = createTabButton("VisualsTab", "VISUALS", 118)
-clientModules.tabs.nothing = createTabButton("NothingTab", "NOTHING", 170)
-clientModules.tabs.combat = createTabButton("CombatTab", "COMBAT", 222)
+clientModules.tabs.combat = createTabButton("CombatTab", "COMBAT", 170)
 clientModules.tabs.fun = createTabButton("FunTab", "FUN", 222)
 clientModules.tabs.performance = createTabButton("PerformanceTab", "PERFORMANCE", 274)
 clientModules.tabs.autoSelect = createTabButton("AutoSelectTab", "AUTO", 326)
@@ -1712,13 +1711,12 @@ clientModules.tabAnimation = {
         Info = 1,
         Local = 2,
         Visuals = 3,
-        Nothing = 4,
-        Combat = 5,
-        Fun = 6,
-        Performance = 7,
-        AutoSelect = 8,
-        KeyList = 9,
-        Settings = 10,
+        Combat = 4,
+        Fun = 5,
+        Performance = 6,
+        AutoSelect = 7,
+        KeyList = 8,
+        Settings = 9,
     },
 }
 
@@ -1866,7 +1864,6 @@ end
 clientModules.pages.info = createScrollingPage("InfoPage")
 localPage = createScrollingPage("LocalPage")
 visualsPage = createScrollingPage("VisualsPage")
-clientModules.pages.nothing = createScrollingPage("NothingPage")
 clientModules.pages.combat = createScrollingPage("CombatPage")
 clientModules.pages.fun = createScrollingPage("FunPage")
 clientModules.pages.camera = createScrollingPage("CameraPage")
@@ -1879,7 +1876,6 @@ settingsPage = createScrollingPage("SettingsPage")
 clientModules.pages.info.Visible = true
 localPage.Visible = false
 visualsPage.Visible = false
-clientModules.pages.nothing.Visible = false
 clientModules.pages.combat.Visible = false
 clientModules.pages.fun.Visible = false
 clientModules.pages.camera.Visible = false
@@ -6053,7 +6049,6 @@ function selectTab(tabName)
         Info = clientModules.pages.info,
         Local = localPage,
         Visuals = visualsPage,
-        Nothing = clientModules.pages.nothing,
         Combat = clientModules.pages.combat,
         Fun = clientModules.pages.fun,
         Performance = clientModules.pages.performance,
@@ -6065,7 +6060,6 @@ function selectTab(tabName)
         Info = clientModules.tabs.info,
         Local = localTab,
         Visuals = visualsTab,
-        Nothing = clientModules.tabs.nothing,
         Combat = clientModules.tabs.combat,
         Fun = clientModules.tabs.fun,
         Performance = clientModules.tabs.performance,
@@ -6077,7 +6071,6 @@ function selectTab(tabName)
         Info = { "OVERVIEW", "Script information and quick overview" },
         Local = { "LOCAL", "Speed, jump and abilities" },
         Visuals = { "VISUALS", "ESP and on-screen status panels" },
-        Nothing = { "NOTHING", "Empty test tab" },
         Combat = { "COMBAT", "Auto Aim and Block / Counter assistance" },
         Fun = { "FUN", "Place-specific utilities and client-side effects" },
         Performance = { "PERFORMANCE", "Optimization and FPS limiter" },
@@ -6106,7 +6099,6 @@ function selectTab(tabName)
     setTabSelected(clientModules.tabs.info, tabName == "Info", instant)
     setTabSelected(localTab, tabName == "Local", instant)
     setTabSelected(visualsTab, tabName == "Visuals", instant)
-    setTabSelected(clientModules.tabs.nothing, tabName == "Nothing", instant)
     setTabSelected(clientModules.tabs.fun, tabName == "Fun", instant)
     setTabSelected(clientModules.tabs.performance, tabName == "Performance", instant)
     setTabSelected(clientModules.tabs.autoSelect, tabName == "AutoSelect", instant)
@@ -6207,7 +6199,6 @@ function relayoutSidebarTabs()
         clientModules.tabs.info,
         localTab,
         visualsTab,
-        clientModules.tabs.nothing,
         clientModules.tabs.combat,
         clientModules.tabs.fun,
         clientModules.tabs.performance,
@@ -6235,7 +6226,6 @@ function relayoutSidebarTabs()
         Info = clientModules.tabs.info,
         Local = localTab,
         Visuals = visualsTab,
-        Nothing = clientModules.tabs.nothing,
         Combat = clientModules.tabs.combat,
         Fun = clientModules.tabs.fun,
         Performance = clientModules.tabs.performance,
@@ -12493,10 +12483,6 @@ end)
 
 clientModules.tabs.fun.Activated:Connect(function()
     selectTab("Fun")
-end)
-
-clientModules.tabs.nothing.Activated:Connect(function()
-    selectTab("Nothing")
 end)
 
 clientModules.tabs.performance.Activated:Connect(function()
