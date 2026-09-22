@@ -50,6 +50,7 @@ CONFIG_PATH_FALLBACK = false
 -- Add approved Roblox usernames/display names here.
 SPECIAL_TAB_NICKNAMES = {
     "CommunityGame125",
+    "Marckoqq",
 }
 
 function normalizeSpecialTabNickname(value)
