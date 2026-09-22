@@ -3674,7 +3674,7 @@ do
         BackgroundColor3 = COLORS.CyanDeep,
         BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
-        Text = "CREATOR\nMarckoq",
+        Text = "CREATOR\nMarckoq (Scriptblox)",
         Font = Enum.Font.GothamBold,
         TextSize = 16,
         TextColor3 = COLORS.Text,
