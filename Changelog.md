@@ -2,6 +2,13 @@
 
 ## 2026-09-22
 
+### Interface
+- Added the repository image `images (1).png` as the PulseCore header icon.
+- Added an orange `BETA` badge with a white outline next to the version.
+- The icon is stored locally under `Real\\workspace\\PulseCore\\assets\\images (1).png` and loaded through the executor asset API.
+
+## 2026-09-22
+
 ### ESP
 - Moved the separate ESP INFO panel to the left side of the screen.
 - Added distance display in studs.
