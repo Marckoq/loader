@@ -44,7 +44,7 @@ CONSOLE_MODE_ATTRIBUTE_NAME = "PulseCoreConsoleModeV1"
 
 UPDATE_CHECK_RAW_URL = "https://raw.githubusercontent.com/Marckoq/loader/main/PulseCore.lua"
 UPDATE_CHECK_BUILD_ID = "2.5.9"
-UPDATE_CHECK_FINGERPRINT = nil
+UPDATE_CHECK_FINGERPRINT = "cb4cbb8a9d577bb8826a178fa50e09f5"
 UPDATE_CHECK_INTERVAL = 0.50
 UPDATE_NOTIFICATION_DURATION = 8
 
@@ -4749,7 +4749,7 @@ function clientModules.updateChecker.checkNow(reason, silentWhenCurrent)
         return false
     end
 
-    local changed = remoteFingerprint ~= UPDATE_CHECK_FINGERPRINT
+    local changed = false
 
     if changed then
         if state.statusLabel and state.statusLabel.Parent then
