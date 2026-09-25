@@ -460,7 +460,7 @@ end]],1)
             or "Duration: N/A"]],[[durationLabel.Text=durationSeconds==math.huge
         and "Duration: Inf"
         or durationSeconds
-            and ("Duration: "..string.format("%.1f",durationSeconds).."/"..string.format("%.1f",durationSeconds))
+            and ("Duration: "..string.format("%.1f",durationSeconds))
             or "Duration: N/A"]],1)
 
         _src=string.gsub(_src,[[                if elapsed>=durationSeconds then
@@ -470,9 +470,10 @@ end]],1)
                 end
 
                 durationLabel.Text="Duration: "..string.format("%.1f",elapsed).."/"..string.format("%.1f",durationSeconds)]],[[                local remaining=math.max(0,durationSeconds-elapsed)
-                durationLabel.Text="Duration: "..string.format("%.1f",remaining).."/"..string.format("%.1f",durationSeconds)
+                durationLabel.Text="Duration: "..string.format("%.1f",remaining)
 
                 if remaining<=0 then
+                    durationLabel.Text="Duration: 0.0"
                     stopNotificationForToken(sg,token)
                     break
                 end]],1)
