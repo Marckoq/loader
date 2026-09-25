@@ -2,6 +2,13 @@
 
 ## 2026-09-25
 
+### Stability
+- Restored the previously working PulseCore loader after the enhancement wrapper caused the main interface to stop appearing.
+- Moved the new No Jump Cooldown and ability notification logic into a separate lightweight enhancement module loaded after PulseCore initializes.
+- Kept the main obfuscated payload unchanged.
+
+## 2026-09-25
+
 ### Local
 - Added a default-enabled `No Jump Cooldown` toggle for the local player.
 - Added queued jump handling so a jump request made during airborne time is executed immediately when the character becomes grounded.
