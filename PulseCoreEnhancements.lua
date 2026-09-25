@@ -210,30 +210,30 @@ local function showAbilityNotification(info,durationSeconds)
     frame.Name="Notification"
     frame.AnchorPoint=Vector2.new(1,1)
     frame.Position=UDim2.new(1,360,1,-18)
-    frame.Size=UDim2.fromOffset(320,92)
-    frame.BackgroundColor3=Color3.fromRGB(0,0,0)
+    frame.Size=UDim2.fromOffset(340,104)
+    frame.BackgroundColor3=Color3.fromRGB(9,9,9)
     frame.BackgroundTransparency=1
     frame.BorderSizePixel=0
     frame.ClipsDescendants=true
     frame.Parent=sg
 
     local corner=Instance.new("UICorner")
-    corner.CornerRadius=UDim.new(0,10)
+    corner.CornerRadius=UDim.new(0,12)
     corner.Parent=frame
 
     local stroke=Instance.new("UIStroke")
-    stroke.Color=Color3.fromRGB(125,125,125)
-    stroke.Thickness=1.5
+    stroke.Color=Color3.fromRGB(95,95,95)
+    stroke.Thickness=1
     stroke.Transparency=1
     stroke.Parent=frame
 
     local title=Instance.new("TextLabel")
-    title.Position=UDim2.fromOffset(14,8)
-    title.Size=UDim2.new(1,-56,0,22)
+    title.Position=UDim2.fromOffset(15,9)
+    title.Size=UDim2.new(1,-58,0,22)
     title.BackgroundTransparency=1
     title.Text="PulseCore"
     title.Font=Enum.Font.GothamBold
-    title.TextSize=18
+    title.TextSize=17
     title.TextColor3=Color3.fromRGB(255,255,255)
     title.TextTransparency=1
     title.TextXAlignment=Enum.TextXAlignment.Left
@@ -241,8 +241,8 @@ local function showAbilityNotification(info,durationSeconds)
 
     local close=Instance.new("TextButton")
     close.AnchorPoint=Vector2.new(1,0)
-    close.Position=UDim2.new(1,-8,0,6)
-    close.Size=UDim2.fromOffset(28,28)
+    close.Position=UDim2.new(1,-9,0,7)
+    close.Size=UDim2.fromOffset(26,26)
     close.BackgroundTransparency=1
     close.BorderSizePixel=0
     close.Text="X"
@@ -256,16 +256,16 @@ local function showAbilityNotification(info,durationSeconds)
     end)
 
     local separator=Instance.new("Frame")
-    separator.Position=UDim2.fromOffset(14,31)
-    separator.Size=UDim2.new(1,-28,0,1)
+    separator.Position=UDim2.fromOffset(15,32)
+    separator.Size=UDim2.new(1,-30,0,1)
     separator.BackgroundColor3=Color3.fromRGB(90,90,90)
     separator.BackgroundTransparency=1
     separator.BorderSizePixel=0
     separator.Parent=frame
 
     local ability=Instance.new("TextLabel")
-    ability.Position=UDim2.fromOffset(14,37)
-    ability.Size=UDim2.new(1,-28,0,20)
+    ability.Position=UDim2.fromOffset(15,40)
+    ability.Size=UDim2.new(1,-30,0,20)
     ability.BackgroundTransparency=1
     ability.Text='Ability "'..name..'" is activated'
     ability.Font=Enum.Font.GothamMedium
@@ -277,16 +277,16 @@ local function showAbilityNotification(info,durationSeconds)
     ability.Parent=frame
 
     local durationLabel=Instance.new("TextLabel")
-    durationLabel.Position=UDim2.fromOffset(14,58)
-    durationLabel.Size=UDim2.new(1,-28,0,20)
+    durationLabel.Position=UDim2.fromOffset(15,63)
+    durationLabel.Size=UDim2.new(1,-30,0,22)
     durationLabel.BackgroundTransparency=1
     durationLabel.Text=durationSeconds==math.huge
         and "Duration: Inf"
         or durationSeconds
-            and ("Duration: 0.0/"..string.format("%.1f",durationSeconds))
+            and ("Duration: "..string.format("%.1f",durationSeconds))
             or "Duration: N/A"
-    durationLabel.Font=Enum.Font.Gotham
-    durationLabel.TextSize=12
+    durationLabel.Font=Enum.Font.GothamMedium
+    durationLabel.TextSize=13
     durationLabel.TextColor3=Color3.fromRGB(185,185,185)
     durationLabel.TextTransparency=1
     durationLabel.TextXAlignment=Enum.TextXAlignment.Left
@@ -294,8 +294,8 @@ local function showAbilityNotification(info,durationSeconds)
 
     local progressBack=Instance.new("Frame")
     progressBack.Name="ProgressBackground"
-    progressBack.Position=UDim2.new(0,10,1,-8)
-    progressBack.Size=UDim2.new(1,-20,0,3)
+    progressBack.Position=UDim2.new(0,12,1,-8)
+    progressBack.Size=UDim2.new(1,-24,0,4)
     progressBack.BackgroundColor3=Color3.fromRGB(48,48,48)
     progressBack.BackgroundTransparency=1
     progressBack.BorderSizePixel=0
@@ -352,16 +352,23 @@ local function showAbilityNotification(info,durationSeconds)
         ):Play()
 
         task.spawn(function()
-            while currentNotification==sg and token==activeToken and sg.Parent do
-                local elapsed=os.clock()-startedAt
+            durationLabel.Text="Duration: "..string.format("%.1f",durationSeconds)
 
-                if elapsed>=durationSeconds then
-                    durationLabel.Text="Duration: "..string.format("%.1f",durationSeconds).."/"..string.format("%.1f",durationSeconds)
-                    stopNotificationForToken(sg,token)
+            while currentNotification==sg and token==activeToken and sg.Parent do
+                local remaining=math.max(0,durationSeconds-(os.clock()-startedAt))
+                durationLabel.Text="Duration: "..string.format("%.1f",remaining)
+
+                if remaining<=0 then
+                    durationLabel.Text="Duration: 0.0"
+                    task.wait(0.05)
+
+                    if currentNotification==sg and token==activeToken and sg.Parent then
+                        closeNotification(true)
+                    end
+
                     break
                 end
 
-                durationLabel.Text="Duration: "..string.format("%.1f",elapsed).."/"..string.format("%.1f",durationSeconds)
                 task.wait(0.05)
             end
         end)
