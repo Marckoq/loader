@@ -3,6 +3,12 @@
 ## 2026-09-25
 
 ### Local
+- Reworked the No Jump Cooldown control into a dedicated always-visible PulseCore UI element instead of placing it inside the scrollable Local page.
+- Added device-responsive scaling and a direct touch/mouse activation button for the toggle.
+
+## 2026-09-25
+
+### Local
 - Fixed the enhancement module initialization so the `No Jump Cooldown` control can be created in the Local tab.
 - Added the missing RunService reference required by the local jump handler.
 
