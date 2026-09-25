@@ -481,7 +481,7 @@ task.defer(function()
         message.Position=UDim2.fromOffset(14,34)
         message.Size=UDim2.new(1,-28,0,40)
         message.BackgroundTransparency=1
-        message.Text="Скрипт может работать нестабильно на мобильных устройствах."
+        message.Text="The script may be unstable on mobile devices."
         message.Font=Enum.Font.Gotham
         message.TextSize=12
         message.TextWrapped=true
