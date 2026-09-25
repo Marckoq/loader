@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-25
+
+### Interface
+- Made the PulseCore interface use nearly the entire screen on phones.
+- Kept desktop and larger touch-device layout behavior unchanged.
+
 ## 2026-09-22
 
 ### Interface
