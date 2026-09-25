@@ -2,6 +2,12 @@
 
 ## 2026-09-25
 
+### Stability
+- Restored `PulseCore.lua` to the previously verified stable loader state after the recent main-file changes caused the interface to disappear.
+- Preserved the 2.6.0 runtime version override and existing sidebar/mobile wrapper fixes from the stable state.
+
+## 2026-09-25
+
 ### Local
 - Temporarily removed the No Jump Cooldown feature and its jump input handler from the PulseCore enhancements module.
 
