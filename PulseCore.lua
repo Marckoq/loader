@@ -207,4 +207,43 @@ local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
 local _fn,_err=_load(_src,"@PulseCore")
 if not _fn then error(_err or "PulseCore payload failed to load.",0) end
-return _fn()
+local _result=_fn()
+task.defer(function()
+    pcall(function()
+        local _plr=game:GetService("Players").LocalPlayer
+        local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
+        local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
+        local _f=_g and _g:FindFirstChild("MainFrame")
+        local _us=_g and _g:FindFirstChildOfClass("UIScale")
+        local _cam=workspace.CurrentCamera
+        if not (_g and _f and _cam) then return end
+
+        local function _mobile()
+            local _v=_cam.ViewportSize
+            return game:GetService("UserInputService").TouchEnabled
+                and math.min(_v.X,_v.Y)<700
+        end
+
+        local function _apply()
+            local _v=_cam.ViewportSize
+            if _mobile() then
+                _g.IgnoreGuiInset=true
+                _f.AnchorPoint=Vector2.new(0.5,0.5)
+                _f.Position=UDim2.fromScale(0.5,0.5)
+                _f.Size=UDim2.new(1,-8,1,-8)
+                if _us then _us.Scale=1 end
+            end
+        end
+
+        _apply()
+        _cam:GetPropertyChangedSignal("ViewportSize"):Connect(_apply)
+
+        task.spawn(function()
+            while _g.Parent do
+                _apply()
+                task.wait(0.75)
+            end
+        end)
+    end)
+end)
+return _result
