@@ -2,6 +2,14 @@
 
 ## 2026-09-25
 
+### Stability
+- Restored the last confirmed working PulseCore interface loader after the experimental enhancement injection caused the interface to disappear.
+- Kept the mobile scaling and tab-panel changes from the stable version.
+- Kept PulseCore runtime version 2.6.0.
+- The experimental No Jump Cooldown and ability notification module remains stored separately and is not loaded by the main script until its integration is stable.
+
+## 2026-09-25
+
 ### Local
 - Fixed No Jump Cooldown so the first jump uses Roblox's normal jump handling instead of forcing an extra jump.
 - A jump request made while airborne is now queued and executed once after landing, preventing a single press from producing a double jump.
