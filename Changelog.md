@@ -2,6 +2,11 @@
 
 ## 2026-09-25
 
+### Local
+- Temporarily removed the No Jump Cooldown feature and its jump input handler from the PulseCore enhancements module.
+
+## 2026-09-25
+
 ### Stability
 - Restored the last verified working main PulseCore loader so the interface loads normally again.
 - Kept the experimental No Jump Cooldown and ability notification implementation isolated in `PulseCoreEnhancements.lua` instead of letting it affect the main loader.
