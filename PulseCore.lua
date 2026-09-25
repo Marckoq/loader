@@ -249,4 +249,55 @@ task.defer(function()
         end
     end)
 end)
+task.defer(function()
+    pcall(function()
+        local _plr=game:GetService("Players").LocalPlayer
+        local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
+        local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
+        local _main=_g and _g:FindFirstChild("MainFrame")
+        local _sidebar=_main and _main:FindFirstChild("Sidebar")
+        if not _sidebar then return end
+
+        local _scroll=_sidebar:FindFirstChild("PulseCoreTabScroller")
+        if not _scroll then
+            _scroll=Instance.new("ScrollingFrame")
+            _scroll.Name="PulseCoreTabScroller"
+            _scroll.Position=UDim2.fromOffset(0,0)
+            _scroll.Size=UDim2.new(1,0,1,-44)
+            _scroll.BackgroundTransparency=1
+            _scroll.BorderSizePixel=0
+            _scroll.CanvasSize=UDim2.fromOffset(0,560)
+            _scroll.ScrollingDirection=Enum.ScrollingDirection.Y
+            _scroll.ScrollingEnabled=true
+            _scroll.Active=true
+            _scroll.ScrollBarThickness=3
+            _scroll.ScrollBarImageTransparency=0.35
+            _scroll.ZIndex=1
+            _scroll.Parent=_sidebar
+
+            local _moveNames={
+                "InfoTab","LocalTab","VisualsTab","CustomTab","CombatTab",
+                "FunTab","PerformanceTab","AutoSelectTab","KeyListTab",
+                "SettingsTab","AnimatedTabBackground","AnimatedTabBar"
+            }
+
+            for _,_name in ipairs(_moveNames) do
+                local _obj=_sidebar:FindFirstChild(_name)
+                if _obj then
+                    _obj.Parent=_scroll
+                end
+            end
+        end
+
+        local _maxBottom=0
+        for _,_obj in ipairs(_scroll:GetChildren()) do
+            if _obj:IsA("GuiObject") then
+                local _bottom=_obj.Position.Y.Offset+_obj.Size.Y.Offset
+                if _bottom>_maxBottom then _maxBottom=_bottom end
+            end
+        end
+        _scroll.CanvasSize=UDim2.fromOffset(0,math.max(560,_maxBottom+24))
+    end)
+end)
+
 return _result
