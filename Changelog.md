@@ -3,6 +3,16 @@
 ## 2026-09-25
 
 ### Stability
+- Restored the known working PulseCore loader structure after the interface disappeared.
+- The enhancement module is now loaded one second after PulseCore initialization and is isolated so its errors cannot block the main interface.
+- Removed the extra forced jump call that could make one jump request produce two jumps.
+
+### Local
+- No Jump Cooldown now keeps the Roblox Jumping state enabled instead of manually forcing a second jump.
+
+## 2026-09-25
+
+### Stability
 - Restored the last confirmed working PulseCore interface loader after the experimental enhancement injection caused the interface to disappear.
 - Kept the mobile scaling and tab-panel changes from the stable version.
 - Kept PulseCore runtime version 2.6.0.
