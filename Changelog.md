@@ -3,6 +3,13 @@
 ## 2026-09-25
 
 ### Mobile
+- Changed the mobile interface from fullscreen to a compact square panel sized automatically for the phone viewport.
+- Reduced the scale of the mobile panel contents, including buttons, fields, and text, to 90%.
+- Kept the compact square layout responsive when the phone viewport changes.
+
+## 2026-09-25
+
+### Mobile
 - Added a separate `PulseCoreMobile.lua` build that uses the same PulseCore feature set but a phone-first interface.
 - Added a dedicated touch capture surface for the sidebar so tabs can be swiped vertically without relying on Roblox's native ScrollingFrame touch handling.
 - Preserved normal tab activation by detecting taps separately from vertical swipes.
