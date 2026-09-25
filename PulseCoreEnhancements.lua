@@ -84,35 +84,37 @@ end
 local learnedDurations = {}
 local activeStarts = {}
 
-local function readPositiveNumber(value)
-    local n = tonumber(value)
-    if n and n > 0 and n < 86400 then
+local function extractDuration(value)
+    local n=tonumber(value)
+    if n and n>0 and n<86400 then
         return n
     end
+
+    local text=tostring(value or "")
+    local seconds=text:match("([%d%.]+)%s*[sS]")
+    n=tonumber(seconds)
+    if n and n>0 and n<86400 then
+        return n
+    end
+
     return nil
 end
 
 local function resolveAbilityDuration(info)
-    local roots = {
-        info.button,
-        info.nameBox,
-        info.button and info.button.Parent,
-    }
+    local roots={info.button,info.nameBox,info.button and info.button.Parent}
 
-    local attributeNames = {
-        "Duration",
-        "AbilityDuration",
-        "ActiveDuration",
-        "AbilityTime",
-        "DurationSeconds",
-        "DurationTime",
-    }
-
-    for _, root in ipairs(roots) do
+    for _,root in ipairs(roots) do
         if root then
-            for _, name in ipairs(attributeNames) do
-                local value = root:GetAttribute(name)
-                local n = readPositiveNumber(value)
+            for _,key in ipairs({
+                "Duration",
+                "AbilityDuration",
+                "ActiveDuration",
+                "AbilityTime",
+                "DurationSeconds",
+                "DurationTime",
+            }) do
+                local value=root:GetAttribute(key)
+                local n=extractDuration(value)
                 if n then
                     return n
                 end
@@ -120,67 +122,33 @@ local function resolveAbilityDuration(info)
         end
     end
 
-    for _, root in ipairs(roots) do
-        if root then
-            for _, obj in ipairs(root:GetDescendants()) do
-                if obj:IsA("NumberValue") or obj:IsA("IntValue") then
-                    local key = tostring(obj.Name):lower()
-                    if key:find("duration",1,true) or key:find("activetime",1,true) then
-                        local n = readPositiveNumber(obj.Value)
-                        if n then
-                            return n
-                        end
-                    end
-                elseif obj:IsA("StringValue") then
-                    local key = tostring(obj.Name):lower()
-                    if key:find("duration",1,true) or key:find("activetime",1,true) then
-                        local n = tonumber(tostring(obj.Value):match("(%d+%.?%d*)"))
-                        n = readPositiveNumber(n)
-                        if n then
-                            return n
-                        end
-                    end
-                elseif obj:IsA("TextLabel") or obj:IsA("TextBox") then
-                    local key = tostring(obj.Name):lower()
-                    if key:find("duration",1,true) or key:find("timer",1,true) then
-                        local n = tonumber(tostring(obj.Text or ""):match("(%d+%.?%d*)"))
-                        n = readPositiveNumber(n)
-                        if n then
-                            return n
-                        end
-                    end
-                end
-            end
-        end
-    end
-
     return nil
 end
 
-local function animateNotificationOut(sg, frame, labels, stroke, durationBackground)
-    if not sg or not frame or sg.Parent == nil then
+local function animateNotificationOut(sg,frame,labels,stroke,background)
+    if not sg or not frame or not sg.Parent then
         return
     end
 
-    local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    local tweenInfo=TweenInfo.new(0.18,Enum.EasingStyle.Quad,Enum.EasingDirection.In)
 
-    TweenService:Create(frame,info,{
+    TweenService:Create(frame,tweenInfo,{
         Position=UDim2.new(1,360,1,-18),
         BackgroundTransparency=1,
     }):Play()
 
-    for _, label in ipairs(labels) do
-        if label and label.Parent then
-            TweenService:Create(label,info,{TextTransparency=1}):Play()
+    for _,obj in ipairs(labels) do
+        if obj and obj.Parent then
+            TweenService:Create(obj,tweenInfo,{TextTransparency=1}):Play()
         end
     end
 
     if stroke and stroke.Parent then
-        TweenService:Create(stroke,info,{Transparency=1}):Play()
+        TweenService:Create(stroke,tweenInfo,{Transparency=1}):Play()
     end
 
-    if durationBackground and durationBackground.Parent then
-        TweenService:Create(durationBackground,info,{BackgroundTransparency=1}):Play()
+    if background and background.Parent then
+        TweenService:Create(background,tweenInfo,{BackgroundTransparency=1}):Play()
     end
 
     task.delay(0.2,function()
@@ -191,37 +159,47 @@ local function animateNotificationOut(sg, frame, labels, stroke, durationBackgro
 end
 
 local function closeNotification(animated)
-    if not currentNotification then
+    local sg=currentNotification
+    if not sg then
         currentOwnerButton=nil
         return
     end
 
-    local sg=currentNotification
     currentNotification=nil
     currentOwnerButton=nil
 
-    local frame=sg:FindFirstChild("Notification")
-    if not animated or not frame then
+    if not animated then
         pcall(function()
             sg:Destroy()
         end)
         return
     end
 
-    local stroke=frame:FindFirstChildOfClass("UIStroke")
-    local durationBackground=frame:FindFirstChild("ProgressBackground")
-    local labels={}
+    local frame=sg:FindFirstChild("Notification")
+    if not frame then
+        pcall(function()
+            sg:Destroy()
+        end)
+        return
+    end
 
-    for _, obj in ipairs(frame:GetChildren()) do
+    local labels={}
+    for _,obj in ipairs(frame:GetChildren()) do
         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
             labels[#labels+1]=obj
         end
     end
 
-    animateNotificationOut(sg,frame,labels,stroke,durationBackground)
+    animateNotificationOut(
+        sg,
+        frame,
+        labels,
+        frame:FindFirstChildOfClass("UIStroke"),
+        frame:FindFirstChild("ProgressBackground")
+    )
 end
 
-local function showAbilityNotification(info, durationSeconds)
+local function showAbilityNotification(info,durationSeconds)
     closeNotification(false)
 
     local name=cleanName(info.nameBox and info.nameBox.Text or info.button.Text)
@@ -241,7 +219,6 @@ local function showAbilityNotification(info, durationSeconds)
     currentOwnerButton=info.button
 
     local scale=Instance.new("UIScale")
-    scale.Name="DeviceScale"
     scale.Parent=sg
 
     local frame=Instance.new("Frame")
@@ -253,7 +230,6 @@ local function showAbilityNotification(info, durationSeconds)
     frame.BackgroundTransparency=1
     frame.BorderSizePixel=0
     frame.ClipsDescendants=true
-    frame.ZIndex=1
     frame.Parent=sg
 
     local corner=Instance.new("UICorner")
@@ -276,7 +252,6 @@ local function showAbilityNotification(info, durationSeconds)
     title.TextColor3=Color3.fromRGB(255,255,255)
     title.TextTransparency=1
     title.TextXAlignment=Enum.TextXAlignment.Left
-    title.ZIndex=2
     title.Parent=frame
 
     local close=Instance.new("TextButton")
@@ -290,7 +265,6 @@ local function showAbilityNotification(info, durationSeconds)
     close.TextSize=16
     close.TextColor3=Color3.fromRGB(205,205,205)
     close.TextTransparency=1
-    close.ZIndex=3
     close.Parent=frame
     close.Activated:Connect(function()
         closeNotification(true)
@@ -302,7 +276,6 @@ local function showAbilityNotification(info, durationSeconds)
     separator.BackgroundColor3=Color3.fromRGB(90,90,90)
     separator.BackgroundTransparency=1
     separator.BorderSizePixel=0
-    separator.ZIndex=2
     separator.Parent=frame
 
     local ability=Instance.new("TextLabel")
@@ -316,20 +289,18 @@ local function showAbilityNotification(info, durationSeconds)
     ability.TextTransparency=1
     ability.TextWrapped=true
     ability.TextXAlignment=Enum.TextXAlignment.Left
-    ability.ZIndex=2
     ability.Parent=frame
 
     local duration=Instance.new("TextLabel")
     duration.Position=UDim2.fromOffset(14,58)
     duration.Size=UDim2.new(1,-28,0,20)
     duration.BackgroundTransparency=1
-    duration.Text="Duration: N/A"
+    duration.Text=durationSeconds and ("Duration: "..string.format("%.1fs",durationSeconds)) or "Duration: N/A"
     duration.Font=Enum.Font.Gotham
     duration.TextSize=12
     duration.TextColor3=Color3.fromRGB(185,185,185)
     duration.TextTransparency=1
     duration.TextXAlignment=Enum.TextXAlignment.Left
-    duration.ZIndex=2
     duration.Parent=frame
 
     local progressBack=Instance.new("Frame")
@@ -340,7 +311,6 @@ local function showAbilityNotification(info, durationSeconds)
     progressBack.BackgroundTransparency=1
     progressBack.BorderSizePixel=0
     progressBack.ClipsDescendants=true
-    progressBack.ZIndex=2
     progressBack.Parent=frame
 
     local progress=Instance.new("Frame")
@@ -348,27 +318,21 @@ local function showAbilityNotification(info, durationSeconds)
     progress.Size=UDim2.fromScale(1,1)
     progress.BackgroundColor3=Color3.fromRGB(175,175,175)
     progress.BorderSizePixel=0
-    progress.ZIndex=3
     progress.Parent=progressBack
 
-    local progressCorner=Instance.new("UICorner")
-    progressCorner.CornerRadius=UDim.new(0,999)
-    progressCorner.Parent=progress
-
-    local function updateScale()
-        local camera=workspace.CurrentCamera
-        if not camera or not sg.Parent then
-            return
-        end
-
-        local v=camera.ViewportSize
-        scale.Scale=math.clamp(math.min(v.X,v.Y)/430,0.72,0.95)
-    end
-
-    updateScale()
+    local pcorner=Instance.new("UICorner")
+    pcorner.CornerRadius=UDim.new(0,999)
+    pcorner.Parent=progress
 
     local camera=workspace.CurrentCamera
     if camera then
+        local function updateScale()
+            local v=camera.ViewportSize
+            scale.Scale=math.clamp(math.min(v.X,v.Y)/430,0.72,1)
+        end
+
+        updateScale()
+
         camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
             if currentNotification==sg then
                 updateScale()
@@ -383,20 +347,18 @@ local function showAbilityNotification(info, durationSeconds)
         BackgroundTransparency=0.2,
     }):Play()
 
-    for _, obj in ipairs({title,close,separator,ability,duration,progressBack}) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            TweenService:Create(obj,intro,{TextTransparency=0}):Play()
-        else
-            TweenService:Create(obj,intro,{BackgroundTransparency=0}):Play()
-        end
-    end
-
+    TweenService:Create(title,intro,{TextTransparency=0}):Play()
+    TweenService:Create(close,intro,{TextTransparency=0}):Play()
+    TweenService:Create(ability,intro,{TextTransparency=0}):Play()
+    TweenService:Create(duration,intro,{TextTransparency=0}):Play()
+    TweenService:Create(separator,intro,{BackgroundTransparency=0}):Play()
+    TweenService:Create(progressBack,intro,{BackgroundTransparency=0}):Play()
     TweenService:Create(stroke,intro,{Transparency=0.05}):Play()
 
     if durationSeconds and durationSeconds>0 then
         TweenService:Create(
             progress,
-            TweenInfo.new(durationSeconds,Enum.EasingStyle.Linear,Enum.EasingDirection.Out),
+            TweenInfo.new(durationSeconds,Enum.EasingStyle.Linear),
             {Size=UDim2.new(0,0,1,0)}
         ):Play()
     end
@@ -446,21 +408,21 @@ local function hookAbilityButton(button)
         if isActive and not wasActive then
             local info=findAbilityInfo(button) or {button=button}
             local name=cleanName(info.nameBox and info.nameBox.Text or button.Text)
-            local resolvedDuration=resolveAbilityDuration(info)
+            local d=resolveAbilityDuration(info)
 
-            if not resolvedDuration and name~="" then
-                resolvedDuration=learnedDurations[name]
+            if not d and name~="" then
+                d=learnedDurations[name]
             end
 
             activeStarts[button]=os.clock()
-            showAbilityNotification(info,resolvedDuration)
+            showAbilityNotification(info,d)
         elseif wasActive and not isActive then
             local info=findAbilityInfo(button) or {button=button}
             local name=cleanName(info.nameBox and info.nameBox.Text or button.Text)
-            local startedAt=activeStarts[button]
+            local started=activeStarts[button]
 
-            if startedAt then
-                local observed=os.clock()-startedAt
+            if started then
+                local observed=os.clock()-started
                 if observed>0.05 and observed<86400 and name~="" then
                     learnedDurations[name]=observed
                 end
@@ -493,76 +455,6 @@ local function scanAbilityButtons()
 end
 
 scanAbilityButtons()
-
-task.defer(function()
-    pcall(function()
-        local noJumpEnabled=true
-        local toggleConnection
-
-        local function getHumanoid()
-            local character=player.Character
-            return character and character:FindFirstChildOfClass("Humanoid")
-        end
-
-        local function refreshNoJumpState(row)
-            local toggle=row and row:FindFirstChild("Toggle",true)
-            if not toggle or not toggle:IsA("GuiButton") then
-                return
-            end
-
-            local c=toggle.BackgroundColor3
-            noJumpEnabled=(c.R>0.05 and c.G>0.25 and c.B>0.35)
-
-            if toggleConnection then
-                toggleConnection:Disconnect()
-            end
-
-            toggleConnection=toggle.Activated:Connect(function()
-                noJumpEnabled=not noJumpEnabled
-            end)
-        end
-
-        local function allowJump()
-            if not noJumpEnabled then
-                return
-            end
-
-            local humanoid=getHumanoid()
-            if not humanoid or humanoid.Health<=0 then
-                return
-            end
-
-            pcall(function()
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,true)
-                humanoid.Jump=true
-            end)
-        end
-
-        UIS.JumpRequest:Connect(allowJump)
-
-        player.CharacterAdded:Connect(function(character)
-            task.defer(function()
-                local humanoid=character:FindFirstChildOfClass("Humanoid")
-                    or character:WaitForChild("Humanoid",5)
-
-                if humanoid and noJumpEnabled then
-                    pcall(function()
-                        humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,true)
-                    end)
-                end
-            end)
-        end)
-
-        for _=1,100 do
-            local row=localPage:FindFirstChild("PulseCoreNoJumpCooldown",true)
-            if row then
-                refreshNoJumpState(row)
-                break
-            end
-            task.wait(0.1)
-        end
-    end)
-end)
 
 localPage.DescendantAdded:Connect(function(obj)
     task.defer(function()
