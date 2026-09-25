@@ -453,6 +453,68 @@ end]],[[local function resolveAbilityDuration(info)
     return nil
 end]],1)
 
+        _src=string.gsub(_src,[[    frame.Size=UDim2.fromOffset(320,92)
+    frame.BackgroundColor3=Color3.fromRGB(0,0,0)
+]],[[    frame.Size=UDim2.fromOffset(340,104)
+    frame.BackgroundColor3=Color3.fromRGB(9,9,9)
+]],1)
+
+        _src=string.gsub(_src,[[    corner.CornerRadius=UDim.new(0,10)
+]],[[    corner.CornerRadius=UDim.new(0,12)
+]],1)
+
+        _src=string.gsub(_src,[[    stroke.Color=Color3.fromRGB(125,125,125)
+    stroke.Thickness=1.5
+]],[[    stroke.Color=Color3.fromRGB(95,95,95)
+    stroke.Thickness=1
+]],1)
+
+        _src=string.gsub(_src,[[    title.Position=UDim2.fromOffset(14,8)
+    title.Size=UDim2.new(1,-56,0,22)
+]],[[    title.Position=UDim2.fromOffset(15,9)
+    title.Size=UDim2.new(1,-58,0,22)
+]],1)
+
+        _src=string.gsub(_src,[[    title.TextSize=18
+]],[[    title.TextSize=17
+]],1)
+
+        _src=string.gsub(_src,[[    close.Position=UDim2.new(1,-8,0,6)
+    close.Size=UDim2.fromOffset(28,28)
+]],[[    close.Position=UDim2.new(1,-9,0,7)
+    close.Size=UDim2.fromOffset(26,26)
+]],1)
+
+        _src=string.gsub(_src,[[    separator.Position=UDim2.fromOffset(14,31)
+    separator.Size=UDim2.new(1,-28,0,1)
+]],[[    separator.Position=UDim2.fromOffset(15,32)
+    separator.Size=UDim2.new(1,-30,0,1)
+]],1)
+
+        _src=string.gsub(_src,[[    ability.Position=UDim2.fromOffset(14,37)
+    ability.Size=UDim2.new(1,-28,0,20)
+]],[[    ability.Position=UDim2.fromOffset(15,40)
+    ability.Size=UDim2.new(1,-30,0,20)
+]],1)
+
+        _src=string.gsub(_src,[[    durationLabel.Position=UDim2.fromOffset(14,58)
+    durationLabel.Size=UDim2.new(1,-28,0,20)
+]],[[    durationLabel.Position=UDim2.fromOffset(15,63)
+    durationLabel.Size=UDim2.new(1,-30,0,22)
+]],1)
+
+        _src=string.gsub(_src,[[    durationLabel.Font=Enum.Font.Gotham
+    durationLabel.TextSize=12
+]],[[    durationLabel.Font=Enum.Font.GothamMedium
+    durationLabel.TextSize=13
+]],1)
+
+        _src=string.gsub(_src,[[    progressBack.Position=UDim2.new(0,10,1,-8)
+    progressBack.Size=UDim2.new(1,-20,0,3)
+]],[[    progressBack.Position=UDim2.new(0,12,1,-8)
+    progressBack.Size=UDim2.new(1,-24,0,4)
+]],1)
+
         _src=string.gsub(_src,[[durationLabel.Text=durationSeconds==math.huge
         and "Duration: Inf"
         or durationSeconds
