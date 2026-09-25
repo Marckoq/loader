@@ -41,22 +41,31 @@ local noJumpCooldown=true
 local jumpConnection
 local jumpHeartbeat
 local queuedJump=false
+local lastHumanoid=nil
+local lastGrounded=true
 
-local function forceJump(humanoid)
-    if not noJumpCooldown or not humanoid or humanoid.Health<=0 then
-        return
-    end
-
-    humanoid.Jump=true
-    pcall(function()
-        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end)
+local function getHumanoid()
+    local character=player.Character
+    return character and character:FindFirstChildOfClass("Humanoid")
 end
 
 local function grounded(humanoid)
     return humanoid
         and humanoid.Health>0
         and humanoid.FloorMaterial~=Enum.Material.Air
+end
+
+local function performQueuedJump(humanoid)
+    if not noJumpCooldown or not humanoid or humanoid.Health<=0 then
+        return
+    end
+
+    if not grounded(humanoid) then
+        return
+    end
+
+    queuedJump=false
+    humanoid.Jump=true
 end
 
 jumpConnection=UIS.JumpRequest:Connect(function()
@@ -70,15 +79,21 @@ jumpConnection=UIS.JumpRequest:Connect(function()
     end
 
     if grounded(humanoid) then
-        queuedJump=false
+        -- Let Roblox perform the first jump normally.
+        lastGrounded=true
         return
     end
 
+    -- A second jump request made while airborne is queued and will
+    -- execute immediately after landing, removing the jump cooldown
+    -- without creating a second jump from a single input.
     queuedJump=true
+    lastGrounded=false
 end)
 
 jumpHeartbeat=RunService.Heartbeat:Connect(function()
-    if not noJumpCooldown or not queuedJump then
+    if not noJumpCooldown then
+        queuedJump=false
         return
     end
 
@@ -88,10 +103,19 @@ jumpHeartbeat=RunService.Heartbeat:Connect(function()
         return
     end
 
-    if grounded(humanoid) then
+    if humanoid~=lastHumanoid then
+        lastHumanoid=humanoid
+        lastGrounded=grounded(humanoid)
         queuedJump=false
-        forceJump(humanoid)
     end
+
+    local isGrounded=grounded(humanoid)
+
+    if isGrounded and not lastGrounded and queuedJump then
+        performQueuedJump(humanoid)
+    end
+
+    lastGrounded=isGrounded
 end)
 
 local oldToggle=localPage:FindFirstChild("PulseCoreNoJumpCooldown",true)
