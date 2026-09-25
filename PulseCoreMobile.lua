@@ -46,11 +46,42 @@ task.defer(function()
         gui.IgnoreGuiInset = true
         main.AnchorPoint = Vector2.new(0.5, 0.5)
         main.Position = UDim2.fromScale(0.5, 0.5)
-        main.Size = UDim2.new(1, -8, 1, -8)
 
         local uiScale = gui:FindFirstChildOfClass("UIScale")
         if uiScale then
             uiScale.Scale = 1
+        end
+
+        local contentScale = main:FindFirstChild("PulseCoreMobileContentScale")
+        if not contentScale then
+            contentScale = Instance.new("UIScale")
+            contentScale.Name = "PulseCoreMobileContentScale"
+            contentScale.Scale = 0.9
+            contentScale.Parent = main
+        else
+            contentScale.Scale = 0.9
+        end
+
+        local function applyMobilePanelSize()
+            local camera = workspace.CurrentCamera
+            if not camera then
+                return
+            end
+
+            local viewport = camera.ViewportSize
+            local side = math.min(viewport.X, viewport.Y) - 24
+            side = math.clamp(side, 300, 400)
+
+            main.Size = UDim2.fromOffset(side, side)
+        end
+
+        applyMobilePanelSize()
+
+        do
+            local camera = workspace.CurrentCamera
+            if camera then
+                camera:GetPropertyChangedSignal("ViewportSize"):Connect(applyMobilePanelSize)
+            end
         end
 
         local mobileSidebar = Instance.new("Frame")
@@ -242,9 +273,15 @@ task.defer(function()
                         gui.IgnoreGuiInset = true
                         main.AnchorPoint = Vector2.new(0.5, 0.5)
                         main.Position = UDim2.fromScale(0.5, 0.5)
-                        main.Size = UDim2.new(1, -8, 1, -8)
+                        local side = math.min(v.X, v.Y) - 24
+                        side = math.clamp(side, 300, 400)
+                        main.Size = UDim2.fromOffset(side, side)
                         if uiScale then
                             uiScale.Scale = 1
+                        end
+                        local contentScale = main:FindFirstChild("PulseCoreMobileContentScale")
+                        if contentScale then
+                            contentScale.Scale = 0.9
                         end
                     end
                 end
