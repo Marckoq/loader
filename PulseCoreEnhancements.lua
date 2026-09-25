@@ -39,33 +39,53 @@ end
 
 local noJumpCooldown=true
 local jumpConnection
-local jumpHeartbeat
-local queuedJump=false
-local lastHumanoid=nil
-local lastGrounded=true
+local characterConnection
 
 local function getHumanoid()
     local character=player.Character
     return character and character:FindFirstChildOfClass("Humanoid")
 end
 
-local function grounded(humanoid)
-    return humanoid
-        and humanoid.Health>0
-        and humanoid.FloorMaterial~=Enum.Material.Air
+local function refreshJumpState()
+    if not noJumpCooldown then
+        return
+    end
+
+    local humanoid=getHumanoid()
+    if not humanoid or humanoid.Health<=0 then
+        return
+    end
+
+    pcall(function()
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,true)
+    end)
 end
 
-local function performQueuedJump(humanoid)
-    if not noJumpCooldown or not humanoid or humanoid.Health<=0 then
+local function bindCharacter(character)
+    if not noJumpCooldown or not character then
         return
     end
 
-    if not grounded(humanoid) then
-        return
+    local humanoid=character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        refreshJumpState()
+    else
+        character.ChildAdded:Connect(function(child)
+            if noJumpCooldown and child:IsA("Humanoid") then
+                task.defer(refreshJumpState)
+            end
+        end)
     end
+end
 
-    queuedJump=false
-    humanoid.Jump=true
+characterConnection=player.CharacterAdded:Connect(function(character)
+    task.defer(function()
+        bindCharacter(character)
+    end)
+end)
+
+if player.Character then
+    bindCharacter(player.Character)
 end
 
 jumpConnection=UIS.JumpRequest:Connect(function()
@@ -73,49 +93,15 @@ jumpConnection=UIS.JumpRequest:Connect(function()
         return
     end
 
-    local humanoid=getHumanoid()
-    if not humanoid then
-        return
-    end
-
-    if grounded(humanoid) then
-        -- Let Roblox perform the first jump normally.
-        lastGrounded=true
-        return
-    end
-
-    -- A second jump request made while airborne is queued and will
-    -- execute immediately after landing, removing the jump cooldown
-    -- without creating a second jump from a single input.
-    queuedJump=true
-    lastGrounded=false
+    -- Do not force another jump here. Roblox already processes this
+    -- JumpRequest, so forcing Humanoid.Jump would cause a double jump.
+    refreshJumpState()
 end)
 
-jumpHeartbeat=RunService.Heartbeat:Connect(function()
-    if not noJumpCooldown then
-        queuedJump=false
-        return
+RunService.Heartbeat:Connect(function()
+    if noJumpCooldown then
+        refreshJumpState()
     end
-
-    local humanoid=getHumanoid()
-    if not humanoid then
-        queuedJump=false
-        return
-    end
-
-    if humanoid~=lastHumanoid then
-        lastHumanoid=humanoid
-        lastGrounded=grounded(humanoid)
-        queuedJump=false
-    end
-
-    local isGrounded=grounded(humanoid)
-
-    if isGrounded and not lastGrounded and queuedJump then
-        performQueuedJump(humanoid)
-    end
-
-    lastGrounded=isGrounded
 end)
 
 local oldToggle=localPage:FindFirstChild("PulseCoreNoJumpCooldown",true)
@@ -196,13 +182,18 @@ local function refreshToggle()
             and UDim2.new(1,-27,0.5,0)
             or UDim2.new(0,5,0.5,0)}
     ):Play()
+
+    if noJumpCooldown then
+        refreshJumpState()
+    end
 end
 
 toggle.Activated:Connect(function()
     noJumpCooldown=not noJumpCooldown
-    queuedJump=false
     refreshToggle()
 end)
+
+refreshToggle()
 
 local function findAbilityByButton(button)
     local order=tonumber(button.LayoutOrder)
