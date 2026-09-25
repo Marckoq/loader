@@ -3,6 +3,12 @@
 ## 2026-09-25
 
 ### Stability
+- Restored the last verified working main PulseCore loader so the interface loads normally again.
+- Kept the experimental No Jump Cooldown and ability notification implementation isolated in `PulseCoreEnhancements.lua` instead of letting it affect the main loader.
+
+## 2026-09-25
+
+### Stability
 - Restored the known working PulseCore loader structure after the interface disappeared.
 - The enhancement module is now loaded one second after PulseCore initialization and is isolated so its errors cannot block the main interface.
 - Removed the extra forced jump call that could make one jump request produce two jumps.
