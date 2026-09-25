@@ -337,6 +337,31 @@ end)
 task.defer(function()
     pcall(function()
         local _src=game:HttpGet("https://raw.githubusercontent.com/Marckoq/loader/main/PulseCoreEnhancements.lua")
+
+        _src=string.gsub(_src,[[durationLabel.Text=durationSeconds==math.huge
+        and "Duration: Inf"
+        or durationSeconds
+            and ("Duration: 0.0/"..string.format("%.1f",durationSeconds))
+            or "Duration: N/A"]],[[durationLabel.Text=durationSeconds==math.huge
+        and "Duration: Inf"
+        or durationSeconds
+            and ("Duration: "..string.format("%.1f",durationSeconds).."/"..string.format("%.1f",durationSeconds))
+            or "Duration: N/A"]],1)
+
+        _src=string.gsub(_src,[[                if elapsed>=durationSeconds then
+                    durationLabel.Text="Duration: "..string.format("%.1f",durationSeconds).."/"..string.format("%.1f",durationSeconds)
+                    stopNotificationForToken(sg,token)
+                    break
+                end
+
+                durationLabel.Text="Duration: "..string.format("%.1f",elapsed).."/"..string.format("%.1f",durationSeconds)]],[[                local remaining=math.max(0,durationSeconds-elapsed)
+                durationLabel.Text="Duration: "..string.format("%.1f",remaining).."/"..string.format("%.1f",durationSeconds)
+
+                if remaining<=0 then
+                    stopNotificationForToken(sg,token)
+                    break
+                end]],1)
+
         local _load=loadstring or load
         if type(_load)~="function" or type(_src)~="string" then
             return
