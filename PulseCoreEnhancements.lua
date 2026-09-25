@@ -125,6 +125,7 @@ local function addNoJumpCooldownToggle()
     local sg=Instance.new("ScreenGui")
     sg.Name="PulseCoreNoJumpCooldownUI"
     sg.ResetOnSpawn=false
+    sg.Enabled=false
     sg.IgnoreGuiInset=true
     sg.DisplayOrder=2999
     sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
