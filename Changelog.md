@@ -3,6 +3,12 @@
 ## 2026-09-25
 
 ### Local
+- Fixed the enhancement module initialization so the `No Jump Cooldown` control can be created in the Local tab.
+- Added the missing RunService reference required by the local jump handler.
+
+## 2026-09-25
+
+### Local
 - Restored No Jump Cooldown with a touch/keyboard jump-request handler that avoids forcing a second jump on the same input.
 - The option remains enabled by default and can be toggled from the Local tab.
 
