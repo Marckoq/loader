@@ -3,6 +3,12 @@
 ## 2026-09-25
 
 ### Mobile
+- Added a 5-second PulseCore warning notification to the main script for mobile devices.
+- The notification uses a black background with a red outline, a close button, device-responsive scaling, and a bottom progress bar that stays inside the notification bounds.
+
+## 2026-09-25
+
+### Mobile
 - Changed the mobile interface from fullscreen to a compact square panel sized automatically for the phone viewport.
 - Reduced the scale of the mobile panel contents, including buttons, fields, and text, to 90%.
 - Kept the compact square layout responsive when the phone viewport changes.
