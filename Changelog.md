@@ -3,6 +3,11 @@
 ## 2026-09-25
 
 ### Mobile
+- Changed the mobile warning notification text to English.
+
+## 2026-09-25
+
+### Mobile
 - Added a 5-second PulseCore warning notification to the main script for mobile devices.
 - The notification uses a black background with a red outline, a close button, device-responsive scaling, and a bottom progress bar that stays inside the notification bounds.
 
