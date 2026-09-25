@@ -1,6 +1,5 @@
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
-local RunService=game:GetService("RunService")
 local TweenService=game:GetService("TweenService")
 
 local player=Players.LocalPlayer
@@ -38,6 +37,7 @@ local function getHumanoid()
 end
 
 local currentNotification
+local currentTextOwner
 
 local function closeNotification()
     if currentNotification then
@@ -93,6 +93,7 @@ local function showNotification(info)
     sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
     sg.Parent=playerGui
     currentNotification=sg
+    currentTextOwner=info.button
 
     local scale=Instance.new("UIScale")
     scale.Scale=0.9
@@ -201,6 +202,7 @@ local function showNotification(info)
         closed=true
         if currentNotification==sg then
             currentNotification=nil
+            currentTextOwner=nil
         end
         pcall(function()
             sg:Destroy()
@@ -273,6 +275,21 @@ local function hookButton(button)
             end
         end)
     end)
+
+    button:GetPropertyChangedSignal("Text"):Connect(function()
+        if currentNotification and currentTextOwner==button then
+            local text=tostring(button.Text or "")
+            if text:sub(1,5)~="STOP " then
+                closeNotification()
+            end
+        end
+    end)
+
+    button.Destroying:Connect(function()
+        if currentNotification and currentTextOwner==button then
+            closeNotification()
+        end
+    end)
 end
 
 local function scan()
@@ -294,25 +311,3 @@ localPage.DescendantAdded:Connect(function(obj)
     end)
 end)
 
-RunService.Heartbeat:Connect(function()
-    if currentNotification then
-        if not currentNotification.Parent then
-            currentNotification=nil
-            return
-        end
-
-        local active=false
-        for _,obj in ipairs(localPage:GetDescendants()) do
-            if obj:IsA("GuiButton") and obj:GetAttribute("PulseCoreAbilityNotificationHooked") then
-                if tostring(obj.Text or ""):sub(1,5)=="STOP " then
-                    active=true
-                    break
-                end
-            end
-        end
-
-        if not active then
-            closeNotification()
-        end
-    end
-end)
