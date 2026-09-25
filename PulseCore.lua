@@ -263,16 +263,20 @@ task.defer(function()
             _scroll=Instance.new("ScrollingFrame")
             _scroll.Name="PulseCoreTabScroller"
             _scroll.Position=UDim2.fromOffset(0,0)
-            _scroll.Size=UDim2.new(1,0,1,-44)
-            _scroll.BackgroundTransparency=1
+            _scroll.Size=UDim2.new(1,0,1,0)
+            _scroll.BackgroundColor3=Color3.fromRGB(14,14,14)
+            _scroll.BackgroundTransparency=0.13
             _scroll.BorderSizePixel=0
             _scroll.CanvasSize=UDim2.fromOffset(0,560)
             _scroll.ScrollingDirection=Enum.ScrollingDirection.Y
             _scroll.ScrollingEnabled=true
             _scroll.Active=true
-            _scroll.ScrollBarThickness=3
-            _scroll.ScrollBarImageTransparency=0.35
-            _scroll.ZIndex=1
+            _scroll.TouchScrollingEnabled=true
+            _scroll.ScrollBarThickness=5
+            _scroll.ScrollBarImageColor3=Color3.fromRGB(165,165,165)
+            _scroll.ScrollBarImageTransparency=0.15
+            _scroll.ElasticBehavior=Enum.ElasticBehavior.WhenScrollable
+            _scroll.ZIndex=2
             _scroll.Parent=_sidebar
 
             local _moveNames={
