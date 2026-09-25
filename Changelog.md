@@ -3,6 +3,11 @@
 ## 2026-09-25
 
 ### Mobile
+- Removed the mobile instability warning notification from the main PulseCore script as requested.
+
+## 2026-09-25
+
+### Mobile
 - Changed the mobile warning notification text to English.
 
 ## 2026-09-25
