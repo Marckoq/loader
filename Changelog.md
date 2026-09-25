@@ -3,6 +3,11 @@
 ## 2026-09-25
 
 ### Interface
+- Added manual finger-drag scrolling for the entire sidebar tab panel, including when the touch starts directly on a tab button.
+
+## 2026-09-25
+
+### Interface
 - Fixed the sidebar tab panel scrolling hook so the entire tab panel responds to mouse-wheel input when the cursor is over it.
 - Recalculated the tab panel canvas height from the actual tab content and viewport, ensuring the panel is genuinely scrollable when tabs exceed the visible area.
 
