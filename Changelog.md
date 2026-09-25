@@ -3,6 +3,7 @@
 ## 2026-09-25
 
 ### Interface
+- Made the entire sidebar tab panel itself touch-scrollable, with a visible scrollbar and elastic mobile scrolling.
 - Added a dedicated vertical scroller for the sidebar tabs so they can be swiped on small touch screens.
 - Identified and corrected touch-device scaling logic so phones no longer fall back to the reduced layout after startup.
 - Prevented the built-in device scaler from reverting the phone interface to a reduced UIScale.
