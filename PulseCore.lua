@@ -1,6 +1,6 @@
 -- PulseCore Version: 2.5.9
 -- Version scheme: 1.0.0 -> 1.0.5 -> 1.0.10; each release increments the final component by 5.
-SCRIPT_VERSION = "2.5.19"
+SCRIPT_VERSION = "2.5.24"
 local guiDestroyed = false
 
 local Players = game:GetService("Players")
@@ -1196,6 +1196,10 @@ floatingToggleButton = create("TextButton", {
 addCorner(floatingToggleButton, 10)
 addStroke(floatingToggleButton, COLORS.Border, 0.12, 1.5)
 
+floatingToggleScale = create("UIScale", {
+    Scale = 1,
+}, floatingToggleGui)
+
 uiScale = create("UIScale", {
     Scale = 1,
 }, screenGui)
@@ -1246,6 +1250,7 @@ local function updatePulseCoreDeviceScale()
     end
 
     uiScale.Scale = scale
+    floatingToggleScale.Scale = scale
 end
 
 updatePulseCoreDeviceScale()
@@ -4455,7 +4460,8 @@ do
         Text = table.concat({
             "CHANGELOG / LATEST UPDATE",
             "",
-            "• Updated to version 2.5.19.",
+            "• Updated to version 2.5.24.",
+            "• Made the standalone interface toggle button responsive to the active device and screen size.",
             "• Added a standalone floating button for hiding and showing the main PulseCore interface.",
             "• Optimized ESP by throttling expensive refresh and name-tag updates.",
             "• Removed the automatic/manual update-check system and its INFO controls.",
