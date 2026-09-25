@@ -338,6 +338,121 @@ task.defer(function()
     pcall(function()
         local _src=game:HttpGet("https://raw.githubusercontent.com/Marckoq/loader/main/PulseCoreEnhancements.lua")
 
+        _src=string.gsub(_src,[[local function resolveAbilityDuration(info)
+    local roots={info.button,info.nameBox,info.button and info.button.Parent}
+
+    for _,root in ipairs(roots) do
+        if root then
+            for _,key in ipairs({
+                "Duration",
+                "AbilityDuration",
+                "ActiveDuration",
+                "AbilityTime",
+                "DurationSeconds",
+                "DurationTime",
+            }) do
+                local value=root:GetAttribute(key)
+                local parsed=parseDurationValue(value)
+                if parsed then
+                    return parsed
+                end
+            end
+        end
+    end
+
+    for _,root in ipairs(roots) do
+        if root then
+            local objects=root:GetDescendants()
+            for i=1,math.min(#objects,200) do
+                local obj=objects[i]
+                local key=tostring(obj.Name or ""):lower()
+
+                if key:find("duration",1,true) or key:find("activetime",1,true) then
+                    if obj:IsA("ValueBase") then
+                        local parsed=parseDurationValue(obj.Value)
+                        if parsed then
+                            return parsed
+                        end
+                    elseif obj:IsA("TextLabel") or obj:IsA("TextBox") then
+                        local parsed=parseDurationValue(obj.Text)
+                        if parsed then
+                            return parsed
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end]],[[local function resolveAbilityDuration(info)
+    if info and info.button then
+        local order=tonumber(info.button.LayoutOrder)
+        if order then
+            local durationOrder=order-8
+
+            for _,obj in ipairs(localPage:GetChildren()) do
+                if obj:IsA("GuiObject") and tonumber(obj.LayoutOrder)==durationOrder then
+                    local box=obj:FindFirstChildWhichIsA("TextBox",true)
+                    if box then
+                        local parsed=parseDurationValue(box.Text)
+                        if parsed then
+                            return parsed
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local roots={info.button,info.nameBox,info.button and info.button.Parent}
+
+    for _,root in ipairs(roots) do
+        if root then
+            for _,key in ipairs({
+                "Duration",
+                "AbilityDuration",
+                "ActiveDuration",
+                "AbilityTime",
+                "DurationSeconds",
+                "DurationTime",
+            }) do
+                local value=root:GetAttribute(key)
+                local parsed=parseDurationValue(value)
+                if parsed then
+                    return parsed
+                end
+            end
+        end
+    end
+
+    for _,root in ipairs(roots) do
+        if root then
+            local objects=root:GetDescendants()
+            for i=1,math.min(#objects,200) do
+                local obj=objects[i]
+                local key=tostring(obj.Name or ""):lower()
+
+                if key:find("duration",1,true) or key:find("activetime",1,true) then
+                    if obj:IsA("ValueBase") then
+                        local parsed=parseDurationValue(obj.Value)
+                        if parsed then
+                            return parsed
+                        end
+                    elseif obj:IsA("TextLabel") or obj:IsA("TextBox") then
+                        local parsed=parseDurationValue(obj.Text)
+                        if parsed then
+                            return parsed
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end]],1)
+
         _src=string.gsub(_src,[[durationLabel.Text=durationSeconds==math.huge
         and "Duration: Inf"
         or durationSeconds
