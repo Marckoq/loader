@@ -2,6 +2,13 @@
 
 ## 2026-09-25
 
+### Notifications
+- Fixed ability activation notifications to trigger from the actual `ACTIVATE -> STOP` state transition, so they also work for abilities activated through hotkeys.
+- Simplified the notification content to the requested two lines: ability name and `Duration: N/A`.
+- Kept the black translucent panel, gray outline, rounded corners, close button, device scaling, and internal progress bar.
+
+## 2026-09-25
+
 ### Local
 - Moved No Jump Cooldown into the main `PulseCore.lua` script.
 - Marked the feature as `(BETA)`.
