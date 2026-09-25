@@ -3,6 +3,12 @@
 ## 2026-09-25
 
 ### Interface
+- Fixed phone fullscreen sizing so the interface content uses normal scale instead of a reduced mobile UIScale.
+- Phone controls, switches, input fields, and text now keep their intended size while the main panel fills the screen.
+
+## 2026-09-25
+
+### Interface
 - Fixed mobile full-screen scaling so the main interface no longer alternates between small and large sizes.
 - The mobile layout now follows the built-in device scale instead of fighting it.
 
