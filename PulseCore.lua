@@ -260,7 +260,9 @@ task.defer(function()
         local _sidebar=_main and _main:FindFirstChild("Sidebar")
         if not _sidebar then return end
 
+        local _uis=game:GetService("UserInputService")
         local _scroll=_sidebar:FindFirstChild("PulseCoreTabScroller")
+
         if not _scroll then
             _scroll=Instance.new("ScrollingFrame")
             _scroll.Name="PulseCoreTabScroller"
@@ -273,7 +275,9 @@ task.defer(function()
             _scroll.ScrollingDirection=Enum.ScrollingDirection.Y
             _scroll.ScrollingEnabled=true
             _scroll.Active=true
+            _scroll.Selectable=true
             _scroll.TouchScrollingEnabled=true
+            _scroll.ScrollingBehavior=Enum.ScrollingBehavior.Preset
             _scroll.ScrollBarThickness=5
             _scroll.ScrollBarImageColor3=Color3.fromRGB(165,165,165)
             _scroll.ScrollBarImageTransparency=0.15
@@ -295,6 +299,10 @@ task.defer(function()
             end
         end
 
+        _scroll.Active=true
+        _scroll.ScrollingEnabled=true
+        _scroll.TouchScrollingEnabled=true
+
         local _maxBottom=0
         for _,_obj in ipairs(_scroll:GetChildren()) do
             if _obj:IsA("GuiObject") then
@@ -302,7 +310,41 @@ task.defer(function()
                 if _bottom>_maxBottom then _maxBottom=_bottom end
             end
         end
-        _scroll.CanvasSize=UDim2.fromOffset(0,math.max(560,_maxBottom+24))
+
+        local _visibleHeight=_scroll.AbsoluteSize.Y
+        local _canvasHeight=math.max(560,_maxBottom+24,_visibleHeight+1)
+        _scroll.CanvasSize=UDim2.fromOffset(0,_canvasHeight)
+
+        if not _scroll:GetAttribute("PulseCoreWheelHooked") then
+            _scroll:SetAttribute("PulseCoreWheelHooked",true)
+
+            _uis.InputChanged:Connect(function(_input)
+                if _input.UserInputType~=Enum.UserInputType.MouseWheel then
+                    return
+                end
+                if not (_scroll.Parent and _scroll.Visible and _scroll.AbsoluteSize.X>0 and _scroll.AbsoluteSize.Y>0) then
+                    return
+                end
+
+                local _mouse=_uis:GetMouseLocation()
+                local _pos=_scroll.AbsolutePosition
+                local _size=_scroll.AbsoluteSize
+                if _mouse.X<_pos.X or _mouse.X>_pos.X+_size.X or _mouse.Y<_pos.Y or _mouse.Y>_pos.Y+_size.Y then
+                    return
+                end
+
+                local _maxY=math.max(0,_scroll.CanvasSize.Y.Offset-_scroll.AbsoluteSize.Y)
+                if _maxY<=0 then
+                    return
+                end
+
+                local _step=(_input.Position.Z or 0)*72
+                local _nextY=math.clamp(_scroll.CanvasPosition.Y-_step,0,_maxY)
+                if _nextY~=_scroll.CanvasPosition.Y then
+                    _scroll.CanvasPosition=Vector2.new(_scroll.CanvasPosition.X,_nextY)
+                end
+            end)
+        end
     end)
 end)
 
