@@ -225,24 +225,20 @@ task.defer(function()
         end
 
         local function _apply()
-            local _v=_cam.ViewportSize
             if _mobile() then
                 _g.IgnoreGuiInset=true
                 _f.AnchorPoint=Vector2.new(0.5,0.5)
                 _f.Position=UDim2.fromScale(0.5,0.5)
+                _f.Size=UDim2.new(1,-8,1,-8)
 
-                local _scale=_us and math.max(_us.Scale,0.01) or 0.68
-                local _w=(_v.X/_scale)-8
-                local _h=(_v.Y/_scale)-8
-                _f.Size=UDim2.new(1,(-8/_scale),1,(-8/_scale))
+                if _us then
+                    _us.Scale=1
+                end
             end
         end
 
         _apply()
         _cam:GetPropertyChangedSignal("ViewportSize"):Connect(_apply)
-        if _us then
-            _us:GetPropertyChangedSignal("Scale"):Connect(_apply)
-        end
     end)
 end)
 return _result
