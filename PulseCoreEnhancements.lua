@@ -36,6 +36,181 @@ local function getHumanoid()
     return character and character:FindFirstChildOfClass("Humanoid")
 end
 
+local noJumpCooldown=true
+local jumpInputSerial=0
+local jumpQueued=false
+
+local function isJumpable(humanoid)
+    if not humanoid or humanoid.Health<=0 then
+        return false
+    end
+
+    local state=humanoid:GetState()
+    if state==Enum.HumanoidStateType.Dead
+        or state==Enum.HumanoidStateType.Jumping
+        or state==Enum.HumanoidStateType.Freefall
+        or state==Enum.HumanoidStateType.FallingDown
+        or state==Enum.HumanoidStateType.Seated then
+        return false
+    end
+
+    return humanoid.FloorMaterial~=Enum.Material.Air
+end
+
+local function requestNoCooldownJump(humanoid, serial)
+    if not noJumpCooldown or not humanoid or humanoid.Health<=0 then
+        return
+    end
+
+    task.defer(function()
+        if not noJumpCooldown or serial~=jumpInputSerial then
+            return
+        end
+
+        if not humanoid.Parent or humanoid.Health<=0 then
+            return
+        end
+
+        if isJumpable(humanoid) then
+            humanoid.Jump=true
+        end
+    end)
+end
+
+local jumpConnection=UIS.JumpRequest:Connect(function()
+    if not noJumpCooldown then
+        return
+    end
+
+    local humanoid=getHumanoid()
+    if not humanoid then
+        return
+    end
+
+    jumpInputSerial=jumpInputSerial+1
+    local serial=jumpInputSerial
+
+    if isJumpable(humanoid) then
+        requestNoCooldownJump(humanoid,serial)
+    else
+        jumpQueued=true
+    end
+end)
+
+local jumpHeartbeat=RunService.Heartbeat:Connect(function()
+    if not noJumpCooldown or not jumpQueued then
+        return
+    end
+
+    local humanoid=getHumanoid()
+    if not humanoid then
+        jumpQueued=false
+        return
+    end
+
+    if isJumpable(humanoid) then
+        jumpQueued=false
+        jumpInputSerial=jumpInputSerial+1
+        requestNoCooldownJump(humanoid,jumpInputSerial)
+    end
+end)
+
+local function addNoJumpCooldownToggle()
+    if localPage:GetAttribute("PulseCoreNoJumpCooldownReady") then
+        return
+    end
+
+    localPage:SetAttribute("PulseCoreNoJumpCooldownReady",true)
+
+    local row=Instance.new("Frame")
+    row.Name="PulseCoreNoJumpCooldown"
+    row.LayoutOrder=0
+    row.Size=UDim2.new(1,0,0,50)
+    row.BackgroundColor3=Color3.fromRGB(30,30,30)
+    row.BackgroundTransparency=0.16
+    row.BorderSizePixel=0
+    row.Parent=localPage
+
+    local rowCorner=Instance.new("UICorner")
+    rowCorner.CornerRadius=UDim.new(0,9)
+    rowCorner.Parent=row
+
+    local rowStroke=Instance.new("UIStroke")
+    rowStroke.Color=Color3.fromRGB(70,70,70)
+    rowStroke.Transparency=0.28
+    rowStroke.Thickness=1
+    rowStroke.Parent=row
+
+    local label=Instance.new("TextLabel")
+    label.Position=UDim2.fromOffset(14,0)
+    label.Size=UDim2.new(1,-100,1,0)
+    label.BackgroundTransparency=1
+    label.Text="No Jump Cooldown"
+    label.Font=Enum.Font.GothamMedium
+    label.TextSize=13
+    label.TextColor3=Color3.fromRGB(235,235,235)
+    label.TextWrapped=true
+    label.TextXAlignment=Enum.TextXAlignment.Left
+    label.Parent=row
+
+    local toggle=Instance.new("TextButton")
+    toggle.Name="Toggle"
+    toggle.AnchorPoint=Vector2.new(1,0.5)
+    toggle.Position=UDim2.new(1,-11,0.5,0)
+    toggle.Size=UDim2.fromOffset(58,30)
+    toggle.BackgroundColor3=Color3.fromRGB(20,95,135)
+    toggle.BorderSizePixel=0
+    toggle.Text=""
+    toggle.AutoButtonColor=false
+    toggle.Parent=row
+
+    local toggleCorner=Instance.new("UICorner")
+    toggleCorner.CornerRadius=UDim.new(0,999)
+    toggleCorner.Parent=toggle
+
+    local dot=Instance.new("Frame")
+    dot.Name="Dot"
+    dot.AnchorPoint=Vector2.new(0,0.5)
+    dot.Position=UDim2.new(1,-27,0.5,0)
+    dot.Size=UDim2.fromOffset(22,22)
+    dot.BackgroundColor3=Color3.fromRGB(225,245,255)
+    dot.BorderSizePixel=0
+    dot.Parent=toggle
+
+    local dotCorner=Instance.new("UICorner")
+    dotCorner.CornerRadius=UDim.new(0,999)
+    dotCorner.Parent=dot
+
+    local function refreshToggle()
+        toggle.BackgroundColor3=noJumpCooldown
+            and Color3.fromRGB(20,95,135)
+            or Color3.fromRGB(38,38,38)
+
+        dot.BackgroundColor3=noJumpCooldown
+            and Color3.fromRGB(225,245,255)
+            or Color3.fromRGB(135,135,135)
+
+        TweenService:Create(
+            dot,
+            TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+            {
+                Position=noJumpCooldown
+                    and UDim2.new(1,-27,0.5,0)
+                    or UDim2.new(0,5,0.5,0)
+            }
+        ):Play()
+    end
+
+    toggle.Activated:Connect(function()
+        noJumpCooldown=not noJumpCooldown
+        jumpQueued=false
+        jumpInputSerial=jumpInputSerial+1
+        refreshToggle()
+    end)
+end
+
+addNoJumpCooldownToggle()
+
 local currentNotification
 local currentTextOwner
 
