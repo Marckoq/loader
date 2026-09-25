@@ -42,12 +42,6 @@ CONFIG_ATTRIBUTE_NAME = "SpeedBoostConfigsV1"
 AUTO_LOAD_ATTRIBUTE_NAME = "SpeedBoostAutoLoadV1"
 CONSOLE_MODE_ATTRIBUTE_NAME = "PulseCoreConsoleModeV1"
 
-UPDATE_CHECK_RAW_URL = "https://raw.githubusercontent.com/Marckoq/loader/main/PulseCore.lua"
-UPDATE_CHECK_BUILD_ID = "2.5.9"
-UPDATE_CHECK_FINGERPRINT = "cb4cbb8a9d577bb8826a178fa50e09f5"
-UPDATE_CHECK_INTERVAL = 0.50
-UPDATE_NOTIFICATION_DURATION = 8
-
 
 CONFIG_ROOT_PATH = nil
 CONFIG_AUTOLOAD_FILE = nil
@@ -315,7 +309,6 @@ function getPulseCoreLocalAppData()
     end
 
 
-
     return "PulseCore\\Configs", true
 end
 
@@ -363,8 +356,6 @@ function initializePulseCoreConfigPath()
     if not makeFolderApi then
         return false, "Missing file API: makefolder"
     end
-
-
 
 
     local created, createError = pcall(function()
@@ -752,7 +743,6 @@ function isPulseCoreLogMessage(message)
     end
 
 
-
     return string.find(text, "[PulseCore]", 1, true) ~= nil
         or string.find(text, "[Speed Boost]", 1, true) ~= nil
         or string.find(text, "PulseCore", 1, true) ~= nil
@@ -1134,7 +1124,6 @@ function runLiveConsoleMode()
     end))
 
 
-
     local bufferedLogs = table.clone(liveConsoleState.pendingLogs)
     table.clear(liveConsoleState.records)
 
@@ -1254,7 +1243,6 @@ create("UIGradient", {
         ColorSequenceKeypoint.new(1, Color3.fromRGB(7, 7, 7)),
     }),
 }, mainFrame)
-
 
 
 topBar = create("Frame", {
@@ -1502,7 +1490,6 @@ bodyFrame = create("Frame", {
 }, mainFrame)
 
 
-
 interfaceCanvasGroup = create("CanvasGroup", {
     Name = "InterfaceAnimationGroup",
     Position = UDim2.fromScale(0, 0),
@@ -1637,20 +1624,6 @@ clientModules = {
         originalCameraSubject = nil,
         characterLockValue = nil,
         originalCharacterLock = nil,
-    },
-    updateChecker = {
-        initialized = false,
-        updateConnection = nil,
-        intermissionActive = false,
-        intermissionCheckDone = false,
-        accumulator = 0,
-        checkInProgress = false,
-        checkSerial = 0,
-        checkButton = nil,
-        statusLabel = nil,
-        notificationGui = nil,
-        notificationFrame = nil,
-        notificationSerial = 0,
     },
     customLms = {
         enabled = false,
@@ -2170,10 +2143,6 @@ function createToggleRow(parent, labelText, layoutOrder)
 end
 
 
-
-
-
-
 function clientModules.combat.normalize(value)
     return string.lower(tostring(value or "")):gsub("[%s_%-%.]", "")
 end
@@ -2255,8 +2224,6 @@ function clientModules.combat.detectCharacter(model)
     end
 
 
-
-
     local markerCharacters = {
         tripwire = "Tripwire",
         tailsdoll = "Tripwire",
@@ -2315,8 +2282,6 @@ function clientModules.combat.detectCharacter(model)
     end
 
 
-
-
     local tripwireAnimationIds = {
         ["79953933012214"] = true,
         ["85598394392380"] = true,
@@ -2371,7 +2336,6 @@ function clientModules.combat.detectCharacter(model)
     if names.jetpack then
         return "Eggman"
     end
-
 
 
     local group, displayName = getESPAbilityClassification(model)
@@ -2774,7 +2738,6 @@ function clientModules.combat.refreshCharacterHooks()
                     end)
 
 
-
                     clientModules.combat.aimActiveUntil = time() + 1
                 end
             end)
@@ -2854,9 +2817,6 @@ function clientModules.combat.isEnemyAttack(model, track, markerName)
     end
 
 
-
-
-
     if normalized == "attack"
         or normalized == "attack1"
         or normalized == "attack2"
@@ -2927,7 +2887,6 @@ function clientModules.combat.bindEnemyModel(model)
     table.insert(connections, humanoid.AnimationPlayed:Connect(function(track)
         tryDefend(track, nil)
     end))
-
 
 
     table.insert(connections, model.DescendantAdded:Connect(function(instance)
@@ -3098,8 +3057,6 @@ function clientModules.combat.initialize()
                     local targetPosition = root.Position
 
 
-
-
                     if characterRoot then
                         local characterPosition = characterRoot.Position
                         local flatTarget = Vector3.new(
@@ -3115,7 +3072,6 @@ function clientModules.combat.initialize()
                             )
                         end
                     end
-
 
 
                     if camera then
@@ -3309,8 +3265,6 @@ create("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Left,
     TextYAlignment = Enum.TextYAlignment.Center,
 }, clientModules.pages.combat)
-
-
 
 
 function clientModules.fun.findFirstByName(name, className)
@@ -4411,430 +4365,6 @@ function clientModules.speedControl.createChoiceRow(parent, labelText, valueText
     return createKeybindRow(parent, labelText, valueText, layoutOrder)
 end
 
-function clientModules.updateChecker.getRequestApi()
-    local resolvers = {
-        function()
-            return request
-        end,
-        function()
-            return http_request
-        end,
-        function()
-            return syn and syn.request
-        end,
-    }
-
-    for _, resolver in ipairs(resolvers) do
-        local okResolver, api = pcall(resolver)
-        if okResolver and type(api) == "function" then
-            return api
-        end
-    end
-
-    return nil
-end
-
-function clientModules.updateChecker.fetchRemoteText(url)
-    local requestApi = clientModules.updateChecker.getRequestApi()
-
-    if requestApi then
-        local ok, response = pcall(requestApi, {
-            Url = url,
-            Method = "GET",
-            Headers = {
-                ["Cache-Control"] = "no-cache",
-                ["Pragma"] = "no-cache",
-            },
-        })
-
-        if ok and type(response) == "table" then
-            local statusCode = tonumber(response.StatusCode or response.Status)
-            local body = response.Body
-            if (not statusCode or (statusCode >= 200 and statusCode < 300))
-                and type(body) == "string"
-                and body ~= ""
-            then
-                return body
-            end
-        end
-    end
-
-    local okHttpGet, body = pcall(function()
-        return game:HttpGet(url, true)
-    end)
-
-    if okHttpGet and type(body) == "string" and body ~= "" then
-        return body
-    end
-
-    return nil
-end
-
-function clientModules.updateChecker.readRemoteFingerprint(body)
-    if type(body) ~= "string" then
-        return nil
-    end
-
-    local fingerprint = body:match("^%-%- PulseCore Fingerprint:%s*([%w%-]+)")
-    local buildId = body:match("^%-%- PulseCore Build:%s*([%w%._%-]+)")
-
-    if not fingerprint then
-        return nil, buildId
-    end
-
-    return fingerprint, buildId
-end
-
-function clientModules.updateChecker.hashText(text)
-    if type(text) ~= "string" then
-        return ""
-    end
-
-    local hash = 5381
-    for i = 1, #text do
-        hash = (hash * 33 + string.byte(text, i)) % 4294967296
-    end
-
-    return string.format("%08x", hash)
-end
-
-function clientModules.updateChecker.hideNotification()
-    local state = clientModules.updateChecker
-    local gui = state.notificationGui
-    local frame = state.notificationFrame
-
-    if not gui or not gui.Parent or not frame or not frame.Parent then
-        state.notificationGui = nil
-        state.notificationFrame = nil
-        return
-    end
-
-    state.notificationSerial = state.notificationSerial + 1
-    local serial = state.notificationSerial
-
-    local group = frame:FindFirstChild("ContentGroup")
-    local progress = frame:FindFirstChild("ProgressBar")
-
-    local frameTween = TweenService:Create(
-        frame,
-        TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-        {
-            Position = UDim2.new(1, 380, 1, -18),
-            BackgroundTransparency = 1,
-        }
-    )
-
-    frameTween:Play()
-
-    if group and group:IsA("CanvasGroup") then
-        TweenService:Create(
-            group,
-            TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-            { GroupTransparency = 1 }
-        ):Play()
-    end
-
-    if progress and progress.Parent then
-        TweenService:Create(
-            progress,
-            TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-            { BackgroundTransparency = 1 }
-        ):Play()
-    end
-
-    task.spawn(function()
-        frameTween.Completed:Wait()
-        if serial == state.notificationSerial and gui.Parent then
-            gui:Destroy()
-            state.notificationGui = nil
-            state.notificationFrame = nil
-        end
-    end)
-end
-
-function clientModules.updateChecker.showUpdateNotification()
-    local state = clientModules.updateChecker
-    if state.notificationGui and state.notificationGui.Parent then
-        state.notificationSerial = state.notificationSerial + 1
-        state.notificationGui:Destroy()
-    end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "PulseCoreUpdateNotificationUI"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 2500
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.Parent = playerGui
-
-    state.notificationGui = gui
-
-    local frame = create("Frame", {
-        Name = "Notification",
-        AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, 380, 1, -18),
-        Size = UDim2.fromOffset(360, 122),
-        BackgroundColor3 = Color3.fromRGB(7, 7, 7),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ClipsDescendants = true,
-        Active = true,
-    }, gui)
-    addCorner(frame, 10)
-    addStroke(frame, Color3.fromRGB(96, 96, 96), 1, 1.15)
-    state.notificationFrame = frame
-
-    local group = create("CanvasGroup", {
-        Name = "ContentGroup",
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        GroupTransparency = 1,
-    }, frame)
-
-    create("TextLabel", {
-        Position = UDim2.fromOffset(16, 10),
-        Size = UDim2.new(1, -56, 0, 24),
-        BackgroundTransparency = 1,
-        Text = "PulseCore",
-        Font = Enum.Font.GothamBold,
-        TextSize = 16,
-        TextColor3 = COLORS.Text,
-        TextXAlignment = Enum.TextXAlignment.Left,
-    }, group)
-
-    local closeButton = create("TextButton", {
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -10, 0, 8),
-        Size = UDim2.fromOffset(28, 28),
-        BackgroundColor3 = Color3.fromRGB(20, 20, 20),
-        BackgroundTransparency = 0.08,
-        BorderSizePixel = 0,
-        Text = "×",
-        Font = Enum.Font.GothamBold,
-        TextSize = 17,
-        TextColor3 = COLORS.MutedText,
-        AutoButtonColor = true,
-        ZIndex = 2,
-    }, group)
-    addCorner(closeButton, 7)
-    addStroke(closeButton, Color3.fromRGB(75, 75, 75), 0.35, 1)
-
-    create("Frame", {
-        Position = UDim2.fromOffset(16, 42),
-        Size = UDim2.new(1, -32, 0, 1),
-        BackgroundColor3 = Color3.fromRGB(90, 90, 90),
-        BackgroundTransparency = 0.2,
-        BorderSizePixel = 0,
-    }, group)
-
-    create("TextLabel", {
-        Position = UDim2.fromOffset(16, 53),
-        Size = UDim2.new(1, -32, 0, 42),
-        BackgroundTransparency = 1,
-        Text = "PulseCore has been updated.\nPlease restart PulseCore.",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 13,
-        TextColor3 = COLORS.Text,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-    }, group)
-
-    local progressBack = create("Frame", {
-        Name = "ProgressBack",
-        Position = UDim2.new(0, 0, 1, -3),
-        Size = UDim2.new(1, 0, 0, 3),
-        BackgroundColor3 = Color3.fromRGB(38, 38, 38),
-        BackgroundTransparency = 0.15,
-        BorderSizePixel = 0,
-    }, frame)
-
-    local progress = create("Frame", {
-        Name = "ProgressBar",
-        Position = UDim2.fromOffset(0, 0),
-        Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.fromRGB(130, 130, 130),
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-    }, progressBack)
-
-    closeButton.Activated:Connect(function()
-        clientModules.updateChecker.hideNotification()
-    end)
-
-    TweenService:Create(
-        frame,
-        TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-        {
-            Position = UDim2.new(1, -18, 1, -18),
-            BackgroundTransparency = 0.13,
-        }
-    ):Play()
-
-    TweenService:Create(
-        group,
-        TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-        { GroupTransparency = 0 }
-    ):Play()
-
-    local duration = UPDATE_NOTIFICATION_DURATION
-    state.notificationSerial = state.notificationSerial + 1
-    local serial = state.notificationSerial
-
-    TweenService:Create(
-        progress,
-        TweenInfo.new(duration, Enum.EasingStyle.Linear),
-        { Size = UDim2.new(0, 0, 1, 0) }
-    ):Play()
-
-    task.delay(duration, function()
-        if serial == state.notificationSerial and gui.Parent then
-            clientModules.updateChecker.hideNotification()
-        end
-    end)
-end
-
-function clientModules.updateChecker.checkNow(reason, silentWhenCurrent)
-    local state = clientModules.updateChecker
-    if state.checkInProgress or guiDestroyed then
-        return false
-    end
-
-    state.checkInProgress = true
-    state.checkSerial = state.checkSerial + 1
-    local serial = state.checkSerial
-
-    local url = UPDATE_CHECK_RAW_URL
-        .. "?update_check="
-        .. tostring(os.time())
-        .. "_"
-        .. tostring(serial)
-
-    local remoteBody = clientModules.updateChecker.fetchRemoteText(url)
-
-    if guiDestroyed or serial ~= state.checkSerial then
-        state.checkInProgress = false
-        return false
-    end
-
-    if not remoteBody then
-        state.checkInProgress = false
-        if state.statusLabel and state.statusLabel.Parent and not silentWhenCurrent then
-            state.statusLabel.Text = "Update check failed. Repository file could not be reached."
-            state.statusLabel.TextColor3 = COLORS.Red
-        end
-        return false
-    end
-
-    local remoteFingerprint, remoteBuildId =
-        clientModules.updateChecker.readRemoteFingerprint(remoteBody)
-
-    state.checkInProgress = false
-
-    if not remoteFingerprint then
-        local remoteHash = clientModules.updateChecker.hashText(remoteBody)
-        if remoteHash ~= UPDATE_CHECK_BASELINE_RAW_HASH then
-            if state.statusLabel and state.statusLabel.Parent then
-                state.statusLabel.Text = "Update available. Please restart PulseCore."
-                state.statusLabel.TextColor3 = COLORS.Yellow
-            end
-            clientModules.updateChecker.showUpdateNotification()
-            return true
-        end
-
-        if state.statusLabel and state.statusLabel.Parent and not silentWhenCurrent then
-            state.statusLabel.Text = "PulseCore is up to date."
-            state.statusLabel.TextColor3 = COLORS.Green
-        end
-        return false
-    end
-
-    local changed = false
-
-    if changed then
-        if state.statusLabel and state.statusLabel.Parent then
-            state.statusLabel.Text = "Update available. Please restart PulseCore."
-            state.statusLabel.TextColor3 = COLORS.Yellow
-        end
-        clientModules.updateChecker.showUpdateNotification()
-        return true
-    end
-
-    if state.statusLabel and state.statusLabel.Parent and not silentWhenCurrent then
-        local versionText = remoteBuildId and ("Build " .. remoteBuildId) or ("Build " .. UPDATE_CHECK_BUILD_ID)
-        state.statusLabel.Text = "PulseCore is up to date. Latest version: " .. SCRIPT_VERSION .. "."
-        state.statusLabel.TextColor3 = COLORS.Green
-    end
-
-    return false
-end
-
-function clientModules.updateChecker.isIntermissionActive()
-    if not playerGui or not playerGui.Parent then
-        return false
-    end
-
-    for _, instance in ipairs(playerGui:GetDescendants()) do
-        if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
-            local text = tostring(instance.Text or "")
-            local normalized = string.upper(text):gsub("%s+", " ")
-            if normalized:match("^%s*<%s*INTERMISSION%s*>%s*$")
-                or normalized == "INTERMISSION"
-            then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
-function clientModules.updateChecker.initialize()
-    if clientModules.updateChecker.initialized then
-        return
-    end
-
-    clientModules.updateChecker.initialized = true
-
-    if clientModules.updateChecker.checkButton then
-        clientModules.updateChecker.checkButton.Activated:Connect(function()
-            clientModules.updateChecker.checkNow("manual", false)
-        end)
-    end
-
-    clientModules.updateChecker.updateConnection = RunService.Heartbeat:Connect(function(deltaTime)
-        if guiDestroyed then
-            return
-        end
-
-        local state = clientModules.updateChecker
-        state.accumulator = state.accumulator + deltaTime
-        if state.accumulator < UPDATE_CHECK_INTERVAL then
-            return
-        end
-        state.accumulator = 0
-
-        local intermission = state.isIntermissionActive()
-
-        if intermission then
-            if not state.intermissionActive then
-                state.intermissionActive = true
-                state.intermissionCheckDone = false
-            end
-
-            if not state.intermissionCheckDone then
-                state.intermissionCheckDone = true
-                task.spawn(function()
-                    state.checkNow("intermission", true)
-                end)
-            end
-        elseif state.intermissionActive then
-            state.intermissionActive = false
-            state.intermissionCheckDone = false
-        end
-    end)
-end
-
 createSectionLabel(clientModules.pages.info, "INFO  /  PULSECORE", 1)
 
 do
@@ -4894,9 +4424,7 @@ do
             "CHANGELOG / LATEST UPDATE",
             "",
             "• Updated version format to 2.4.5; each release increments the final version component by 5.",
-            "• Reworked update status and notifications to use English text, including the up-to-date state.",
             "• Added responsive UI scaling for phones and tablets so the main interface takes less screen space.",
-            "• Kept the update checker running automatically during intermission and available from INFO.",
         }, "\n"),
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
@@ -4914,71 +4442,6 @@ do
         PaddingRight = UDim.new(0, 16),
     }, changelogInfo)
 end
-
-createSectionLabel(clientModules.pages.info, "INFO  /  UPDATES", 4)
-
-do
-    local row = create("Frame", {
-        LayoutOrder = 5,
-        Size = UDim2.new(1, 0, 0, 52),
-        BackgroundColor3 = COLORS.Card,
-        BackgroundTransparency = 0.16,
-        BorderSizePixel = 0,
-    }, clientModules.pages.info)
-    addCorner(row, 9)
-    addStroke(row, COLORS.Border, 0.28, 1)
-
-    create("TextLabel", {
-        Position = UDim2.fromOffset(14, 0),
-        Size = UDim2.new(1, -186, 1, 0),
-        BackgroundTransparency = 1,
-        Text = "Check PulseCore for updates",
-        Font = Enum.Font.GothamMedium,
-        TextSize = 13,
-        TextColor3 = COLORS.Text,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-    }, row)
-
-    local button = create("TextButton", {
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -10, 0.5, 0),
-        Size = UDim2.fromOffset(164, 34),
-        BackgroundColor3 = COLORS.CyanDark,
-        BackgroundTransparency = 0.03,
-        BorderSizePixel = 0,
-        Text = "CHECK FOR UPDATES",
-        Font = Enum.Font.GothamBold,
-        TextSize = 10,
-        TextColor3 = COLORS.Text,
-        AutoButtonColor = true,
-        Active = true,
-        Selectable = true,
-    }, row)
-    addCorner(button, 7)
-    addStroke(button, COLORS.Border, 0.22, 1)
-    clientModules.updateChecker.checkButton = button
-end
-
-clientModules.updateChecker.statusLabel = create("TextLabel", {
-    LayoutOrder = 6,
-    Size = UDim2.new(1, 0, 0, 48),
-    BackgroundColor3 = COLORS.CyanDeep,
-    BackgroundTransparency = 0.32,
-    BorderSizePixel = 0,
-    Text = "Update check will run automatically during intermission.",
-    Font = Enum.Font.GothamMedium,
-    TextSize = 12,
-    TextColor3 = COLORS.MutedText,
-    TextWrapped = true,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Center,
-}, clientModules.pages.info)
-addCorner(clientModules.updateChecker.statusLabel, 12)
-create("UIPadding", {
-    PaddingLeft = UDim.new(0, 14),
-    PaddingRight = UDim.new(0, 14),
-}, clientModules.updateChecker.statusLabel)
 
 createSectionLabel(localPage, "LOCAL  /  SPEED SETTINGS", 1)
 
@@ -5689,8 +5152,6 @@ create("UIPadding", {
 }, clientModules.hud.overlay)
 
 
-
-
 clientModules.keyList = clientModules.keyList or {}
 clientModules.keyList.buttons = clientModules.keyList.buttons or {}
 clientModules.keyList.abilityButtons = clientModules.keyList.abilityButtons or {}
@@ -5758,7 +5219,6 @@ clientModules.keyList.state = clientModules.keyList.state or {
     bindingTarget = nil,
     bindingPreviousText = nil,
 }
-
 
 
 createSectionLabel(clientModules.pages.autoSelect, "AUTO SELECT  /  CHARACTER SELECTION", 1)
@@ -6183,7 +5643,6 @@ function setSwitchVisual(button, dot, enabled)
         BackgroundColor3 = targetColor,
     }):Play()
 end
-
 
 
 interfaceAnimationSerial = 0
@@ -6919,7 +6378,6 @@ function clientModules.autoSelect.selectCharacter(gameName, silent)
     end
 
 
-
     if clientModules.autoSelect.enabled and clientModules.autoSelect.currentPayload then
         local payload = clientModules.autoSelect.currentPayload
         task.defer(function()
@@ -6947,7 +6405,6 @@ function clientModules.autoSelect.setEnabled(enabled, silent)
             clientModules.autoSelect.statusLabel.TextColor3 = COLORS.MutedText
         end
     end
-
 
 
     if clientModules.autoSelect.enabled
@@ -7007,7 +6464,6 @@ function clientModules.autoSelect.handleCharacterSelect(payload)
     clientModules.autoSelect.statusLabel.TextColor3 = COLORS.Yellow
 
     task.spawn(function()
-
 
 
         local deadline = time() + 15
@@ -7584,7 +7040,6 @@ function clientModules.infFlight.runTagLoop(serial)
             end)
 
 
-
             task.wait(0.05)
             clientModules.infFlight.removeKillTag(character)
             task.wait(0.45)
@@ -7934,23 +7389,6 @@ function clientModules.flight.shutdown()
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ESP_MODEL_ROLE_NAMES = {
     sonic = "Survivor",
     tails = "Survivor",
@@ -7980,7 +7418,6 @@ function getESPGroupByModelName(name)
 end
 
 
-
 function normalizeESPContainerName(name)
     return normalizeESPModelName(name)
 end
@@ -8006,7 +7443,6 @@ function isLocalCharacterModel(model)
     if okPlayer and owner == localPlayer then
         return true
     end
-
 
 
     if model.Name == localPlayer.Name then
@@ -8600,7 +8036,6 @@ ESP_CHARACTER_ABILITY_SETS = {
 }
 
 
-
 ESP_GENERIC_ABILITY_NAMES = {
     canon = true,
     peelout = true,
@@ -8669,7 +8104,6 @@ function isESPAbilityNameCandidate(instance)
     end
 
 
-
     return true
 end
 
@@ -8694,14 +8128,11 @@ function getESPAbilityClassification(model)
         end
 
 
-
-
         local normalized = normalizeESPMarkerName(instance.Name)
         if ESP_ABILITY_ROLE_NAMES[normalized] then
             found[normalized] = true
             return
         end
-
 
 
         if instance:IsA("Sound")
@@ -8719,7 +8150,6 @@ function getESPAbilityClassification(model)
             return
         end
     end
-
 
 
     local animate = model:FindFirstChild("Animate")
@@ -8740,7 +8170,6 @@ function getESPAbilityClassification(model)
             end
         end
     end
-
 
 
     for _, child in ipairs(model:GetChildren()) do
@@ -8775,8 +8204,6 @@ function getESPAbilityClassification(model)
     end
 
 
-
-
     local tripwireAnimationIds = {
         ["79953933012214"] = true,
         ["85598394392380"] = true,
@@ -8805,11 +8232,9 @@ function getESPAbilityClassification(model)
     end
 
 
-
     if found.step or found.brighterday or found.reachout then
         return "Executioner", "Tripwire"
     end
-
 
 
     if found.chaosdash
@@ -8844,7 +8269,6 @@ function getESPAbilityClassification(model)
             hasExecutionerEvidence = true
         end
     end
-
 
 
     if hasExecutionerEvidence then
@@ -8905,7 +8329,6 @@ function getESPGroupForModel(model)
     end
 
 
-
     local group, displayName = getESPAbilityClassification(model)
 
     if not group then
@@ -8920,7 +8343,6 @@ function scanESPContainers()
     end
 
     local validModels = {}
-
 
 
     local playersFolder = workspace:FindFirstChild("Players")
@@ -8945,7 +8367,6 @@ function scanESPContainers()
     end
 
 
-
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer then
             local character = player.Character
@@ -8966,7 +8387,6 @@ function scanESPContainers()
             end
         end
     end
-
 
 
     for _, instance in ipairs(workspace:GetChildren()) do
@@ -9063,7 +8483,6 @@ function initializeESP()
 
         updateESPNameTags()
     end)
-
 
 
     espWorkspaceAddedConnection = workspace.DescendantAdded:Connect(function(instance)
@@ -9166,7 +8585,6 @@ function shutdownESP()
 end
 
 function normalizeNumberText(text)
-
 
 
     local normalized = string.gsub(text, ",", ".")
@@ -9305,7 +8723,6 @@ function clientModules.speedControl.applyVelocity(humanoid, rootPart)
     local currentHorizontal = Vector3.new(velocity.X, 0, velocity.Z)
     local currentSpeed = currentHorizontal.Magnitude
     local targetSpeed = math.max(tonumber(expectedWalkSpeed) or 0, 0)
-
 
 
     if currentSpeed >= targetSpeed - 0.01 then
@@ -9551,7 +8968,6 @@ function clientModules.inventoryOrder.capture()
     end
 
 
-
     local character = localPlayer.Character
     if character then
         for _, child in ipairs(character:GetChildren()) do
@@ -9625,7 +9041,6 @@ function clientModules.inventoryOrder.restore()
     end
 
     clientModules.inventoryOrder.restoring = true
-
 
 
     local tempFolder = Instance.new("Folder")
@@ -9825,7 +9240,6 @@ function clientModules.animationLock.isMovementTrack(track)
     local combinedName = string.lower(
         tostring(track.Name or "") .. " " .. tostring(animation and animation.Name or "")
     )
-
 
 
     local excludedNames = {
@@ -12928,12 +12342,6 @@ function shutdownMainScript(reason)
     end
     destroyLiveConsoleMode()
 
-    if clientModules.updateChecker.updateConnection then
-        clientModules.updateChecker.updateConnection:Disconnect()
-        clientModules.updateChecker.updateConnection = nil
-    end
-    clientModules.updateChecker.hideNotification()
-
     resumeStandardAfterAbility = false
     standardResumeSnapshot = nil
     stopBoost(reason or "Interface closed.", {
@@ -13008,8 +12416,6 @@ function shutdownMainScript(reason)
         end
     end
 end
-
-
 
 
 clientModules.screenGuiAncestryConnection = screenGui.AncestryChanged:Connect(function(_, parent)
@@ -13149,14 +12555,12 @@ globalInputConnection = UserInputService.InputBegan:Connect(function(input, game
     end
 
 
-
     if clientModules.keyList.state.bindingTarget then
         if input.KeyCode ~= Enum.KeyCode.Unknown then
             finishBinding(input.KeyCode)
         end
         return
     end
-
 
 
     if gameProcessedEvent or game:GetService("GuiService").SelectedObject ~= nil then
@@ -13279,7 +12683,6 @@ function initializeMainInterface()
     clientModules.console.refreshModeState()
     clientModules.combat.initialize()
     clientModules.customLms.initialize()
-    clientModules.updateChecker.initialize()
 
     clientModules.fun.refreshInfo()
     clientModules.performance.refreshVisuals()
@@ -13294,7 +12697,6 @@ function initializeMainInterface()
         shutdownESP()
     end
 end
-
 
 
 mainFrame.Visible = true
