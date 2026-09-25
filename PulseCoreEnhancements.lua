@@ -117,63 +117,75 @@ local jumpHeartbeat=RunService.Heartbeat:Connect(function()
 end)
 
 local function addNoJumpCooldownToggle()
-    if localPage:GetAttribute("PulseCoreNoJumpCooldownReady") then
-        return
+    local existing=playerGui:FindFirstChild("PulseCoreNoJumpCooldownUI")
+    if existing then
+        existing:Destroy()
     end
 
-    localPage:SetAttribute("PulseCoreNoJumpCooldownReady",true)
+    local sg=Instance.new("ScreenGui")
+    sg.Name="PulseCoreNoJumpCooldownUI"
+    sg.ResetOnSpawn=false
+    sg.IgnoreGuiInset=true
+    sg.DisplayOrder=2999
+    sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+    sg.Parent=playerGui
 
-    local row=Instance.new("Frame")
-    row.Name="PulseCoreNoJumpCooldown"
-    row.LayoutOrder=0
-    row.Size=UDim2.new(1,0,0,50)
-    row.BackgroundColor3=Color3.fromRGB(30,30,30)
-    row.BackgroundTransparency=0.16
-    row.BorderSizePixel=0
-    row.Parent=localPage
+    local scale=Instance.new("UIScale")
+    scale.Name="DeviceScale"
+    scale.Scale=0.9
+    scale.Parent=sg
 
-    local rowCorner=Instance.new("UICorner")
-    rowCorner.CornerRadius=UDim.new(0,9)
-    rowCorner.Parent=row
+    local button=Instance.new("TextButton")
+    button.Name="Toggle"
+    button.AnchorPoint=Vector2.new(1,1)
+    button.Position=UDim2.new(1,-18,1,-86)
+    button.Size=UDim2.fromOffset(190,38)
+    button.BackgroundColor3=Color3.fromRGB(25,25,25)
+    button.BackgroundTransparency=0.08
+    button.BorderSizePixel=0
+    button.Text=""
+    button.AutoButtonColor=false
+    button.Active=true
+    button.Selectable=true
+    button.Parent=sg
 
-    local rowStroke=Instance.new("UIStroke")
-    rowStroke.Color=Color3.fromRGB(70,70,70)
-    rowStroke.Transparency=0.28
-    rowStroke.Thickness=1
-    rowStroke.Parent=row
+    local corner=Instance.new("UICorner")
+    corner.CornerRadius=UDim.new(0,10)
+    corner.Parent=button
+
+    local stroke=Instance.new("UIStroke")
+    stroke.Color=Color3.fromRGB(75,75,75)
+    stroke.Transparency=0.15
+    stroke.Thickness=1
+    stroke.Parent=button
 
     local label=Instance.new("TextLabel")
-    label.Position=UDim2.fromOffset(14,0)
-    label.Size=UDim2.new(1,-100,1,0)
+    label.Position=UDim2.fromOffset(12,0)
+    label.Size=UDim2.new(1,-54,1,0)
     label.BackgroundTransparency=1
     label.Text="No Jump Cooldown"
     label.Font=Enum.Font.GothamMedium
     label.TextSize=13
     label.TextColor3=Color3.fromRGB(235,235,235)
-    label.TextWrapped=true
     label.TextXAlignment=Enum.TextXAlignment.Left
-    label.Parent=row
+    label.Parent=button
 
-    local toggle=Instance.new("TextButton")
-    toggle.Name="Toggle"
+    local toggle=Instance.new("Frame")
     toggle.AnchorPoint=Vector2.new(1,0.5)
-    toggle.Position=UDim2.new(1,-11,0.5,0)
-    toggle.Size=UDim2.fromOffset(58,30)
+    toggle.Position=UDim2.new(1,-10,0.5,0)
+    toggle.Size=UDim2.fromOffset(42,22)
     toggle.BackgroundColor3=Color3.fromRGB(20,95,135)
     toggle.BorderSizePixel=0
-    toggle.Text=""
-    toggle.AutoButtonColor=false
-    toggle.Parent=row
+    toggle.Parent=button
 
     local toggleCorner=Instance.new("UICorner")
     toggleCorner.CornerRadius=UDim.new(0,999)
     toggleCorner.Parent=toggle
 
     local dot=Instance.new("Frame")
-    dot.Name="Dot"
     dot.AnchorPoint=Vector2.new(0,0.5)
-    dot.Position=UDim2.new(1,-27,0.5,0)
-    dot.Size=UDim2.fromOffset(22,22)
+    dot.Position=UDim2.new(1,-20,0.5,0)
+    dot.Size=UDim2.fromOffset(16,16)
     dot.BackgroundColor3=Color3.fromRGB(225,245,255)
     dot.BorderSizePixel=0
     dot.Parent=toggle
@@ -182,7 +194,7 @@ local function addNoJumpCooldownToggle()
     dotCorner.CornerRadius=UDim.new(0,999)
     dotCorner.Parent=dot
 
-    local function refreshToggle()
+    local function refresh()
         toggle.BackgroundColor3=noJumpCooldown
             and Color3.fromRGB(20,95,135)
             or Color3.fromRGB(38,38,38)
@@ -191,23 +203,34 @@ local function addNoJumpCooldownToggle()
             and Color3.fromRGB(225,245,255)
             or Color3.fromRGB(135,135,135)
 
-        TweenService:Create(
-            dot,
-            TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
-            {
-                Position=noJumpCooldown
-                    and UDim2.new(1,-27,0.5,0)
-                    or UDim2.new(0,5,0.5,0)
-            }
-        ):Play()
+        dot.Position=noJumpCooldown
+            and UDim2.new(1,-20,0.5,0)
+            or UDim2.new(0,4,0.5,0)
     end
 
-    toggle.Activated:Connect(function()
+    button.Activated:Connect(function()
         noJumpCooldown=not noJumpCooldown
         jumpQueued=false
         jumpInputSerial=jumpInputSerial+1
-        refreshToggle()
+        refresh()
     end)
+
+    local function updateScale()
+        local camera=workspace.CurrentCamera
+        if not camera then
+            return
+        end
+        local v=camera.ViewportSize
+        scale.Scale=math.clamp(math.min(v.X,v.Y)/430,0.72,0.95)
+    end
+
+    updateScale()
+    local camera=workspace.CurrentCamera
+    if camera then
+        camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+    end
+
+    refresh()
 end
 
 addNoJumpCooldownToggle()
