@@ -96,7 +96,7 @@ end
 
 local row=Instance.new("Frame")
 row.Name="PulseCoreNoJumpCooldown"
-row.LayoutOrder=12
+row.LayoutOrder=0
 row.Size=UDim2.new(1,0,0,50)
 row.BackgroundColor3=Color3.fromRGB(30,30,30)
 row.BackgroundTransparency=0.16
