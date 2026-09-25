@@ -2,6 +2,12 @@
 
 ## 2026-09-25
 
+### Interface
+- Fixed the sidebar tab panel scrolling hook so the entire tab panel responds to mouse-wheel input when the cursor is over it.
+- Recalculated the tab panel canvas height from the actual tab content and viewport, ensuring the panel is genuinely scrollable when tabs exceed the visible area.
+
+## 2026-09-25
+
 ### Release
 - Restored the stable obfuscated payload after the version-change issue and preserved the 2.6.0 runtime version override.
 - Bumped PulseCore version to 2.6.0 as requested.
