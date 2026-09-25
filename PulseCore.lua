@@ -1,6 +1,6 @@
 -- PulseCore Version: 2.5.9
 -- Version scheme: 1.0.0 -> 1.0.5 -> 1.0.10; each release increments the final component by 5.
-SCRIPT_VERSION = "2.5.24"
+SCRIPT_VERSION = "2.5.9"
 local guiDestroyed = false
 
 local Players = game:GetService("Players")
@@ -1195,6 +1195,14 @@ floatingToggleButton = create("TextButton", {
 }, floatingToggleGui)
 addCorner(floatingToggleButton, 10)
 addStroke(floatingToggleButton, COLORS.Border, 0.12, 1.5)
+
+floatingToggleDragState = {
+    dragging = false,
+    dragged = false,
+    dragInput = nil,
+    startPointer = nil,
+    startPosition = nil,
+}
 
 floatingToggleScale = create("UIScale", {
     Scale = 1,
@@ -4460,8 +4468,9 @@ do
         Text = table.concat({
             "CHANGELOG / LATEST UPDATE",
             "",
-            "• Updated to version 2.5.24.",
-            "• Made the standalone interface toggle button responsive to the active device and screen size.",
+            "• Version remains 2.5.9; version changes are made only when requested.",
+            "• Added mouse and touch dragging for the standalone interface toggle button.",
+            "• Kept the standalone interface toggle button responsive to the active device and screen size.",
             "• Added a standalone floating button for hiding and showing the main PulseCore interface.",
             "• Optimized ESP by throttling expensive refresh and name-tag updates.",
             "• Removed the automatic/manual update-check system and its INFO controls.",
@@ -5751,6 +5760,123 @@ end
 
 floatingToggleButton.Activated:Connect(function()
     if guiDestroyed then
+        return
+    end
+
+    animateMainInterfaceVisibility(not screenGui.Enabled)
+end)
+
+
+local function clampFloatingTogglePosition(offsetX, offsetY)
+    local camera = workspace.CurrentCamera
+    if not camera then
+        return offsetX, offsetY
+    end
+
+    local scale = math.max(floatingToggleScale.Scale, 0.01)
+    local viewport = camera.ViewportSize
+    local buttonSize = 48
+    local margin = 8
+
+    local minOffsetX = -(viewport.X / scale) + buttonSize + margin
+    local maxOffsetX = -margin
+    local minOffsetY = -(viewport.Y / scale) + buttonSize + margin
+    local maxOffsetY = -margin
+
+    if minOffsetX > maxOffsetX then
+        minOffsetX, maxOffsetX = maxOffsetX, minOffsetX
+    end
+
+    if minOffsetY > maxOffsetY then
+        minOffsetY, maxOffsetY = maxOffsetY, minOffsetY
+    end
+
+    return
+        math.clamp(offsetX, minOffsetX, maxOffsetX),
+        math.clamp(offsetY, minOffsetY, maxOffsetY)
+end
+
+floatingToggleButton.InputBegan:Connect(function(input)
+    if guiDestroyed then
+        return
+    end
+
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1
+        and input.UserInputType ~= Enum.UserInputType.Touch
+    then
+        return
+    end
+
+    floatingToggleDragState.dragging = true
+    floatingToggleDragState.dragged = false
+    floatingToggleDragState.dragInput = input
+    floatingToggleDragState.startPointer = input.Position
+    floatingToggleDragState.startPosition = floatingToggleButton.Position
+end)
+
+floatingToggleButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+    then
+        floatingToggleDragState.dragInput = input
+    end
+end)
+
+floatingToggleInputChangedConnection = UserInputService.InputChanged:Connect(function(input)
+    if guiDestroyed or not floatingToggleDragState.dragging then
+        return
+    end
+
+    if input ~= floatingToggleDragState.dragInput then
+        return
+    end
+
+    local startPointer = floatingToggleDragState.startPointer
+    local startPosition = floatingToggleDragState.startPosition
+    if not startPointer or not startPosition then
+        return
+    end
+
+    local scale = math.max(floatingToggleScale.Scale, 0.01)
+    local delta = input.Position - startPointer
+
+    if delta.Magnitude > 5 then
+        floatingToggleDragState.dragged = true
+    end
+
+    local newOffsetX, newOffsetY = clampFloatingTogglePosition(
+        startPosition.X.Offset + delta.X / scale,
+        startPosition.Y.Offset + delta.Y / scale
+    )
+
+    floatingToggleButton.Position = UDim2.new(
+        startPosition.X.Scale,
+        newOffsetX,
+        startPosition.Y.Scale,
+        newOffsetY
+    )
+end)
+
+floatingToggleButton.InputEnded:Connect(function(input)
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1
+        and input.UserInputType ~= Enum.UserInputType.Touch
+    then
+        return
+    end
+
+    floatingToggleDragState.dragging = false
+    floatingToggleDragState.dragInput = nil
+    floatingToggleDragState.startPointer = nil
+    floatingToggleDragState.startPosition = nil
+end)
+
+floatingToggleButton.Activated:Connect(function()
+    if guiDestroyed then
+        return
+    end
+
+    if floatingToggleDragState.dragged then
+        floatingToggleDragState.dragged = false
         return
     end
 
@@ -12402,6 +12528,11 @@ function shutdownMainScript(reason)
     end
 
     guiDestroyed = true
+
+    if floatingToggleInputChangedConnection then
+        floatingToggleInputChangedConnection:Disconnect()
+        floatingToggleInputChangedConnection = nil
+    end
 
     if floatingToggleGui then
         floatingToggleGui:Destroy()
