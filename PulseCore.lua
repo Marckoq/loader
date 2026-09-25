@@ -342,6 +342,61 @@ task.defer(function()
                     _scroll.CanvasPosition=Vector2.new(_scroll.CanvasPosition.X,_nextY)
                 end
             end)
+
+            local _touchStartY=nil
+            local _touchStartCanvasY=nil
+            local _touchId=nil
+
+            _uis.InputBegan:Connect(function(_input)
+                if _input.UserInputType~=Enum.UserInputType.Touch then
+                    return
+                end
+                if not (_scroll.Parent and _scroll.Visible and _scroll.AbsoluteSize.X>0 and _scroll.AbsoluteSize.Y>0) then
+                    return
+                end
+
+                local _p=_input.Position
+                local _pos=_scroll.AbsolutePosition
+                local _size=_scroll.AbsoluteSize
+                if _p.X<_pos.X or _p.X>_pos.X+_size.X or _p.Y<_pos.Y or _p.Y>_pos.Y+_size.Y then
+                    return
+                end
+
+                _touchId=_input
+                _touchStartY=_p.Y
+                _touchStartCanvasY=_scroll.CanvasPosition.Y
+            end)
+
+            _uis.InputChanged:Connect(function(_input)
+                if _input.UserInputType~=Enum.UserInputType.Touch or _touchId==nil then
+                    return
+                end
+                if not (_scroll.Parent and _scroll.Visible) then
+                    _touchId=nil
+                    _touchStartY=nil
+                    _touchStartCanvasY=nil
+                    return
+                end
+
+                local _deltaY=_input.Position.Y-_touchStartY
+                local _maxY=math.max(0,_scroll.CanvasSize.Y.Offset-_scroll.AbsoluteSize.Y)
+                if _maxY<=0 then
+                    return
+                end
+
+                local _nextY=math.clamp(_touchStartCanvasY-_deltaY,0,_maxY)
+                if _nextY~=_scroll.CanvasPosition.Y then
+                    _scroll.CanvasPosition=Vector2.new(_scroll.CanvasPosition.X,_nextY)
+                end
+            end)
+
+            _uis.InputEnded:Connect(function(_input)
+                if _input.UserInputType==Enum.UserInputType.Touch and _input==_touchId then
+                    _touchId=nil
+                    _touchStartY=nil
+                    _touchStartCanvasY=nil
+                end
+            end)
         end
     end)
 end)
