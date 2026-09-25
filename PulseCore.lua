@@ -1,6 +1,6 @@
 -- PulseCore Version: 2.5.9
 -- Version scheme: 1.0.0 -> 1.0.5 -> 1.0.10; each release increments the final component by 5.
-SCRIPT_VERSION = "2.5.9"
+SCRIPT_VERSION = "2.5.14"
 local guiDestroyed = false
 
 local Players = game:GetService("Players")
@@ -4423,8 +4423,9 @@ do
         Text = table.concat({
             "CHANGELOG / LATEST UPDATE",
             "",
-            "• Updated version format to 2.4.5; each release increments the final version component by 5.",
-            "• Added responsive UI scaling for phones and tablets so the main interface takes less screen space.",
+            "• Updated to version 2.5.14.",
+            "• Optimized ESP by throttling expensive refresh and name-tag updates.",
+            "• Removed the automatic/manual update-check system and its INFO controls.",
         }, "\n"),
         Font = Enum.Font.GothamMedium,
         TextSize = 13,
@@ -5581,6 +5582,8 @@ globalInputConnection = nil
 espSurvivorsEnabled = false
 espExecutionersEnabled = false
 trackedModels = {}
+espNameTagAccumulator = 0
+espRefreshAccumulator = 0
 recordedESPContainers = {}
 characterModelsFolder = nil
 characterModelAddedConnection = nil
@@ -8470,6 +8473,8 @@ function initializeESP()
 
     espScanSerial = espScanSerial + 1
     espScanQueued = false
+    espNameTagAccumulator = 0
+    espRefreshAccumulator = 0
 
     if espNameTagConnection then
         espNameTagConnection:Disconnect()
@@ -8525,13 +8530,28 @@ function initializeESP()
         espNameTagConnection = nil
     end
 
-    espNameTagConnection = RunService.RenderStepped:Connect(function()
+    espNameTagAccumulator = 0
+    espRefreshAccumulator = 0
+
+    espNameTagConnection = RunService.RenderStepped:Connect(function(deltaTime)
         if guiDestroyed then
             return
         end
 
-        if espSurvivorsEnabled or espExecutionersEnabled then
+        if not (espSurvivorsEnabled or espExecutionersEnabled) then
+            return
+        end
+
+        espNameTagAccumulator = espNameTagAccumulator + deltaTime
+        espRefreshAccumulator = espRefreshAccumulator + deltaTime
+
+        if espRefreshAccumulator >= 0.5 then
+            espRefreshAccumulator = 0
             refreshAllTrackedModels()
+        end
+
+        if espNameTagAccumulator >= 0.1 then
+            espNameTagAccumulator = 0
             updateESPNameTags()
         end
     end)
