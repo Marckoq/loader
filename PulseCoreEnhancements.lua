@@ -83,14 +83,27 @@ end
 
 local learnedDurations = {}
 local activeStarts = {}
+local activeToken = 0
 
-local function extractDuration(value)
+local function parseDurationValue(value)
+    if value==nil then
+        return nil
+    end
+
+    if value==math.huge then
+        return math.huge
+    end
+
+    local text=tostring(value)
+    if text:lower():find("inf",1,true) then
+        return math.huge
+    end
+
     local n=tonumber(value)
     if n and n>0 and n<86400 then
         return n
     end
 
-    local text=tostring(value or "")
     local seconds=text:match("([%d%.]+)%s*[sS]")
     n=tonumber(seconds)
     if n and n>0 and n<86400 then
@@ -114,9 +127,33 @@ local function resolveAbilityDuration(info)
                 "DurationTime",
             }) do
                 local value=root:GetAttribute(key)
-                local n=extractDuration(value)
-                if n then
-                    return n
+                local parsed=parseDurationValue(value)
+                if parsed then
+                    return parsed
+                end
+            end
+        end
+    end
+
+    for _,root in ipairs(roots) do
+        if root then
+            local objects=root:GetDescendants()
+            for i=1,math.min(#objects,200) do
+                local obj=objects[i]
+                local key=tostring(obj.Name or ""):lower()
+
+                if key:find("duration",1,true) or key:find("activetime",1,true) then
+                    if obj:IsA("ValueBase") then
+                        local parsed=parseDurationValue(obj.Value)
+                        if parsed then
+                            return parsed
+                        end
+                    elseif obj:IsA("TextLabel") or obj:IsA("TextBox") then
+                        local parsed=parseDurationValue(obj.Text)
+                        if parsed then
+                            return parsed
+                        end
+                    end
                 end
             end
         end
@@ -125,78 +162,22 @@ local function resolveAbilityDuration(info)
     return nil
 end
 
-local function animateNotificationOut(sg,frame,labels,stroke,background)
-    if not sg or not frame or not sg.Parent then
+local function stopNotificationForToken(sg,token)
+    if token~=activeToken then
         return
     end
 
-    local tweenInfo=TweenInfo.new(0.18,Enum.EasingStyle.Quad,Enum.EasingDirection.In)
-
-    TweenService:Create(frame,tweenInfo,{
-        Position=UDim2.new(1,360,1,-18),
-        BackgroundTransparency=1,
-    }):Play()
-
-    for _,obj in ipairs(labels) do
-        if obj and obj.Parent then
-            TweenService:Create(obj,tweenInfo,{TextTransparency=1}):Play()
-        end
-    end
-
-    if stroke and stroke.Parent then
-        TweenService:Create(stroke,tweenInfo,{Transparency=1}):Play()
-    end
-
-    if background and background.Parent then
-        TweenService:Create(background,tweenInfo,{BackgroundTransparency=1}):Play()
-    end
-
-    task.delay(0.2,function()
-        pcall(function()
-            sg:Destroy()
-        end)
-    end)
-end
-
-local function closeNotification(animated)
-    local sg=currentNotification
-    if not sg then
-        currentOwnerButton=nil
-        return
-    end
-
-    currentNotification=nil
-    currentOwnerButton=nil
-
-    if not animated then
-        pcall(function()
-            sg:Destroy()
-        end)
+    if currentNotification~=sg then
         return
     end
 
     local frame=sg:FindFirstChild("Notification")
     if not frame then
-        pcall(function()
-            sg:Destroy()
-        end)
+        closeNotification(false)
         return
     end
 
-    local labels={}
-    for _,obj in ipairs(frame:GetChildren()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            labels[#labels+1]=obj
-        end
-    end
-
-    animateNotificationOut(
-        sg,
-        frame,
-        labels,
-        frame:FindFirstChildOfClass("UIStroke"),
-        frame:FindFirstChild("ProgressBackground")
-    )
+    closeNotification(true)
 end
 
 local function showAbilityNotification(info,durationSeconds)
@@ -206,6 +187,10 @@ local function showAbilityNotification(info,durationSeconds)
     if name=="" then
         name="Ability"
     end
+
+    activeToken=activeToken+1
+    local token=activeToken
+    local startedAt=os.clock()
 
     local sg=Instance.new("ScreenGui")
     sg.Name="PulseCoreAbilityNotification"
@@ -291,17 +276,21 @@ local function showAbilityNotification(info,durationSeconds)
     ability.TextXAlignment=Enum.TextXAlignment.Left
     ability.Parent=frame
 
-    local duration=Instance.new("TextLabel")
-    duration.Position=UDim2.fromOffset(14,58)
-    duration.Size=UDim2.new(1,-28,0,20)
-    duration.BackgroundTransparency=1
-    duration.Text=durationSeconds and ("Duration: "..string.format("%.1fs",durationSeconds)) or "Duration: N/A"
-    duration.Font=Enum.Font.Gotham
-    duration.TextSize=12
-    duration.TextColor3=Color3.fromRGB(185,185,185)
-    duration.TextTransparency=1
-    duration.TextXAlignment=Enum.TextXAlignment.Left
-    duration.Parent=frame
+    local durationLabel=Instance.new("TextLabel")
+    durationLabel.Position=UDim2.fromOffset(14,58)
+    durationLabel.Size=UDim2.new(1,-28,0,20)
+    durationLabel.BackgroundTransparency=1
+    durationLabel.Text=durationSeconds==math.huge
+        and "Duration: Inf"
+        or durationSeconds
+            and ("Duration: 0.0/"..string.format("%.1f",durationSeconds))
+            or "Duration: N/A"
+    durationLabel.Font=Enum.Font.Gotham
+    durationLabel.TextSize=12
+    durationLabel.TextColor3=Color3.fromRGB(185,185,185)
+    durationLabel.TextTransparency=1
+    durationLabel.TextXAlignment=Enum.TextXAlignment.Left
+    durationLabel.Parent=frame
 
     local progressBack=Instance.new("Frame")
     progressBack.Name="ProgressBackground"
@@ -350,17 +339,34 @@ local function showAbilityNotification(info,durationSeconds)
     TweenService:Create(title,intro,{TextTransparency=0}):Play()
     TweenService:Create(close,intro,{TextTransparency=0}):Play()
     TweenService:Create(ability,intro,{TextTransparency=0}):Play()
-    TweenService:Create(duration,intro,{TextTransparency=0}):Play()
+    TweenService:Create(durationLabel,intro,{TextTransparency=0}):Play()
     TweenService:Create(separator,intro,{BackgroundTransparency=0}):Play()
     TweenService:Create(progressBack,intro,{BackgroundTransparency=0}):Play()
     TweenService:Create(stroke,intro,{Transparency=0.05}):Play()
 
-    if durationSeconds and durationSeconds>0 then
+    if durationSeconds and durationSeconds~=math.huge and durationSeconds>0 then
         TweenService:Create(
             progress,
             TweenInfo.new(durationSeconds,Enum.EasingStyle.Linear),
             {Size=UDim2.new(0,0,1,0)}
         ):Play()
+
+        task.spawn(function()
+            while currentNotification==sg and token==activeToken and sg.Parent do
+                local elapsed=os.clock()-startedAt
+
+                if elapsed>=durationSeconds then
+                    durationLabel.Text="Duration: "..string.format("%.1f",durationSeconds).."/"..string.format("%.1f",durationSeconds)
+                    stopNotificationForToken(sg,token)
+                    break
+                end
+
+                durationLabel.Text="Duration: "..string.format("%.1f",elapsed).."/"..string.format("%.1f",durationSeconds)
+                task.wait(0.05)
+            end
+        end)
+    elseif durationSeconds==math.huge then
+        durationLabel.Text="Duration: Inf"
     end
 end
 
