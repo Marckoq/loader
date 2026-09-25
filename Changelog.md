@@ -2,6 +2,12 @@
 
 ## 2026-09-25
 
+### Local
+- Restored No Jump Cooldown with a touch/keyboard jump-request handler that avoids forcing a second jump on the same input.
+- The option remains enabled by default and can be toggled from the Local tab.
+
+## 2026-09-25
+
 ### Performance
 - Reduced Auto Counter enemy-model rescanning from every frame to once every 0.25 seconds while the feature is enabled.
 - Removed the ability-notification per-frame GUI descendant scan and replaced it with event-driven button state tracking.
