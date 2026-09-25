@@ -3,6 +3,11 @@
 ## 2026-09-25
 
 ### Local
+- Restored the main-script loader for `PulseCoreEnhancements.lua`, so the No Jump Cooldown toggle and related enhancements are actually initialized when PulseCore starts.
+
+## 2026-09-25
+
+### Local
 - Reworked the No Jump Cooldown control into a dedicated always-visible PulseCore UI element instead of placing it inside the scrollable Local page.
 - Added device-responsive scaling and a direct touch/mouse activation button for the toggle.
 
