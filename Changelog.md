@@ -2,6 +2,14 @@
 
 ## 2026-09-25
 
+### Mobile
+- Added a separate `PulseCoreMobile.lua` build that uses the same PulseCore feature set but a phone-first interface.
+- Added a dedicated touch capture surface for the sidebar so tabs can be swiped vertically without relying on Roblox's native ScrollingFrame touch handling.
+- Preserved normal tab activation by detecting taps separately from vertical swipes.
+- Kept the mobile layout fullscreen with normal UIScale.
+
+## 2026-09-25
+
 ### Interface
 - Added manual finger-drag scrolling for the entire sidebar tab panel, including when the touch starts directly on a tab button.
 
