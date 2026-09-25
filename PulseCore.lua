@@ -352,4 +352,267 @@ task.defer(function()
     end)
 end)
 
+
+task.defer(function()
+    pcall(function()
+        local Players=game:GetService("Players")
+        local RunService=game:GetService("RunService")
+        local TweenService=game:GetService("TweenService")
+
+        local player=Players.LocalPlayer
+        local playerGui=player and player:FindFirstChildOfClass("PlayerGui")
+        if not playerGui then
+            return
+        end
+
+        local gui=playerGui:FindFirstChild("AssemblySpeedBoostUI")
+        local localPage=gui and gui:FindFirstChild("LocalPage",true)
+        if not (gui and localPage) then
+            return
+        end
+
+        local enabled=true
+        local connections={}
+        local humanoidStates=setmetatable({}, {__mode="k"})
+
+        local function disconnectHumanoid(humanoid)
+            local data=humanoidStates[humanoid]
+            if not data then
+                return
+            end
+
+            if data.stateConnection then
+                data.stateConnection:Disconnect()
+            end
+
+            if data.heartbeatConnection then
+                data.heartbeatConnection:Disconnect()
+            end
+
+            if humanoid.Parent and data.originalJumpingEnabled~=nil then
+                pcall(function()
+                    humanoid:SetStateEnabled(
+                        Enum.HumanoidStateType.Jumping,
+                        data.originalJumpingEnabled
+                    )
+                end)
+            end
+
+            humanoidStates[humanoid]=nil
+        end
+
+        local function attachHumanoid(humanoid)
+            if not humanoid or humanoid.Health<=0 then
+                return
+            end
+
+            disconnectHumanoid(humanoid)
+
+            local originalJumpingEnabled=true
+            pcall(function()
+                originalJumpingEnabled=humanoid:GetStateEnabled(
+                    Enum.HumanoidStateType.Jumping
+                )
+            end)
+
+            local data={
+                originalJumpingEnabled=originalJumpingEnabled,
+                stateConnection=nil,
+                heartbeatConnection=nil,
+            }
+
+            humanoidStates[humanoid]=data
+
+            if enabled then
+                pcall(function()
+                    humanoid:SetStateEnabled(
+                        Enum.HumanoidStateType.Jumping,
+                        true
+                    )
+                end)
+            end
+
+            data.stateConnection=humanoid.StateEnabledChanged:Connect(function(state,isEnabled)
+                if state~=Enum.HumanoidStateType.Jumping then
+                    return
+                end
+
+                if enabled and not isEnabled and humanoid.Parent and humanoid.Health>0 then
+                    task.defer(function()
+                        if enabled and humanoid.Parent and humanoid.Health>0 then
+                            pcall(function()
+                                humanoid:SetStateEnabled(
+                                    Enum.HumanoidStateType.Jumping,
+                                    true
+                                )
+                            end)
+                        end
+                    end)
+                end
+            end)
+
+            data.heartbeatConnection=RunService.Heartbeat:Connect(function()
+                if not humanoid.Parent or humanoid.Health<=0 then
+                    disconnectHumanoid(humanoid)
+                    return
+                end
+
+                if enabled then
+                    local stateEnabled=true
+                    pcall(function()
+                        stateEnabled=humanoid:GetStateEnabled(
+                            Enum.HumanoidStateType.Jumping
+                        )
+                    end)
+
+                    if not stateEnabled then
+                        pcall(function()
+                            humanoid:SetStateEnabled(
+                                Enum.HumanoidStateType.Jumping,
+                                true
+                            )
+                        end)
+                    end
+                end
+            end)
+        end
+
+        local function setEnabled(value)
+            enabled=value==true
+
+            local _,currentHumanoid=(function()
+                local character=player.Character
+                return character,character and character:FindFirstChildOfClass("Humanoid")
+            end)()
+
+            for humanoid in pairs(humanoidStates) do
+                if enabled then
+                    if humanoid.Parent and humanoid.Health>0 then
+                        pcall(function()
+                            humanoid:SetStateEnabled(
+                                Enum.HumanoidStateType.Jumping,
+                                true
+                            )
+                        end)
+                    end
+                else
+                    disconnectHumanoid(humanoid)
+                end
+            end
+
+            if enabled and currentHumanoid then
+                attachHumanoid(currentHumanoid)
+            end
+        end
+
+        local characterConnection=player.CharacterAdded:Connect(function(character)
+            task.defer(function()
+                local humanoid=character:FindFirstChildOfClass("Humanoid")
+                    or character:WaitForChild("Humanoid",5)
+
+                if humanoid and enabled then
+                    attachHumanoid(humanoid)
+                end
+            end)
+        end)
+        connections[#connections+1]=characterConnection
+
+        local character=player.Character
+        local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            attachHumanoid(humanoid)
+        end
+
+        local old=localPage:FindFirstChild("PulseCoreNoJumpCooldown",true)
+        if old then
+            old:Destroy()
+        end
+
+        local row=Instance.new("Frame")
+        row.Name="PulseCoreNoJumpCooldown"
+        row.LayoutOrder=12
+        row.Size=UDim2.new(1,0,0,50)
+        row.BackgroundColor3=Color3.fromRGB(30,30,30)
+        row.BackgroundTransparency=0.16
+        row.BorderSizePixel=0
+        row.Parent=localPage
+
+        local rowCorner=Instance.new("UICorner")
+        rowCorner.CornerRadius=UDim.new(0,9)
+        rowCorner.Parent=row
+
+        local rowStroke=Instance.new("UIStroke")
+        rowStroke.Color=Color3.fromRGB(70,70,70)
+        rowStroke.Transparency=0.28
+        rowStroke.Thickness=1
+        rowStroke.Parent=row
+
+        local label=Instance.new("TextLabel")
+        label.Position=UDim2.fromOffset(14,0)
+        label.Size=UDim2.new(1,-100,1,0)
+        label.BackgroundTransparency=1
+        label.Text="No Jump Cooldown (BETA)"
+        label.Font=Enum.Font.GothamMedium
+        label.TextSize=13
+        label.TextColor3=Color3.fromRGB(235,235,235)
+        label.TextXAlignment=Enum.TextXAlignment.Left
+        label.Parent=row
+
+        local toggle=Instance.new("TextButton")
+        toggle.Name="Toggle"
+        toggle.AnchorPoint=Vector2.new(1,0.5)
+        toggle.Position=UDim2.new(1,-11,0.5,0)
+        toggle.Size=UDim2.fromOffset(58,30)
+        toggle.BackgroundColor3=Color3.fromRGB(20,95,135)
+        toggle.BorderSizePixel=0
+        toggle.Text=""
+        toggle.AutoButtonColor=false
+        toggle.Parent=row
+
+        local toggleCorner=Instance.new("UICorner")
+        toggleCorner.CornerRadius=UDim.new(0,999)
+        toggleCorner.Parent=toggle
+
+        local dot=Instance.new("Frame")
+        dot.Name="Dot"
+        dot.AnchorPoint=Vector2.new(0,0.5)
+        dot.Position=UDim2.new(1,-27,0.5,0)
+        dot.Size=UDim2.fromOffset(22,22)
+        dot.BackgroundColor3=Color3.fromRGB(225,245,255)
+        dot.BorderSizePixel=0
+        dot.Parent=toggle
+
+        local dotCorner=Instance.new("UICorner")
+        dotCorner.CornerRadius=UDim.new(0,999)
+        dotCorner.Parent=dot
+
+        local function refresh()
+            toggle.BackgroundColor3=enabled
+                and Color3.fromRGB(20,95,135)
+                or Color3.fromRGB(38,38,38)
+
+            dot.BackgroundColor3=enabled
+                and Color3.fromRGB(225,245,255)
+                or Color3.fromRGB(135,135,135)
+
+            TweenService:Create(
+                dot,
+                TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+                {
+                    Position=enabled
+                        and UDim2.new(1,-27,0.5,0)
+                        or UDim2.new(0,5,0.5,0)
+                }
+            ):Play()
+        end
+
+        toggle.Activated:Connect(function()
+            setEnabled(not enabled)
+            refresh()
+        end)
+
+        refresh()
+    end)
+end)
+
 return _result
