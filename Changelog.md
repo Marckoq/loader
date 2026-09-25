@@ -2,6 +2,12 @@
 
 ## 2026-09-25
 
+### Stability
+- Isolated the optional enhancement module from the main PulseCore loader so enhancement errors cannot prevent the main interface from loading.
+- Added a short startup delay before loading the enhancement module.
+
+## 2026-09-25
+
 ### Local
 - Fixed No Jump Cooldown causing one jump input to trigger an extra jump.
 - Grounded jump requests now rely on Roblox's normal jump handling; the enhancement only queues an additional jump when another jump is actually requested while airborne.
