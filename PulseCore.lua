@@ -275,9 +275,7 @@ task.defer(function()
             _scroll.ScrollingDirection=Enum.ScrollingDirection.Y
             _scroll.ScrollingEnabled=true
             _scroll.Active=true
-            _scroll.Selectable=true
             _scroll.TouchScrollingEnabled=true
-            _scroll.ScrollingBehavior=Enum.ScrollingBehavior.Preset
             _scroll.ScrollBarThickness=5
             _scroll.ScrollBarImageColor3=Color3.fromRGB(165,165,165)
             _scroll.ScrollBarImageTransparency=0.15
