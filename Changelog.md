@@ -3,6 +3,12 @@
 ## 2026-09-25
 
 ### Interface
+- Fixed mobile full-screen scaling so the main interface no longer alternates between small and large sizes.
+- The mobile layout now follows the built-in device scale instead of fighting it.
+
+## 2026-09-25
+
+### Interface
 - Made the PulseCore interface use nearly the entire screen on phones.
 - Kept desktop and larger touch-device layout behavior unchanged.
 
