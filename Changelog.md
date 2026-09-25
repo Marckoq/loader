@@ -2,6 +2,17 @@
 
 ## 2026-09-25
 
+### Local
+- Added a default-enabled `No Jump Cooldown` toggle for the local player.
+- Added queued jump handling so a jump request made during airborne time is executed immediately when the character becomes grounded.
+
+### Notifications
+- Added persistent ability activation notifications showing the ability name, duration, and activation delay.
+- Notifications use a black translucent background, gray outline, rounded corners, PulseCore title, close button, and an internal duration progress bar.
+- The active notification is replaced when another ability is activated and closes when the current ability stops or ends.
+
+## 2026-09-25
+
 ### Mobile
 - Removed the mobile instability warning notification from the main PulseCore script as requested.
 
