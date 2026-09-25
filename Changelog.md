@@ -3,6 +3,14 @@
 ## 2026-09-25
 
 ### Local
+- Moved No Jump Cooldown into the main `PulseCore.lua` script.
+- Marked the feature as `(BETA)`.
+- Reworked the feature to keep the Humanoid Jumping state enabled instead of intercepting `JumpRequest`, avoiding duplicate jump triggers.
+- Added automatic handling for character respawns and restored the previous Jumping-state setting when the feature is disabled.
+
+## 2026-09-25
+
+### Local
 - Temporarily hid the No Jump Cooldown interface while keeping its underlying logic unchanged.
 
 ## 2026-09-25
