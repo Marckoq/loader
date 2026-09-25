@@ -2,6 +2,11 @@
 
 ## 2026-09-25
 
+### Release
+- Bumped PulseCore version to 2.6.0 as requested.
+
+## 2026-09-25
+
 ### Interface
 - Made the entire sidebar tab panel itself touch-scrollable, with a visible scrollbar and elastic mobile scrolling.
 - Added a dedicated vertical scroller for the sidebar tabs so they can be swiped on small touch screens.
