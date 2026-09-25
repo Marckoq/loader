@@ -71,10 +71,10 @@ jumpConnection=UIS.JumpRequest:Connect(function()
 
     if grounded(humanoid) then
         queuedJump=false
-        forceJump(humanoid)
-    else
-        queuedJump=true
+        return
     end
+
+    queuedJump=true
 end)
 
 jumpHeartbeat=RunService.Heartbeat:Connect(function()
@@ -83,6 +83,11 @@ jumpHeartbeat=RunService.Heartbeat:Connect(function()
     end
 
     local humanoid=getHumanoid()
+    if not humanoid then
+        queuedJump=false
+        return
+    end
+
     if grounded(humanoid) then
         queuedJump=false
         forceJump(humanoid)
