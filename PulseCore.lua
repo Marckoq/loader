@@ -239,6 +239,14 @@ task.defer(function()
 
         _apply()
         _cam:GetPropertyChangedSignal("ViewportSize"):Connect(_apply)
+
+        if _us then
+            _us:GetPropertyChangedSignal("Scale"):Connect(function()
+                if _mobile() and _us.Scale ~= 1 then
+                    _us.Scale=1
+                end
+            end)
+        end
     end)
 end)
 return _result
