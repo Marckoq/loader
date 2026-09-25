@@ -3,6 +3,7 @@
 ## 2026-09-25
 
 ### Interface
+- Identified and corrected touch-device scaling logic so phones no longer fall back to the reduced layout after startup.
 - Prevented the built-in device scaler from reverting the phone interface to a reduced UIScale.
 - Fixed phone fullscreen sizing so the interface content uses normal scale instead of a reduced mobile UIScale.
 - Phone controls, switches, input fields, and text now keep their intended size while the main panel fills the screen.
