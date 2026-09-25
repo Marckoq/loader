@@ -1,6 +1,6 @@
 -- PulseCore Version: 2.5.9
 -- Version scheme: 1.0.0 -> 1.0.5 -> 1.0.10; each release increments the final component by 5.
-SCRIPT_VERSION = "2.5.14"
+SCRIPT_VERSION = "2.5.19"
 local guiDestroyed = false
 
 local Players = game:GetService("Players")
@@ -481,6 +481,11 @@ COLORS = {
 oldGui = playerGui:FindFirstChild("AssemblySpeedBoostUI")
 if oldGui then
     oldGui:Destroy()
+end
+
+oldToggleGui = playerGui:FindFirstChild("PulseCoreToggleUI")
+if oldToggleGui then
+    oldToggleGui:Destroy()
 end
 
 oldConsoleGui = playerGui:FindFirstChild("PulseCoreLiveConsoleUI")
@@ -1163,6 +1168,33 @@ screenGui = create("ScreenGui", {
     DisplayOrder = 1000,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 }, playerGui)
+
+floatingToggleGui = create("ScreenGui", {
+    Name = "PulseCoreToggleUI",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    DisplayOrder = 2000,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+}, playerGui)
+
+floatingToggleButton = create("TextButton", {
+    Name = "ToggleInterfaceButton",
+    AnchorPoint = Vector2.new(1, 1),
+    Position = UDim2.new(1, -24, 1, -110),
+    Size = UDim2.fromOffset(48, 48),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+    BackgroundTransparency = 0,
+    BorderSizePixel = 0,
+    Text = "≡",
+    Font = Enum.Font.GothamBold,
+    TextSize = 24,
+    TextColor3 = COLORS.MutedText,
+    AutoButtonColor = true,
+    Active = true,
+    Selectable = true,
+}, floatingToggleGui)
+addCorner(floatingToggleButton, 10)
+addStroke(floatingToggleButton, COLORS.Border, 0.12, 1.5)
 
 uiScale = create("UIScale", {
     Scale = 1,
@@ -4423,7 +4455,8 @@ do
         Text = table.concat({
             "CHANGELOG / LATEST UPDATE",
             "",
-            "• Updated to version 2.5.14.",
+            "• Updated to version 2.5.19.",
+            "• Added a standalone floating button for hiding and showing the main PulseCore interface.",
             "• Optimized ESP by throttling expensive refresh and name-tag updates.",
             "• Removed the automatic/manual update-check system and its INFO controls.",
         }, "\n"),
@@ -5709,6 +5742,14 @@ function animateMainInterfaceVisibility(visible)
         end)
     end
 end
+
+floatingToggleButton.Activated:Connect(function()
+    if guiDestroyed then
+        return
+    end
+
+    animateMainInterfaceVisibility(not screenGui.Enabled)
+end)
 
 
 function clientModules.camera.parseNumber(textValue, minimum, maximum)
@@ -12355,6 +12396,12 @@ function shutdownMainScript(reason)
     end
 
     guiDestroyed = true
+
+    if floatingToggleGui then
+        floatingToggleGui:Destroy()
+        floatingToggleGui = nil
+        floatingToggleButton = nil
+    end
 
     if clientModules.console.attributeConnection then
         clientModules.console.attributeConnection:Disconnect()
