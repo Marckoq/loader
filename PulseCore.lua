@@ -4469,6 +4469,7 @@ do
             "CHANGELOG / LATEST UPDATE",
             "",
             "• Version remains 2.5.9; version changes are made only when requested.",
+            "• Fixed the standalone toggle button so hiding, reopening, and dragging no longer trigger duplicate toggles.",
             "• Added mouse and touch dragging for the standalone interface toggle button.",
             "• Kept the standalone interface toggle button responsive to the active device and screen size.",
             "• Added a standalone floating button for hiding and showing the main PulseCore interface.",
@@ -5757,15 +5758,6 @@ function animateMainInterfaceVisibility(visible)
         end)
     end
 end
-
-floatingToggleButton.Activated:Connect(function()
-    if guiDestroyed then
-        return
-    end
-
-    animateMainInterfaceVisibility(not screenGui.Enabled)
-end)
-
 
 local function clampFloatingTogglePosition(offsetX, offsetY)
     local camera = workspace.CurrentCamera
