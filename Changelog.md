@@ -3,6 +3,7 @@
 ## 2026-09-25
 
 ### Release
+- Restored the stable obfuscated payload after the version-change issue and preserved the 2.6.0 runtime version override.
 - Bumped PulseCore version to 2.6.0 as requested.
 
 ## 2026-09-25
