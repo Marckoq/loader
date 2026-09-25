@@ -2,6 +2,12 @@
 
 ## 2026-09-25
 
+### Local
+- Fixed No Jump Cooldown causing one jump input to trigger an extra jump.
+- Grounded jump requests now rely on Roblox's normal jump handling; the enhancement only queues an additional jump when another jump is actually requested while airborne.
+
+## 2026-09-25
+
 ### Stability
 - Restored the previously working PulseCore loader after the enhancement wrapper caused the main interface to stop appearing.
 - Moved the new No Jump Cooldown and ability notification logic into a separate lightweight enhancement module loaded after PulseCore initializes.
