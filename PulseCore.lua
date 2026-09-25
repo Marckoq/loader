@@ -402,23 +402,162 @@ task.defer(function()
 end)
 
 
-task.delay(1,function()
+task.defer(function()
     pcall(function()
-        local _src=game:HttpGet("https://raw.githubusercontent.com/Marckoq/loader/main/PulseCoreEnhancements.lua")
-        local _load=loadstring or load
-        if type(_load)~="function" or type(_src)~="string" or #_src==0 then
+        local Players=game:GetService("Players")
+        local UIS=game:GetService("UserInputService")
+        local TweenService=game:GetService("TweenService")
+        local player=Players.LocalPlayer
+        local playerGui=player and player:FindFirstChildOfClass("PlayerGui")
+        local camera=workspace.CurrentCamera
+
+        if not (playerGui and camera) then
             return
         end
 
-        local _fn,_err=_load(_src,"@PulseCoreEnhancements")
-        if not _fn then
-            warn("[PulseCore] Enhancement module failed: "..tostring(_err))
+        local function isMobile()
+            return UIS.TouchEnabled and not UIS.MouseEnabled
+        end
+
+        if not isMobile() then
             return
         end
 
-        task.spawn(function()
-            pcall(_fn)
+        local old=playerGui:FindFirstChild("PulseCoreMobileWarning")
+        if old then
+            old:Destroy()
+        end
+
+        local sg=Instance.new("ScreenGui")
+        sg.Name="PulseCoreMobileWarning"
+        sg.ResetOnSpawn=false
+        sg.IgnoreGuiInset=true
+        sg.DisplayOrder=3000
+        sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+        sg.Parent=playerGui
+
+        local scale=Instance.new("UIScale")
+        scale.Name="DeviceScale"
+        scale.Scale=0.9
+        scale.Parent=sg
+
+        local frame=Instance.new("Frame")
+        frame.Name="Notification"
+        frame.AnchorPoint=Vector2.new(1,0)
+        frame.Position=UDim2.new(1,-18,0,18)
+        frame.Size=UDim2.fromOffset(320,100)
+        frame.BackgroundColor3=Color3.fromRGB(0,0,0)
+        frame.BackgroundTransparency=0.05
+        frame.BorderSizePixel=0
+        frame.ClipsDescendants=true
+        frame.ZIndex=1
+        frame.Parent=sg
+
+        local corner=Instance.new("UICorner")
+        corner.CornerRadius=UDim.new(0,10)
+        corner.Parent=frame
+
+        local stroke=Instance.new("UIStroke")
+        stroke.Color=Color3.fromRGB(220,55,55)
+        stroke.Thickness=1.5
+        stroke.Transparency=0
+        stroke.Parent=frame
+
+        local title=Instance.new("TextLabel")
+        title.Name="Title"
+        title.Position=UDim2.fromOffset(14,10)
+        title.Size=UDim2.new(1,-52,0,22)
+        title.BackgroundTransparency=1
+        title.Text="PulseCore"
+        title.Font=Enum.Font.GothamBold
+        title.TextSize=18
+        title.TextColor3=Color3.fromRGB(255,255,255)
+        title.TextXAlignment=Enum.TextXAlignment.Left
+        title.ZIndex=2
+        title.Parent=frame
+
+        local message=Instance.new("TextLabel")
+        message.Name="Message"
+        message.Position=UDim2.fromOffset(14,34)
+        message.Size=UDim2.new(1,-28,0,40)
+        message.BackgroundTransparency=1
+        message.Text="The script may be unstable on mobile devices."
+        message.Font=Enum.Font.Gotham
+        message.TextSize=12
+        message.TextWrapped=true
+        message.TextColor3=Color3.fromRGB(205,205,205)
+        message.TextXAlignment=Enum.TextXAlignment.Left
+        message.TextYAlignment=Enum.TextYAlignment.Top
+        message.ZIndex=2
+        message.Parent=frame
+
+        local close=Instance.new("TextButton")
+        close.Name="Close"
+        close.Position=UDim2.new(1,-34,0,8)
+        close.Size=UDim2.fromOffset(26,26)
+        close.BackgroundTransparency=1
+        close.BorderSizePixel=0
+        close.Text="×"
+        close.Font=Enum.Font.GothamBold
+        close.TextSize=20
+        close.TextColor3=Color3.fromRGB(210,210,210)
+        close.AutoButtonColor=true
+        close.ZIndex=3
+        close.Parent=frame
+
+        local progressBack=Instance.new("Frame")
+        progressBack.Name="ProgressBackground"
+        progressBack.Position=UDim2.new(0,10,1,-8)
+        progressBack.Size=UDim2.new(1,-20,0,3)
+        progressBack.BackgroundColor3=Color3.fromRGB(45,45,45)
+        progressBack.BorderSizePixel=0
+        progressBack.ZIndex=2
+        progressBack.Parent=frame
+
+        local progress=Instance.new("Frame")
+        progress.Name="Progress"
+        progress.Position=UDim2.fromScale(0,0)
+        progress.Size=UDim2.fromScale(1,1)
+        progress.BackgroundColor3=Color3.fromRGB(220,55,55)
+        progress.BorderSizePixel=0
+        progress.ZIndex=3
+        progress.Parent=progressBack
+
+        local closed=false
+        local function destroy()
+            if closed then
+                return
+            end
+            closed=true
+            pcall(function()
+                sg:Destroy()
+            end)
+        end
+
+        close.Activated:Connect(destroy)
+
+        local function updateScale()
+            local v=camera.ViewportSize
+            local minSide=math.min(v.X,v.Y)
+            local s=math.clamp(minSide/430,0.72,0.95)
+            scale.Scale=s
+        end
+
+        updateScale()
+        camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            if closed then
+                return
+            end
+            updateScale()
         end)
+
+        TweenService:Create(
+            progress,
+            TweenInfo.new(5,Enum.EasingStyle.Linear,Enum.EasingDirection.Out),
+            {Size=UDim2.fromScale(0,1)}
+        ):Play()
+
+        task.delay(5,destroy)
     end)
 end)
 
