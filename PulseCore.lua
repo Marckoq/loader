@@ -402,12 +402,10 @@ task.defer(function()
 end)
 
 
-
 task.defer(function()
     pcall(function()
         local Players=game:GetService("Players")
         local UIS=game:GetService("UserInputService")
-        local RunService=game:GetService("RunService")
         local TweenService=game:GetService("TweenService")
         local player=Players.LocalPlayer
         local playerGui=player and player:FindFirstChildOfClass("PlayerGui")
@@ -417,486 +415,165 @@ task.defer(function()
             return
         end
 
-        local gui=playerGui:FindFirstChild("AssemblySpeedBoostUI")
-        local localPage=gui and gui:FindFirstChild("LocalPage")
-        local main=gui and gui:FindFirstChild("MainFrame")
+        local function isMobile()
+            return UIS.TouchEnabled and not UIS.MouseEnabled
+        end
 
-        if not (gui and localPage and main) then
+        if not isMobile() then
             return
         end
 
-        local jumpState={
-            enabled=true,
-            connection=nil,
-            heartbeat=nil,
-            queued=false,
-            lastHumanoid=nil,
-        }
-
-        local function getCharacterParts()
-            local character=player.Character
-            if not character then
-                return nil,nil
-            end
-
-            local humanoid=character:FindFirstChildOfClass("Humanoid")
-            if not humanoid then
-                return character,nil
-            end
-
-            return character,humanoid
+        local old=playerGui:FindFirstChild("PulseCoreMobileWarning")
+        if old then
+            old:Destroy()
         end
 
-        local function forceJump()
-            if not jumpState.enabled then
+        local sg=Instance.new("ScreenGui")
+        sg.Name="PulseCoreMobileWarning"
+        sg.ResetOnSpawn=false
+        sg.IgnoreGuiInset=true
+        sg.DisplayOrder=3000
+        sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+        sg.Parent=playerGui
+
+        local scale=Instance.new("UIScale")
+        scale.Name="DeviceScale"
+        scale.Scale=0.9
+        scale.Parent=sg
+
+        local frame=Instance.new("Frame")
+        frame.Name="Notification"
+        frame.AnchorPoint=Vector2.new(1,0)
+        frame.Position=UDim2.new(1,-18,0,18)
+        frame.Size=UDim2.fromOffset(320,100)
+        frame.BackgroundColor3=Color3.fromRGB(0,0,0)
+        frame.BackgroundTransparency=0.05
+        frame.BorderSizePixel=0
+        frame.ClipsDescendants=true
+        frame.ZIndex=1
+        frame.Parent=sg
+
+        local corner=Instance.new("UICorner")
+        corner.CornerRadius=UDim.new(0,10)
+        corner.Parent=frame
+
+        local stroke=Instance.new("UIStroke")
+        stroke.Color=Color3.fromRGB(220,55,55)
+        stroke.Thickness=1.5
+        stroke.Transparency=0
+        stroke.Parent=frame
+
+        local title=Instance.new("TextLabel")
+        title.Name="Title"
+        title.Position=UDim2.fromOffset(14,10)
+        title.Size=UDim2.new(1,-52,0,22)
+        title.BackgroundTransparency=1
+        title.Text="PulseCore"
+        title.Font=Enum.Font.GothamBold
+        title.TextSize=18
+        title.TextColor3=Color3.fromRGB(255,255,255)
+        title.TextXAlignment=Enum.TextXAlignment.Left
+        title.ZIndex=2
+        title.Parent=frame
+
+        local message=Instance.new("TextLabel")
+        message.Name="Message"
+        message.Position=UDim2.fromOffset(14,34)
+        message.Size=UDim2.new(1,-28,0,40)
+        message.BackgroundTransparency=1
+        message.Text="The script may be unstable on mobile devices."
+        message.Font=Enum.Font.Gotham
+        message.TextSize=12
+        message.TextWrapped=true
+        message.TextColor3=Color3.fromRGB(205,205,205)
+        message.TextXAlignment=Enum.TextXAlignment.Left
+        message.TextYAlignment=Enum.TextYAlignment.Top
+        message.ZIndex=2
+        message.Parent=frame
+
+        local close=Instance.new("TextButton")
+        close.Name="Close"
+        close.Position=UDim2.new(1,-34,0,8)
+        close.Size=UDim2.fromOffset(26,26)
+        close.BackgroundTransparency=1
+        close.BorderSizePixel=0
+        close.Text="×"
+        close.Font=Enum.Font.GothamBold
+        close.TextSize=20
+        close.TextColor3=Color3.fromRGB(210,210,210)
+        close.AutoButtonColor=true
+        close.ZIndex=3
+        close.Parent=frame
+
+        local progressBack=Instance.new("Frame")
+        progressBack.Name="ProgressBackground"
+        progressBack.Position=UDim2.new(0,10,1,-8)
+        progressBack.Size=UDim2.new(1,-20,0,3)
+        progressBack.BackgroundColor3=Color3.fromRGB(45,45,45)
+        progressBack.BorderSizePixel=0
+        progressBack.ZIndex=2
+        progressBack.Parent=frame
+
+        local progress=Instance.new("Frame")
+        progress.Name="Progress"
+        progress.Position=UDim2.fromScale(0,0)
+        progress.Size=UDim2.fromScale(1,1)
+        progress.BackgroundColor3=Color3.fromRGB(220,55,55)
+        progress.BorderSizePixel=0
+        progress.ZIndex=3
+        progress.Parent=progressBack
+
+        local closed=false
+        local function destroy()
+            if closed then
                 return
             end
-
-            local _,humanoid=getCharacterParts()
-            if not humanoid or humanoid.Health<=0 then
-                return
-            end
-
-            local state=humanoid:GetState()
-            if state==Enum.HumanoidStateType.Dead or state==Enum.HumanoidStateType.Seated then
-                return
-            end
-
-            humanoid.Jump=true
+            closed=true
             pcall(function()
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                sg:Destroy()
             end)
         end
 
-        local function isGrounded(humanoid)
-            if not humanoid or humanoid.Health<=0 then
-                return false
-            end
+        close.Activated:Connect(destroy)
 
-            local material=humanoid.FloorMaterial
-            return material~=Enum.Material.Air
+        local function updateScale()
+            local v=camera.ViewportSize
+            local minSide=math.min(v.X,v.Y)
+            local s=math.clamp(minSide/430,0.72,0.95)
+            scale.Scale=s
         end
 
-        if not localPage:GetAttribute("PulseCoreNoJumpCooldownUI") then
-            localPage:SetAttribute("PulseCoreNoJumpCooldownUI",true)
-
-            local row=Instance.new("Frame")
-            row.Name="NoJumpCooldown"
-            row.LayoutOrder=12
-            row.Size=UDim2.new(1,0,0,50)
-            row.BackgroundColor3=Color3.fromRGB(30,30,30)
-            row.BackgroundTransparency=0.16
-            row.BorderSizePixel=0
-            row.Parent=localPage
-
-            local rowCorner=Instance.new("UICorner")
-            rowCorner.CornerRadius=UDim.new(0,9)
-            rowCorner.Parent=row
-
-            local rowStroke=Instance.new("UIStroke")
-            rowStroke.Color=Color3.fromRGB(70,70,70)
-            rowStroke.Transparency=0.28
-            rowStroke.Thickness=1
-            rowStroke.Parent=row
-
-            local label=Instance.new("TextLabel")
-            label.Name="Label"
-            label.Position=UDim2.fromOffset(14,0)
-            label.Size=UDim2.new(1,-100,1,0)
-            label.BackgroundTransparency=1
-            label.Text="No Jump Cooldown"
-            label.Font=Enum.Font.GothamMedium
-            label.TextSize=13
-            label.TextColor3=Color3.fromRGB(235,235,235)
-            label.TextWrapped=true
-            label.TextXAlignment=Enum.TextXAlignment.Left
-            label.Parent=row
-
-            local toggle=Instance.new("TextButton")
-            toggle.Name="Toggle"
-            toggle.AnchorPoint=Vector2.new(1,0.5)
-            toggle.Position=UDim2.new(1,-11,0.5,0)
-            toggle.Size=UDim2.fromOffset(58,30)
-            toggle.BackgroundColor3=Color3.fromRGB(38,38,38)
-            toggle.BorderSizePixel=0
-            toggle.Text=""
-            toggle.AutoButtonColor=false
-            toggle.Parent=row
-
-            local toggleCorner=Instance.new("UICorner")
-            toggleCorner.CornerRadius=UDim.new(0,999)
-            toggleCorner.Parent=toggle
-
-            local dot=Instance.new("Frame")
-            dot.Name="Dot"
-            dot.AnchorPoint=Vector2.new(0,0.5)
-            dot.Position=UDim2.new(0,5,0.5,0)
-            dot.Size=UDim2.fromOffset(22,22)
-            dot.BackgroundColor3=Color3.fromRGB(135,135,135)
-            dot.BorderSizePixel=0
-            dot.Parent=toggle
-
-            local dotCorner=Instance.new("UICorner")
-            dotCorner.CornerRadius=UDim.new(0,999)
-            dotCorner.Parent=dot
-
-            local function refreshToggle()
-                toggle.BackgroundColor3=jumpState.enabled
-                    and Color3.fromRGB(20,95,135)
-                    or Color3.fromRGB(38,38,38)
-
-                dot.BackgroundColor3=jumpState.enabled
-                    and Color3.fromRGB(225,245,255)
-                    or Color3.fromRGB(135,135,135)
-
-                TweenService:Create(
-                    dot,
-                    TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
-                    {Position=jumpState.enabled and UDim2.new(1,-27,0.5,0) or UDim2.new(0,5,0.5,0)}
-                ):Play()
-            end
-
-            toggle.Activated:Connect(function()
-                jumpState.enabled=not jumpState.enabled
-                jumpState.queued=false
-                refreshToggle()
-            end)
-
-            refreshToggle()
-        end
-
-        jumpState.connection=UIS.JumpRequest:Connect(function()
-            if not jumpState.enabled then
+        updateScale()
+        camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            if closed then
                 return
             end
-
-            local _,humanoid=getCharacterParts()
-            if not humanoid then
-                return
-            end
-
-            if isGrounded(humanoid) then
-                jumpState.queued=false
-                forceJump()
-            else
-                jumpState.queued=true
-            end
-        end)
-
-        jumpState.heartbeat=RunService.Heartbeat:Connect(function()
-            if not jumpState.enabled or not jumpState.queued then
-                return
-            end
-
-            local _,humanoid=getCharacterParts()
-            if not humanoid then
-                return
-            end
-
-            if humanoid~=jumpState.lastHumanoid then
-                jumpState.lastHumanoid=humanoid
-            end
-
-            if isGrounded(humanoid) then
-                jumpState.queued=false
-                forceJump()
-            end
-        end)
-
-        local notificationSerial=0
-        local currentNotification=nil
-        local currentButton=nil
-
-        local function destroyNotification()
-            notificationSerial=notificationSerial+1
-            currentButton=nil
-
-            if currentNotification then
-                pcall(function()
-                    currentNotification:Destroy()
-                end)
-                currentNotification=nil
-            end
-        end
-
-        local function findTextBoxByLayoutOrder(order)
-            for _,obj in ipairs(localPage:GetChildren()) do
-                if obj:IsA("GuiObject") and obj.LayoutOrder==order then
-                    local box=obj:FindFirstChildWhichIsA("TextBox",true)
-                    if box then
-                        return box
-                    end
-                end
-            end
-            return nil
-        end
-
-        local function cleanAbilityName(name)
-            name=tostring(name or "")
-            name=name:gsub("^%s+",""):gsub("%s+$","")
-            name=name:gsub("^ACTIVATE%s+","")
-            name=name:gsub("^STOP%s+","")
-            name=name:gsub("%s*%[[^%]]*%]%s*$","")
-            name=name:gsub("^COOLDOWN%s+","")
-            name=name:gsub("%s*:%s*[%d%.]+%s*sec%.?$","")
-            return name
-        end
-
-        local function createNotification(button)
-            local order=tonumber(button.LayoutOrder)
-            if not order then
-                return
-            end
-
-            local base=order-16
-            local nameBox=findTextBoxByLayoutOrder(base)
-            local delayBox=findTextBoxByLayoutOrder(base+7)
-            local durationBox=findTextBoxByLayoutOrder(base+8)
-
-            local abilityName=cleanAbilityName(nameBox and nameBox.Text or button.Text)
-            if abilityName=="" then
-                abilityName="Ability"
-            end
-
-            local delayValue=delayBox and tostring(delayBox.Text or "") or ""
-            local durationValue=durationBox and tostring(durationBox.Text or "") or ""
-
-            local delayNumber=tonumber(delayValue)
-            local durationNumber=tonumber(durationValue)
-
-            local delayText="N/A"
-            if delayNumber and delayNumber>0 then
-                delayText=string.format("%.1fs",delayNumber)
-            end
-
-            local durationText="N/A"
-            if durationValue:lower()=="inf" then
-                durationText="N/A"
-            elseif durationNumber and durationNumber>0 then
-                durationText=string.format("%.1fs",durationNumber)
-            end
-
-            destroyNotification()
-            notificationSerial=notificationSerial+1
-            local serial=notificationSerial
-            currentButton=button
-
-            local sg=Instance.new("ScreenGui")
-            sg.Name="PulseCoreAbilityNotification"
-            sg.ResetOnSpawn=false
-            sg.IgnoreGuiInset=true
-            sg.DisplayOrder=3000
-            sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-            sg.Parent=playerGui
-            currentNotification=sg
-
-            local scale=Instance.new("UIScale")
-            scale.Name="DeviceScale"
-            scale.Scale=0.9
-            scale.Parent=sg
-
-            local frame=Instance.new("Frame")
-            frame.Name="Notification"
-            frame.AnchorPoint=Vector2.new(1,0)
-            frame.Position=UDim2.new(1,-18,0,18)
-            frame.Size=UDim2.fromOffset(320,116)
-            frame.BackgroundColor3=Color3.fromRGB(0,0,0)
-            frame.BackgroundTransparency=0.2
-            frame.BorderSizePixel=0
-            frame.ClipsDescendants=true
-            frame.Parent=sg
-
-            local corner=Instance.new("UICorner")
-            corner.CornerRadius=UDim.new(0,10)
-            corner.Parent=frame
-
-            local stroke=Instance.new("UIStroke")
-            stroke.Color=Color3.fromRGB(125,125,125)
-            stroke.Transparency=0.05
-            stroke.Thickness=1.5
-            stroke.Parent=frame
-
-            local title=Instance.new("TextLabel")
-            title.Name="Title"
-            title.Position=UDim2.fromOffset(14,9)
-            title.Size=UDim2.new(1,-56,0,22)
-            title.BackgroundTransparency=1
-            title.Text="PulseCore"
-            title.Font=Enum.Font.GothamBold
-            title.TextSize=18
-            title.TextColor3=Color3.fromRGB(255,255,255)
-            title.TextXAlignment=Enum.TextXAlignment.Left
-            title.Parent=frame
-
-            local close=Instance.new("TextButton")
-            close.Name="Close"
-            close.Position=UDim2.new(1,-36,0,7)
-            close.Size=UDim2.fromOffset(28,28)
-            close.BackgroundTransparency=1
-            close.BorderSizePixel=0
-            close.Text="×"
-            close.Font=Enum.Font.GothamBold
-            close.TextSize=20
-            close.TextColor3=Color3.fromRGB(205,205,205)
-            close.Parent=frame
-
-            local abilityLabel=Instance.new("TextLabel")
-            abilityLabel.Name="Ability"
-            abilityLabel.Position=UDim2.fromOffset(14,34)
-            abilityLabel.Size=UDim2.new(1,-28,0,24)
-            abilityLabel.BackgroundTransparency=1
-            abilityLabel.Text="Ability \"" .. abilityName .. "\" is activated"
-            abilityLabel.Font=Enum.Font.GothamMedium
-            abilityLabel.TextSize=13
-            abilityLabel.TextColor3=Color3.fromRGB(235,235,235)
-            abilityLabel.TextWrapped=true
-            abilityLabel.TextXAlignment=Enum.TextXAlignment.Left
-            abilityLabel.Parent=frame
-
-            local details=Instance.new("TextLabel")
-            details.Name="Details"
-            details.Position=UDim2.fromOffset(14,59)
-            details.Size=UDim2.new(1,-28,0,34)
-            details.BackgroundTransparency=1
-            details.Text=string.format("Duration: %s\nDelay: %s",durationText,delayText)
-            details.Font=Enum.Font.Gotham
-            details.TextSize=12
-            details.TextColor3=Color3.fromRGB(185,185,185)
-            details.TextWrapped=true
-            details.TextXAlignment=Enum.TextXAlignment.Left
-            details.TextYAlignment=Enum.TextYAlignment.Top
-            details.Parent=frame
-
-            local progressBack=Instance.new("Frame")
-            progressBack.Name="ProgressBackground"
-            progressBack.Position=UDim2.new(0,10,1,-9)
-            progressBack.Size=UDim2.new(1,-20,0,3)
-            progressBack.BackgroundColor3=Color3.fromRGB(48,48,48)
-            progressBack.BorderSizePixel=0
-            progressBack.ClipsDescendants=true
-            progressBack.Parent=frame
-
-            local progress=Instance.new("Frame")
-            progress.Name="Progress"
-            progress.Position=UDim2.fromScale(0,0)
-            progress.Size=UDim2.fromScale(1,1)
-            progress.BackgroundColor3=Color3.fromRGB(175,175,175)
-            progress.BorderSizePixel=0
-            progress.Parent=progressBack
-
-            local progressCorner=Instance.new("UICorner")
-            progressCorner.CornerRadius=UDim.new(0,999)
-            progressCorner.Parent=progress
-
-            local closed=false
-            local function closeNotification()
-                if closed then
-                    return
-                end
-                closed=true
-                if currentNotification==sg then
-                    currentNotification=nil
-                    currentButton=nil
-                end
-                pcall(function()
-                    sg:Destroy()
-                end)
-            end
-
-            close.Activated:Connect(closeNotification)
-
-            local function updateScale()
-                local v=camera.ViewportSize
-                local minSide=math.min(v.X,v.Y)
-                scale.Scale=math.clamp(minSide/430,0.72,0.95)
-            end
-
             updateScale()
-            camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-                if not closed then
-                    updateScale()
-                end
-            end)
-
-            if durationNumber and durationNumber>0 then
-                local function startDurationProgress()
-                    if closed or serial~=notificationSerial then
-                        return
-                    end
-
-                    TweenService:Create(
-                        progress,
-                        TweenInfo.new(durationNumber,Enum.EasingStyle.Linear,Enum.EasingDirection.Out),
-                        {Size=UDim2.fromScale(0,1)}
-                    ):Play()
-                end
-
-                if delayNumber and delayNumber>0 then
-                    task.delay(delayNumber,startDurationProgress)
-                else
-                    startDurationProgress()
-                end
-            end
-        end
-
-        local function hookAbilityButton(button)
-            if not button:IsA("GuiButton") or button:GetAttribute("PulseCoreAbilityNotificationHooked") then
-                return
-            end
-
-            button:SetAttribute("PulseCoreAbilityNotificationHooked",true)
-
-            local function handle()
-                task.defer(function()
-                    if not button.Parent then
-                        return
-                    end
-
-                    local text=tostring(button.Text or "")
-
-                    if text:sub(1,5)=="STOP " then
-                        createNotification(button)
-                    elseif currentButton==button and (text:sub(1,8)=="ACTIVATE" or text:sub(1,9)=="COOLDOWN") then
-                        destroyNotification()
-                    end
-                end)
-            end
-
-            button.Activated:Connect(handle)
-        end
-
-        local function scanAbilityButtons()
-            for _,obj in ipairs(localPage:GetChildren()) do
-                if obj:IsA("GuiButton") then
-                    local text=tostring(obj.Text or "")
-                    if text:sub(1,9)=="ACTIVATE " or text:sub(1,5)=="STOP " or text:sub(1,9)=="COOLDOWN " then
-                        if not text:find("SPEED BOOST",1,true) then
-                            hookAbilityButton(obj)
-                        end
-                    end
-                end
-            end
-        end
-
-        scanAbilityButtons()
-
-        localPage.ChildAdded:Connect(function(obj)
-            task.defer(function()
-                if obj:IsA("GuiButton") then
-                    hookAbilityButton(obj)
-                end
-                scanAbilityButtons()
-            end)
         end)
 
-        RunService.Heartbeat:Connect(function()
-            if currentButton then
-                local text=tostring(currentButton.Text or "")
-                if not currentButton.Parent or text:sub(1,5)~="STOP " then
-                    destroyNotification()
-                end
-            end
-        end)
+        TweenService:Create(
+            progress,
+            TweenInfo.new(5,Enum.EasingStyle.Linear,Enum.EasingDirection.Out),
+            {Size=UDim2.fromScale(0,1)}
+        ):Play()
+
+        task.delay(5,destroy)
+    end)
+end)
+
+task.defer(function()
+    pcall(function()
+        local _src=game:HttpGet("https://raw.githubusercontent.com/Marckoq/loader/main/PulseCoreEnhancements.lua")
+        local _load=loadstring or load
+        if type(_load)~="function" or type(_src)~="string" then
+            return
+        end
+        local _fn,_err=_load(_src,"@PulseCoreEnhancements")
+        if not _fn then
+            warn("[PulseCore] Enhancement module failed: "..tostring(_err))
+            return
+        end
+        task.defer(_fn)
     end)
 end)
 
