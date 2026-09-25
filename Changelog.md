@@ -2,6 +2,12 @@
 
 ## 2026-09-25
 
+### Local
+- Fixed No Jump Cooldown so the first jump uses Roblox's normal jump handling instead of forcing an extra jump.
+- A jump request made while airborne is now queued and executed once after landing, preventing a single press from producing a double jump.
+
+## 2026-09-25
+
 ### Stability
 - Isolated the optional enhancement module from the main PulseCore loader so enhancement errors cannot prevent the main interface from loading.
 - Added a short startup delay before loading the enhancement module.
