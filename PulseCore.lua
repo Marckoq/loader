@@ -205,6 +205,34 @@ end
 local _src=table.concat(_out)
 _src=string.gsub(_src,'SCRIPT_VERSION = "2%.5%.9"','SCRIPT_VERSION = "2.6.0"',1)
 _src=string.gsub(_src,'-- PulseCore Version: 2%.5%.9','-- PulseCore Version: 2.6.0',1)
+
+_src=string.gsub(_src,[[
+    clientModules.combat.scanConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if guiDestroyed then
+            return
+        end
+
+        if clientModules.combat.autoCounterEnabled then
+            clientModules.combat.scanEnemyHooks()
+        end
+    end)
+]], [[
+    clientModules.combat.scanConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if guiDestroyed or not clientModules.combat.autoCounterEnabled then
+            return
+        end
+
+        clientModules.combat.scanAccumulator = (clientModules.combat.scanAccumulator or 0) + deltaTime
+
+        if clientModules.combat.scanAccumulator < 0.25 then
+            return
+        end
+
+        clientModules.combat.scanAccumulator = 0
+        clientModules.combat.scanEnemyHooks()
+    end)
+]],1)
+
 local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
 local _fn,_err=_load(_src,"@PulseCore")
