@@ -2,6 +2,13 @@
 
 ## 2026-09-25
 
+### Performance
+- Reduced Auto Counter enemy-model rescanning from every frame to once every 0.25 seconds while the feature is enabled.
+- Removed the ability-notification per-frame GUI descendant scan and replaced it with event-driven button state tracking.
+- Kept event-based attack detection unchanged so the optimization does not require a constant full model scan.
+
+## 2026-09-25
+
 ### Stability
 - Restored `PulseCore.lua` to the previously verified stable loader state after the recent main-file changes caused the interface to disappear.
 - Preserved the 2.6.0 runtime version override and existing sidebar/mobile wrapper fixes from the stable state.
