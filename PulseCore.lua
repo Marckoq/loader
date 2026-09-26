@@ -312,9 +312,37 @@ task.spawn(function()
     until scroller or os.clock()>scrollerDeadline
 
     if not scroller then
-        warn("[PulseCore] Tab scroller was not ready for the Emotes patch.")
-        return
+        scroller=Instance.new("ScrollingFrame")
+        scroller.Name="PulseCoreTabScroller"
+        scroller.Position=UDim2.fromOffset(0,0)
+        scroller.Size=UDim2.new(1,0,1,0)
+        scroller.BackgroundTransparency=1
+        scroller.BorderSizePixel=0
+        scroller.CanvasSize=UDim2.fromOffset(0,620)
+        scroller.ScrollingDirection=Enum.ScrollingDirection.Y
+        scroller.ScrollingEnabled=true
+        scroller.Active=true
+        scroller.TouchScrollingEnabled=true
+        scroller.ScrollBarThickness=5
+        scroller.ScrollBarImageTransparency=.2
+        scroller.ZIndex=50
+        scroller.Parent=sidebar
+
+        local moveNames={
+            "InfoTab","LocalTab","VisualsTab","CustomTab","CombatTab",
+            "FunTab","PerformanceTab","AutoSelectTab","KeyListTab",
+            "SettingsTab","AnimatedTabBackground","AnimatedTabBar"
+        }
+
+        for _,name in ipairs(moveNames) do
+            local obj=sidebar:FindFirstChild(name)
+            if obj then
+                obj.Parent=scroller
+            end
+        end
     end
+
+    scroller.ZIndex=50
 
     local function addCorner(obj,r)
         if obj:FindFirstChildOfClass("UICorner") then return end
@@ -476,6 +504,7 @@ task.spawn(function()
     emotesPage.BackgroundTransparency=1
     emotesPage.BorderSizePixel=0
     emotesPage.ScrollBarThickness=5
+    emotesPage.ZIndex=20
 
     local emotesTab=scroller:FindFirstChild("PulseCoreEmotesTab")
     if not emotesTab then
@@ -520,8 +549,12 @@ task.spawn(function()
     emotesTab.Visible=true
     emotesTab.Active=true
     emotesTab.Selectable=true
+    emotesTab.ZIndex=100
 
     for _,obj in ipairs(emotesTab:GetDescendants()) do
+        if obj:IsA("GuiObject") then
+            obj.ZIndex=100
+        end
         if obj:IsA("TextLabel") and obj.Name=="Title" then
             obj.Text="EMOTES"
         end
@@ -1437,7 +1470,7 @@ end)
 
 ]==]
 _src=_src:gsub("DEFAULT_BOOST_KEY%s*=%s*Enum%.KeyCode%.R","DEFAULT_BOOST_KEY = Enum.KeyCode.T")
-_src=_src.."\n".._pulseCoreEmotesAndPromptsSource
+-- PULSECORE_EMOTES_AND_PROMPTS_RUNTIME_ATTACH_V4
 
 local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
@@ -2227,5 +2260,25 @@ end)
 
 
 
+
+task.defer(function()
+    local ok, err = pcall(function()
+        local _loader = loadstring or load
+        if type(_loader) ~= "function" then
+            error("loadstring/load unavailable for Emotes/Prompts runtime attach")
+        end
+
+        local fn, fnErr = _loader(_pulseCoreEmotesAndPromptsSource, "@PulseCoreEmotesAndPrompts")
+        if not fn then
+            error(fnErr or "Emotes/Prompts patch failed to compile")
+        end
+
+        fn()
+    end)
+
+    if not ok then
+        warn("[PulseCore] Emotes/Prompts attach error: " .. tostring(err))
+    end
+end)
 
 return _result
