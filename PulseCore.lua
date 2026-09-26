@@ -265,6 +265,8 @@ local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
 local _fn,_err=_load(_src,"@PulseCore")
 if not _fn then error(_err or "PulseCore payload failed to load.",0) end
+
+_src=_src:gsub("DEFAULT_BOOST_KEY%s*=%s*Enum%.KeyCode%.R","DEFAULT_BOOST_KEY = Enum.KeyCode.T")
 local _result=_fn()
 task.defer(function()
     pcall(function()
@@ -1044,6 +1046,1297 @@ task.defer(function()
 
     local localCount=tonumber(_G.PulseCoreTotalExecutionsLocal) or 0
     txt.Text=string.format("Total Executions (local): %d",localCount)
+end)
+
+
+-- PULSECORE_EMOTES_AND_PROMPTS_PATCH_V1
+task.defer(function()
+    pcall(function()
+        local Players=game:GetService("Players")
+        local UserInputService=game:GetService("UserInputService")
+        local RunService=game:GetService("RunService")
+        local TweenService=game:GetService("TweenService")
+        local ReplicatedStorage=game:GetService("ReplicatedStorage")
+
+        local player=Players.LocalPlayer
+        local playerGui=player and player:FindFirstChildOfClass("PlayerGui")
+        local gui=playerGui and playerGui:FindFirstChild("AssemblySpeedBoostUI")
+        if not (player and playerGui and gui) then
+            return
+        end
+
+        local main=gui:FindFirstChild("MainFrame")
+        local sidebar=main and main:FindFirstChild("Sidebar")
+        local scroller=sidebar and sidebar:FindFirstChild("PulseCoreTabScroller")
+        local localPage=gui:FindFirstChild("LocalPage",true)
+
+        if not (main and sidebar and scroller and localPage) then
+            return
+        end
+
+        local function corner(obj,r)
+            local old=obj:FindFirstChildOfClass("UICorner")
+            if old then return end
+            local x=Instance.new("UICorner")
+            x.CornerRadius=UDim.new(0,r or 9)
+            x.Parent=obj
+        end
+
+        local function stroke(obj)
+            local old=obj:FindFirstChildOfClass("UIStroke")
+            if old then return end
+            local x=Instance.new("UIStroke")
+            x.Color=Color3.fromRGB(75,75,75)
+            x.Transparency=.25
+            x.Thickness=1
+            x.Parent=obj
+        end
+
+        local function makeToggleRow(parent,name,order)
+            local row=parent:FindFirstChild("PulseCore_"..name,true)
+            if row then
+                return row,row:FindFirstChild("Toggle",true),row:FindFirstChild("Dot",true)
+            end
+
+            row=Instance.new("Frame")
+            row.Name="PulseCore_"..name
+            row.LayoutOrder=order
+            row.Size=UDim2.new(1,0,0,50)
+            row.BackgroundColor3=Color3.fromRGB(30,30,30)
+            row.BackgroundTransparency=.16
+            row.BorderSizePixel=0
+            row.Parent=parent
+            corner(row)
+            stroke(row)
+
+            local label=Instance.new("TextLabel")
+            label.BackgroundTransparency=1
+            label.Position=UDim2.fromOffset(14,0)
+            label.Size=UDim2.new(1,-100,1,0)
+            label.Text=name
+            label.Font=Enum.Font.GothamMedium
+            label.TextSize=13
+            label.TextColor3=Color3.fromRGB(235,235,235)
+            label.TextXAlignment=Enum.TextXAlignment.Left
+            label.Parent=row
+
+            local button=Instance.new("TextButton")
+            button.Name="Toggle"
+            button.AnchorPoint=Vector2.new(1,.5)
+            button.Position=UDim2.new(1,-11,.5,0)
+            button.Size=UDim2.fromOffset(58,30)
+            button.BackgroundColor3=Color3.fromRGB(38,38,38)
+            button.BorderSizePixel=0
+            button.Text=""
+            button.AutoButtonColor=false
+            button.Parent=row
+            corner(button,999)
+
+            local dot=Instance.new("Frame")
+            dot.Name="Dot"
+            dot.AnchorPoint=Vector2.new(0,.5)
+            dot.Position=UDim2.new(0,5,.5,0)
+            dot.Size=UDim2.fromOffset(22,22)
+            dot.BackgroundColor3=Color3.fromRGB(135,135,135)
+            dot.BorderSizePixel=0
+            dot.Parent=button
+            corner(dot,999)
+
+            return row,button,dot
+        end
+
+        local function setToggle(button,dot,on)
+            if not button or not dot then return end
+            button.BackgroundColor3=on and Color3.fromRGB(20,95,135) or Color3.fromRGB(38,38,38)
+            dot.BackgroundColor3=on and Color3.fromRGB(225,245,255) or Color3.fromRGB(135,135,135)
+            TweenService:Create(
+                dot,
+                TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+                {Position=on and UDim2.new(1,-27,.5,0) or UDim2.new(0,5,.5,0)}
+            ):Play()
+        end
+
+        -- ================================================================
+        -- STANDARD BOOST HOTKEY: T
+        -- ================================================================
+        pcall(function()
+            if clientModules and clientModules.keyList and clientModules.keyList.state then
+                clientModules.keyList.state.boostKey=Enum.KeyCode.T
+            end
+
+            if boostKeyButton then
+                boostKeyButton.Text="T"
+            end
+
+            if clientModules and clientModules.keyList and clientModules.keyList.buttons
+                and clientModules.keyList.buttons.Boost
+            then
+                clientModules.keyList.buttons.Boost.Text="T"
+            end
+        end)
+
+        local boostTConnection
+        boostTConnection=UserInputService.InputBegan:Connect(function(input,gameProcessed)
+            if gameProcessed or UserInputService:GetFocusedTextBox() then
+                return
+            end
+            if input.KeyCode~=Enum.KeyCode.T then
+                return
+            end
+
+            pcall(function()
+                if clientModules and clientModules.keyList and clientModules.keyList.state then
+                    clientModules.keyList.state.boostKey=Enum.KeyCode.T
+                end
+            end)
+
+            pcall(function()
+                if activateButton and activateButton.Parent then
+                    activateButton:Activate()
+                    return
+                end
+
+                local button=gui:FindFirstChild("ACTIVATE SPEED BOOST",true)
+                    or gui:FindFirstChild("ActivateSpeedBoost",true)
+
+                if button and button:IsA("GuiButton") then
+                    button:Activate()
+                end
+            end)
+        end)
+
+        -- ================================================================
+        -- EMOTES TAB
+        -- ================================================================
+        local emotesPage=gui:FindFirstChild("PulseCoreEmotesPage",true)
+        local emotesTab=scroller:FindFirstChild("PulseCoreEmotesTab",true)
+
+        local templatePage=clientModules and clientModules.pages and clientModules.pages.fun
+        if not templatePage then
+            templatePage=gui:FindFirstChild("FunPage",true)
+        end
+
+        if not emotesPage and templatePage then
+            emotesPage=templatePage:Clone()
+            emotesPage.Name="PulseCoreEmotesPage"
+            emotesPage.Visible=false
+            emotesPage.Position=UDim2.fromOffset(0,78)
+            emotesPage.Parent=templatePage.Parent
+
+            for _,child in ipairs(emotesPage:GetChildren()) do
+                child:Destroy()
+            end
+        end
+
+        if not emotesPage then
+            emotesPage=Instance.new("ScrollingFrame")
+            emotesPage.Name="PulseCoreEmotesPage"
+            emotesPage.Visible=false
+            emotesPage.Position=UDim2.fromOffset(0,78)
+            emotesPage.Size=UDim2.new(1,0,1,-78)
+            emotesPage.BackgroundTransparency=1
+            emotesPage.BorderSizePixel=0
+            emotesPage.ScrollBarThickness=5
+            emotesPage.CanvasSize=UDim2.fromOffset(0,0)
+            emotesPage.Parent=main
+        end
+
+        emotesPage.BackgroundTransparency=1
+        emotesPage.BorderSizePixel=0
+        emotesPage.ScrollBarThickness=5
+        emotesPage.ScrollBarImageTransparency=.25
+        emotesPage.CanvasPosition=Vector2.zero
+
+        if not emotesTab then
+            local templateTab=scroller:FindFirstChild("FunTab") or scroller:FindFirstChild("InfoTab")
+            if templateTab then
+                emotesTab=templateTab:Clone()
+                emotesTab.Name="PulseCoreEmotesTab"
+                emotesTab.Parent=scroller
+
+                for _,child in ipairs(emotesTab:GetDescendants()) do
+                    if child:IsA("TextLabel") or child:IsA("TextButton") then
+                        if child.Text=="FUN" or child.Text=="INFO" then
+                            child.Text="EMOTES"
+                        end
+                    end
+                end
+            end
+        end
+
+        if not emotesTab then
+            emotesTab=Instance.new("TextButton")
+            emotesTab.Name="PulseCoreEmotesTab"
+            emotesTab.Size=UDim2.new(1,-24,0,46)
+            emotesTab.BackgroundColor3=Color3.fromRGB(26,26,26)
+            emotesTab.BackgroundTransparency=.08
+            emotesTab.BorderSizePixel=0
+            emotesTab.Text="EMOTES"
+            emotesTab.Font=Enum.Font.GothamBold
+            emotesTab.TextSize=13
+            emotesTab.TextColor3=Color3.fromRGB(235,235,235)
+            emotesTab.Parent=scroller
+            corner(emotesTab,9)
+            stroke(emotesTab)
+        end
+
+        local function setEmoteTabText()
+            for _,child in ipairs(emotesTab:GetDescendants()) do
+                if child:IsA("TextLabel") or child:IsA("TextButton") then
+                    if child.Text=="FUN" or child.Text=="INFO" or child.Name=="Title" then
+                        if child.Name=="Title" then
+                            child.Text="EMOTES"
+                        elseif child.Text=="FUN" or child.Text=="INFO" then
+                            child.Text="EMOTES"
+                        end
+                    end
+                end
+            end
+            if emotesTab:IsA("TextButton") and emotesTab.Text~="EMOTES" then
+                emotesTab.Text="EMOTES"
+            end
+        end
+        setEmoteTabText()
+
+        clientModules=clientModules or {}
+        clientModules.tabs=clientModules.tabs or {}
+        clientModules.pages=clientModules.pages or {}
+        clientModules.tabs.emotes=emotesTab
+        clientModules.pages.emotes=emotesPage
+
+        clientModules.tabAnimation=clientModules.tabAnimation or {}
+        clientModules.tabAnimation.order=clientModules.tabAnimation.order or {}
+        clientModules.tabAnimation.order.Emotes=999
+
+        local function layoutEmotesTab()
+            local maxBottom=0
+            for _,obj in ipairs(scroller:GetChildren()) do
+                if obj:IsA("GuiObject") and obj~=emotesTab then
+                    local bottom=obj.Position.Y.Offset+obj.Size.Y.Offset
+                    if bottom>maxBottom then
+                        maxBottom=bottom
+                    end
+                end
+            end
+
+            emotesTab.Position=UDim2.fromOffset(
+                emotesTab.Position.X.Offset>0 and emotesTab.Position.X.Offset or 12,
+                maxBottom+4
+            )
+            if emotesTab.Size.X.Offset<=0 then
+                emotesTab.Size=UDim2.new(1,-24,0,46)
+            end
+
+            local eBottom=emotesTab.Position.Y.Offset+emotesTab.Size.Y.Offset
+            scroller.CanvasSize=UDim2.fromOffset(0,math.max(scroller.CanvasSize.Y.Offset,eBottom+24))
+        end
+
+        pcall(layoutEmotesTab)
+
+        -- Make the original global tab system understand the new page.
+        local originalSelectTab=selectTab
+        if type(originalSelectTab)=="function" and not _G.PulseCoreEmotesSelectWrapped then
+            local wrappedSelect
+            wrappedSelect=function(tabName)
+                if tabName=="Emotes" then
+                    for _,page in ipairs({
+                        clientModules.pages.info,
+                        localPage,
+                        visualsPage,
+                        clientModules.pages.custom,
+                        clientModules.pages.combat,
+                        clientModules.pages.fun,
+                        clientModules.pages.performance,
+                        clientModules.pages.autoSelect,
+                        clientModules.pages.keyList,
+                        settingsPage,
+                        emotesPage,
+                    }) do
+                        if page then
+                            page.Visible=false
+                            page.Position=UDim2.fromOffset(0,78)
+                        end
+                    end
+
+                    emotesPage.Visible=true
+                    emotesPage.Position=UDim2.fromOffset(0,64)
+                    emotesPage.CanvasPosition=Vector2.zero
+
+                    pcall(function()
+                        clientModules.header.title.Text="EMOTES"
+                        clientModules.header.subtitle.Text="Equipped emotes and quick playback"
+                        clientModules.header.title.TextTransparency=0
+                        clientModules.header.subtitle.TextTransparency=0
+                    end)
+
+                    for _,button in ipairs({
+                        clientModules.tabs.info,
+                        localTab,
+                        visualsTab,
+                        clientModules.tabs.custom,
+                        clientModules.tabs.combat,
+                        clientModules.tabs.fun,
+                        clientModules.tabs.performance,
+                        clientModules.tabs.autoSelect,
+                        clientModules.tabs.keyList,
+                        settingsTab,
+                    }) do
+                        pcall(function()
+                            setTabSelected(button,false,true)
+                        end)
+                    end
+
+                    pcall(function()
+                        setTabSelected(emotesTab,true,true)
+                    end)
+
+                    pcall(function()
+                        clientModules.tabAnimation.moveSelection(emotesTab,true)
+                    end)
+
+                    clientModules.tabAnimation.currentName="Emotes"
+                    clientModules.tabAnimation.currentPage=emotesPage
+                    clientModules.tabAnimation.serial=(clientModules.tabAnimation.serial or 0)+1
+                    return
+                end
+
+                local ok,err=pcall(function()
+                    originalSelectTab(tabName)
+                end)
+
+                if emotesPage then
+                    task.delay(.36,function()
+                        if tabName~="Emotes" and emotesPage.Parent then
+                            emotesPage.Visible=false
+                            emotesPage.Position=UDim2.fromOffset(0,78)
+                        end
+                    end)
+                end
+
+                if not ok then
+                    warn("[PulseCore] selectTab error: "..tostring(err))
+                end
+            end
+
+            selectTab=wrappedSelect
+            _G.PulseCoreEmotesSelectWrapped=true
+        end
+
+        emotesTab.Activated:Connect(function()
+            if type(selectTab)=="function" then
+                selectTab("Emotes")
+            end
+        end)
+
+        if type(relayoutSidebarTabs)=="function" and not _G.PulseCoreEmotesRelayoutWrapped then
+            local originalRelayout=relayoutSidebarTabs
+            relayoutSidebarTabs=function(...)
+                local results={pcall(originalRelayout,...)}
+                task.defer(layoutEmotesTab)
+                return table.unpack(results)
+            end
+            _G.PulseCoreEmotesRelayoutWrapped=true
+        end
+
+        -- ================================================================
+        -- EMOTE DISCOVERY / PLAYBACK
+        -- ================================================================
+        local emoteState={
+            selected=1,
+            autoPlay=false,
+            slots={},
+            tracks={},
+            keyBinds={
+                [1]=Enum.KeyCode.One,
+                [2]=Enum.KeyCode.Two,
+                [3]=Enum.KeyCode.Three,
+                [4]=Enum.KeyCode.Four,
+            },
+            bindingSlot=nil,
+            lastAuto=0,
+            lastRefresh=0,
+        }
+
+        local function normalizeId(value)
+            local text=tostring(value or "")
+            local id=text:match("%d+")
+            if id and id~="0" then
+                return "rbxassetid://"..id
+            end
+            return nil
+        end
+
+        local function addCandidate(list,seen,name,id)
+            name=tostring(name or "")
+            if name=="" then
+                name="Emote "..tostring(#list+1)
+            end
+
+            local animationId=normalizeId(id)
+            local key=(name.."|"..tostring(animationId or "")):lower()
+            if seen[key] then return end
+            seen[key]=true
+
+            list[#list+1]={
+                name=name,
+                animationId=animationId,
+                source=nil,
+            }
+        end
+
+        local function addValueCandidate(list,seen,key,value)
+            local k=string.lower(tostring(key or ""))
+            if not string.find(k,"emote",1,true)
+                and not string.find(k,"slot",1,true)
+                and not string.find(k,"dance",1,true)
+            then
+                return
+            end
+
+            if type(value)=="string" then
+                local id=normalizeId(value)
+                local name=id and ("Emote "..tostring(#list+1)) or value
+                addCandidate(list,seen,name,id or nil)
+                list[#list].emoteName=(id and nil or value)
+            elseif type(value)=="number" then
+                local id=normalizeId(value)
+                if id then
+                    addCandidate(list,seen,"Emote "..tostring(#list+1),id)
+                end
+            end
+        end
+
+        local function scanAttributes(list,seen,instance)
+            if not instance then return end
+            for key,value in pairs(instance:GetAttributes()) do
+                addValueCandidate(list,seen,key,value)
+            end
+        end
+
+        local function scanAnimations(list,seen,container)
+            if not container then return end
+            for _,obj in ipairs(container:GetDescendants()) do
+                if obj:IsA("Animation") then
+                    local ancestryHasEmotes=false
+                    local p=obj.Parent
+                    while p and p~=game do
+                        local n=string.lower(tostring(p.Name))
+                        if string.find(n,"emote",1,true) then
+                            ancestryHasEmotes=true
+                            break
+                        end
+                        p=p.Parent
+                    end
+
+                    if ancestryHasEmotes then
+                        local id=obj.AnimationId
+                        if normalizeId(id) then
+                            addCandidate(list,seen,obj.Name,id)
+                        elseif string.lower(obj.Name)~="dance1"
+                            and string.lower(obj.Name)~="dance2"
+                        then
+                            addCandidate(list,seen,obj.Name,nil)
+                            list[#list].emoteName=obj.Name
+                        end
+                    end
+                end
+            end
+        end
+
+        local function tryRequireCharacterEmoteModule(list,seen)
+            local character=player.Character
+            if not character then return end
+
+            local characterName=nil
+
+            pcall(function()
+                if clientModules and clientModules.combat
+                    and type(clientModules.combat.detectCharacter)=="function"
+                then
+                    characterName=clientModules.combat.detectCharacter(character)
+                end
+            end)
+
+            characterName=characterName
+                or character:GetAttribute("Character")
+                or character:GetAttribute("CharacterName")
+
+            if type(characterName)~="string" or characterName=="" then
+                return
+            end
+
+            local assets=ReplicatedStorage:FindFirstChild("ClientAssets")
+            local cosmetics=assets and assets:FindFirstChild("Cosmetics")
+            local emotes=cosmetics and cosmetics:FindFirstChild("Emotes")
+            if not emotes then return end
+
+            local normalized=string.lower(tostring(characterName))
+            local branch=nil
+
+            for _,groupName in ipairs({"Survivor","EXE"}) do
+                local group=emotes:FindFirstChild(groupName)
+                if group then
+                    for _,module in ipairs(group:GetChildren()) do
+                        if module:IsA("ModuleScript")
+                            and string.lower(module.Name)==normalized
+                        then
+                            branch=module
+                            break
+                        end
+                    end
+                end
+                if branch then break end
+            end
+
+            if not branch then return end
+
+            local ok,data=pcall(require,branch)
+            if not ok or type(data)~="table" then return end
+
+            local visited={}
+            local function walk(value,keyName,depth)
+                if #list>=4 or depth>5 then return end
+
+                if type(value)=="string" or type(value)=="number" then
+                    local id=normalizeId(value)
+                    local keyText=string.lower(tostring(keyName or ""))
+
+                    if id then
+                        addCandidate(list,seen,keyName or ("Emote "..tostring(#list+1)),id)
+                    elseif string.find(keyText,"emote",1,true)
+                        or string.find(keyText,"dance",1,true)
+                        or string.find(keyText,"name",1,true)
+                    then
+                        addCandidate(list,seen,keyName or value,nil)
+                        list[#list].emoteName=tostring(value)
+                    end
+                    return
+                end
+
+                if typeof(value)=="Instance" then
+                    if value:IsA("Animation") then
+                        local id=normalizeId(value.AnimationId)
+                        if id then
+                            addCandidate(list,seen,value.Name,id)
+                        end
+                    end
+                    return
+                end
+
+                if type(value)~="table" or visited[value] then return end
+                visited[value]=true
+
+                for k,v in pairs(value) do
+                    local key=tostring(k)
+                    local kl=string.lower(key)
+
+                    if (string.find(kl,"equipped",1,true)
+                        or string.find(kl,"slot",1,true))
+                        and type(v)=="table"
+                    then
+                        for sk,sv in pairs(v) do
+                            walk(sv,tostring(sk),depth+1)
+                            if #list>=4 then break end
+                        end
+                    else
+                        walk(v,key,depth+1)
+                    end
+
+                    if #list>=4 then break end
+                end
+            end
+
+            walk(data,characterName,0)
+        end
+
+        local function refreshEmotes()
+            local list={}
+            local seen={}
+
+            scanAttributes(list,seen,player)
+            scanAttributes(list,seen,player.Character)
+
+            local character=player.Character
+            if character then
+                local animate=character:FindFirstChild("Animate")
+                local emoteFolder=animate and animate:FindFirstChild("Emotes")
+                if emoteFolder then
+                    for _,obj in ipairs(emoteFolder:GetDescendants()) do
+                        if obj:IsA("Animation") then
+                            local id=normalizeId(obj.AnimationId)
+                            if id then
+                                addCandidate(list,seen,obj.Name,id)
+                            end
+                        end
+                    end
+                end
+            end
+
+            scanAnimations(list,seen,character)
+            scanAnimations(list,seen,player)
+            tryRequireCharacterEmoteModule(list,seen)
+
+            if #list==0 then
+                local character=player.Character
+                local animate=character and character:FindFirstChild("Animate")
+                local folder=animate and animate:FindFirstChild("Emotes")
+
+                if folder then
+                    for _,obj in ipairs(folder:GetChildren()) do
+                        if obj:IsA("Animation")
+                            and (string.lower(obj.Name)=="dance1"
+                                or string.lower(obj.Name)=="dance2")
+                        then
+                            addCandidate(list,seen,obj.Name,nil)
+                            list[#list].emoteName=obj.Name
+                        end
+                    end
+                end
+            end
+
+            emoteState.slots={}
+            for i=1,math.min(4,#list) do
+                emoteState.slots[i]=list[i]
+            end
+
+            if emoteState.selected>#emoteState.slots then
+                emoteState.selected=math.max(1,#emoteState.slots)
+            end
+        end
+
+        local function stopTracks()
+            for _,track in pairs(emoteState.tracks) do
+                if track and track.IsPlaying then
+                    pcall(function() track:Stop(.1) end)
+                end
+            end
+            emoteState.tracks={}
+        end
+
+        local function playSlot(index)
+            local slot=emoteState.slots[index]
+            local character=player.Character
+            local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+            if not slot or not humanoid then
+                return false
+            end
+
+            stopTracks()
+
+            if slot.animationId then
+                local animator=humanoid:FindFirstChildOfClass("Animator")
+                    or Instance.new("Animator")
+
+                if not animator.Parent then
+                    animator.Parent=humanoid
+                end
+
+                local animation=Instance.new("Animation")
+                animation.Name="PulseCoreEmote_"..tostring(index)
+                animation.AnimationId=slot.animationId
+
+                local ok,track=pcall(function()
+                    return animator:LoadAnimation(animation)
+                end)
+
+                if ok and track then
+                    track.Priority=Enum.AnimationPriority.Action
+                    track.Looped=false
+                    track:Play(.1,1,1)
+                    emoteState.tracks[index]=track
+                    return true
+                end
+            end
+
+            if slot.emoteName then
+                local ok,result=pcall(function()
+                    return humanoid:PlayEmote(slot.emoteName)
+                end)
+                return ok and result~=false
+            end
+
+            return false
+        end
+
+        -- ================================================================
+        -- EMOTES UI
+        -- ================================================================
+        for _,child in ipairs(emotesPage:GetChildren()) do
+            child:Destroy()
+        end
+
+        local padding=Instance.new("UIPadding")
+        padding.PaddingLeft=UDim.new(0,14)
+        padding.PaddingRight=UDim.new(0,14)
+        padding.PaddingTop=UDim.new(0,4)
+        padding.PaddingBottom=UDim.new(0,16)
+        padding.Parent=emotesPage
+
+        local listLayout=Instance.new("UIListLayout")
+        listLayout.Padding=UDim.new(0,7)
+        listLayout.SortOrder=Enum.SortOrder.LayoutOrder
+        listLayout.Parent=emotesPage
+
+        local header=Instance.new("TextLabel")
+        header.LayoutOrder=1
+        header.Size=UDim2.new(1,0,0,34)
+        header.BackgroundTransparency=1
+        header.Text="EQUIPPED EMOTES"
+        header.Font=Enum.Font.GothamBold
+        header.TextSize=12
+        header.TextColor3=Color3.fromRGB(20,145,195)
+        header.TextXAlignment=Enum.TextXAlignment.Left
+        header.Parent=emotesPage
+
+        local status=Instance.new("TextLabel")
+        status.LayoutOrder=2
+        status.Size=UDim2.new(1,0,0,36)
+        status.BackgroundTransparency=1
+        status.Text="Detecting equipped emotes..."
+        status.Font=Enum.Font.GothamMedium
+        status.TextSize=11
+        status.TextColor3=Color3.fromRGB(145,145,145)
+        status.TextWrapped=true
+        status.TextXAlignment=Enum.TextXAlignment.Left
+        status.Parent=emotesPage
+
+        local slotRows={}
+        local function makeSlotRow(index)
+            local row=Instance.new("Frame")
+            row.Name="EmoteSlot"..tostring(index)
+            row.LayoutOrder=10+index
+            row.Size=UDim2.new(1,0,0,54)
+            row.BackgroundColor3=Color3.fromRGB(30,30,30)
+            row.BackgroundTransparency=.16
+            row.BorderSizePixel=0
+            row.Parent=emotesPage
+            corner(row)
+            stroke(row)
+
+            local select=Instance.new("TextButton")
+            select.Name="Select"
+            select.Position=UDim2.fromOffset(8,7)
+            select.Size=UDim2.new(1,-125,0,40)
+            select.BackgroundTransparency=1
+            select.Text=""
+            select.AutoButtonColor=false
+            select.Parent=row
+
+            local slotLabel=Instance.new("TextLabel")
+            slotLabel.Name="Slot"
+            slotLabel.Position=UDim2.fromOffset(5,0)
+            slotLabel.Size=UDim2.fromOffset(24,40)
+            slotLabel.BackgroundTransparency=1
+            slotLabel.Text=tostring(index)
+            slotLabel.Font=Enum.Font.GothamBold
+            slotLabel.TextSize=13
+            slotLabel.TextColor3=Color3.fromRGB(20,145,195)
+            slotLabel.TextXAlignment=Enum.TextXAlignment.Left
+            slotLabel.Parent=select
+
+            local name=Instance.new("TextLabel")
+            name.Name="Name"
+            name.Position=UDim2.fromOffset(29,0)
+            name.Size=UDim2.new(1,-35,40/40,0)
+            name.BackgroundTransparency=1
+            name.Text="Empty"
+            name.Font=Enum.Font.GothamMedium
+            name.TextSize=12
+            name.TextColor3=Color3.fromRGB(235,235,235)
+            name.TextXAlignment=Enum.TextXAlignment.Left
+            name.TextTruncate=Enum.TextTruncate.AtEnd
+            name.Parent=select
+
+            local play=Instance.new("TextButton")
+            play.Name="Play"
+            play.AnchorPoint=Vector2.new(1,.5)
+            play.Position=UDim2.new(1,-8,.5,0)
+            play.Size=UDim2.fromOffset(102,34)
+            play.BackgroundColor3=Color3.fromRGB(20,95,135)
+            play.BorderSizePixel=0
+            play.Text="PLAY"
+            play.Font=Enum.Font.GothamBold
+            play.TextSize=11
+            play.TextColor3=Color3.fromRGB(225,245,255)
+            play.AutoButtonColor=false
+            play.Parent=row
+            corner(play,8)
+
+            select.Activated:Connect(function()
+                emoteState.selected=index
+            end)
+
+            play.Activated:Connect(function()
+                emoteState.selected=index
+                local ok=playSlot(index)
+                if not ok then
+                    status.Text="Could not play this emote."
+                end
+            end)
+
+            slotRows[index]=row
+        end
+
+        for i=1,4 do
+            makeSlotRow(i)
+        end
+
+        local _,autoButton,autoDot=makeToggleRow(emotesPage,"Auto Play",20)
+
+        local autoHint=Instance.new("TextLabel")
+        autoHint.LayoutOrder=21
+        autoHint.Size=UDim2.new(1,0,0,30)
+        autoHint.BackgroundTransparency=1
+        autoHint.Text="Auto Play activates the selected emote while the character is standing still."
+        autoHint.Font=Enum.Font.GothamMedium
+        autoHint.TextSize=10
+        autoHint.TextColor3=Color3.fromRGB(145,145,145)
+        autoHint.TextWrapped=true
+        autoHint.TextXAlignment=Enum.TextXAlignment.Left
+        autoHint.Parent=emotesPage
+
+        local keyHeader=Instance.new("TextLabel")
+        keyHeader.LayoutOrder=30
+        keyHeader.Size=UDim2.new(1,0,0,28)
+        keyHeader.BackgroundTransparency=1
+        keyHeader.Text="EMOTE HOTKEYS"
+        keyHeader.Font=Enum.Font.GothamBold
+        keyHeader.TextSize=12
+        keyHeader.TextColor3=Color3.fromRGB(20,145,195)
+        keyHeader.TextXAlignment=Enum.TextXAlignment.Left
+        keyHeader.Parent=emotesPage
+
+        local bindRows={}
+        for i=1,4 do
+            local row=Instance.new("Frame")
+            row.Name="EmoteKey"..tostring(i)
+            row.LayoutOrder=30+i
+            row.Size=UDim2.new(1,0,0,44)
+            row.BackgroundColor3=Color3.fromRGB(30,30,30)
+            row.BackgroundTransparency=.16
+            row.BorderSizePixel=0
+            row.Parent=emotesPage
+            corner(row)
+            stroke(row)
+
+            local label=Instance.new("TextLabel")
+            label.BackgroundTransparency=1
+            label.Position=UDim2.fromOffset(14,0)
+            label.Size=UDim2.new(1,-110,1,0)
+            label.Text="Emote "..tostring(i)
+            label.Font=Enum.Font.GothamMedium
+            label.TextSize=12
+            label.TextColor3=Color3.fromRGB(235,235,235)
+            label.TextXAlignment=Enum.TextXAlignment.Left
+            label.Parent=row
+
+            local button=Instance.new("TextButton")
+            button.Name="Key"
+            button.AnchorPoint=Vector2.new(1,.5)
+            button.Position=UDim2.new(1,-10,.5,0)
+            button.Size=UDim2.fromOffset(78,30)
+            button.BackgroundColor3=Color3.fromRGB(38,38,38)
+            button.BorderSizePixel=0
+            button.Text=emoteState.keyBinds[i].Name
+            button.Font=Enum.Font.GothamBold
+            button.TextSize=11
+            button.TextColor3=Color3.fromRGB(235,235,235)
+            button.AutoButtonColor=false
+            button.Parent=row
+            corner(button,8)
+
+            button.Activated:Connect(function()
+                emoteState.bindingSlot=i
+                button.Text="PRESS KEY"
+            end)
+
+            bindRows[i]=button
+        end
+
+        local _,dummy1,dummy2=makeToggleRow(emotesPage,"",99)
+        local dummy=emotesPage:FindFirstChild("PulseCore_",true)
+        if dummy then
+            dummy:Destroy()
+        end
+
+        autoButton.Activated:Connect(function()
+            emoteState.autoPlay=not emoteState.autoPlay
+            setToggle(autoButton,autoDot,emoteState.autoPlay)
+        end)
+        setToggle(autoButton,autoDot,false)
+
+        local function refreshUI()
+            for i=1,4 do
+                local row=slotRows[i]
+                local slot=emoteState.slots[i]
+                if row then
+                    local nameLabel=row:FindFirstChild("Name",true)
+                    local select=row:FindFirstChild("Select")
+                    local play=row:FindFirstChild("Play")
+
+                    if nameLabel then
+                        nameLabel.Text=slot and slot.name or "Empty"
+                    end
+
+                    if select then
+                        select.BackgroundTransparency=1
+                    end
+
+                    if row then
+                        row.BackgroundColor3=(i==emoteState.selected)
+                            and Color3.fromRGB(34,52,62)
+                            or Color3.fromRGB(30,30,30)
+                    end
+
+                    if play then
+                        play.Active=slot~=nil
+                        play.Text=slot and "PLAY" or "EMPTY"
+                        play.BackgroundColor3=slot
+                            and Color3.fromRGB(20,95,135)
+                            or Color3.fromRGB(45,45,45)
+                    end
+                end
+
+                if bindRows[i] then
+                    bindRows[i].Text=emoteState.bindingSlot==i
+                        and "PRESS KEY"
+                        or emoteState.keyBinds[i].Name
+                end
+            end
+
+            status.Text=(#emoteState.slots>0)
+                and ("Detected "..tostring(#emoteState.slots).." equipped emote(s).")
+                or "No equipped emotes were exposed to the client yet."
+
+            emotesPage.CanvasSize=UDim2.fromOffset(
+                0,
+                math.max(0,listLayout.AbsoluteContentSize.Y+24)
+            )
+        end
+
+        refreshEmotes()
+        refreshUI()
+
+        UserInputService.InputBegan:Connect(function(input,gameProcessed)
+            if gameProcessed or UserInputService:GetFocusedTextBox() then
+                return
+            end
+
+            if emoteState.bindingSlot then
+                if input.UserInputType==Enum.UserInputType.Keyboard
+                    and input.KeyCode~=Enum.KeyCode.Unknown
+                then
+                    local slot=emoteState.bindingSlot
+                    emoteState.keyBinds[slot]=input.KeyCode
+                    emoteState.bindingSlot=nil
+                    refreshUI()
+                end
+                return
+            end
+
+            for i=1,4 do
+                if input.KeyCode==emoteState.keyBinds[i] then
+                    emoteState.selected=i
+                    playSlot(i)
+                    refreshUI()
+                    break
+                end
+            end
+        end)
+
+        local lastState=0
+        RunService.Heartbeat:Connect(function()
+            local now=os.clock()
+
+            if now-lastState>.35 then
+                lastState=now
+                if now-emoteState.lastRefresh>2 then
+                    emoteState.lastRefresh=now
+                    local before=#emoteState.slots
+                    refreshEmotes()
+                    if #emoteState.slots~=before then
+                        refreshUI()
+                    end
+                end
+            end
+
+            if emoteState.autoPlay
+                and now-emoteState.lastAuto>.75
+                and #emoteState.slots>0
+            then
+                local character=player.Character
+                local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+                local root=character and character:FindFirstChild("HumanoidRootPart")
+
+                if humanoid and root
+                    and humanoid.Health>0
+                    and humanoid.MoveDirection.Magnitude<0.05
+                    and humanoid:GetState()~=Enum.HumanoidStateType.Jumping
+                    and humanoid:GetState()~=Enum.HumanoidStateType.Freefall
+                    and humanoid:GetState()~=Enum.HumanoidStateType.FallingDown
+                    and humanoid:GetState()~=Enum.HumanoidStateType.Dead
+                then
+                    local active=false
+                    for _,track in pairs(emoteState.tracks) do
+                        if track and track.IsPlaying then
+                            active=true
+                            break
+                        end
+                    end
+
+                    if not active then
+                        emoteState.lastAuto=now
+                        playSlot(emoteState.selected)
+                    end
+                end
+            end
+        end)
+
+        player.CharacterAdded:Connect(function()
+            stopTracks()
+            task.delay(.5,function()
+                refreshEmotes()
+                refreshUI()
+            end)
+        end)
+
+        -- ================================================================
+        -- LOCAL / PROMPTS
+        -- ================================================================
+        local promptState={
+            instant=false,
+            reach=1,
+            autoInteract=false,
+            original=setmetatable({}, {__mode="k"}),
+            lastFire=0,
+        }
+
+        local function getPromptOriginal(prompt)
+            local data=promptState.original[prompt]
+            if data then
+                return data
+            end
+
+            data={
+                HoldDuration=prompt.HoldDuration,
+                MaxActivationDistance=prompt.MaxActivationDistance,
+            }
+            promptState.original[prompt]=data
+            return data
+        end
+
+        local function applyPrompt(prompt)
+            if not prompt or not prompt.Parent or not prompt:IsA("ProximityPrompt") then
+                return
+            end
+
+            local original=getPromptOriginal(prompt)
+            if promptState.instant then
+                pcall(function() prompt.HoldDuration=0 end)
+            else
+                pcall(function() prompt.HoldDuration=original.HoldDuration end)
+            end
+
+            pcall(function()
+                prompt.MaxActivationDistance=original.MaxActivationDistance*promptState.reach
+            end)
+        end
+
+        local function applyAllPrompts()
+            for _,obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") then
+                    applyPrompt(obj)
+                end
+            end
+        end
+
+        local function firePrompt(prompt)
+            if not prompt or not prompt.Parent or not prompt.Enabled then
+                return false
+            end
+
+            local fired=false
+
+            pcall(function()
+                if type(fireproximityprompt)=="function" then
+                    fireproximityprompt(prompt)
+                    fired=true
+                end
+            end)
+
+            if fired then
+                return true
+            end
+
+            local hold=0
+            pcall(function() hold=prompt.HoldDuration end)
+
+            local ok=pcall(function()
+                prompt:InputHoldBegin()
+                if hold>0 then
+                    task.wait(hold)
+                end
+                prompt:InputHoldEnd()
+            end)
+
+            return ok
+        end
+
+        local _,instantButton,instantDot=makeToggleRow(localPage,"Instant Prompts",60)
+
+        local reachRow=Instance.new("Frame")
+        reachRow.Name="PulseCore_PromptReachMultiplier"
+        reachRow.LayoutOrder=61
+        reachRow.Size=UDim2.new(1,0,0,50)
+        reachRow.BackgroundColor3=Color3.fromRGB(30,30,30)
+        reachRow.BackgroundTransparency=.16
+        reachRow.BorderSizePixel=0
+        reachRow.Parent=localPage
+        corner(reachRow)
+        stroke(reachRow)
+
+        local reachLabel=Instance.new("TextLabel")
+        reachLabel.BackgroundTransparency=1
+        reachLabel.Position=UDim2.fromOffset(14,0)
+        reachLabel.Size=UDim2.new(1,-100,1,0)
+        reachLabel.Text="Prompt Reach Multiplier"
+        reachLabel.Font=Enum.Font.GothamMedium
+        reachLabel.TextSize=13
+        reachLabel.TextColor3=Color3.fromRGB(235,235,235)
+        reachLabel.TextXAlignment=Enum.TextXAlignment.Left
+        reachLabel.Parent=reachRow
+
+        local reachBox=Instance.new("TextBox")
+        reachBox.Name="Value"
+        reachBox.AnchorPoint=Vector2.new(1,.5)
+        reachBox.Position=UDim2.new(1,-10,.5,0)
+        reachBox.Size=UDim2.fromOffset(74,30)
+        reachBox.BackgroundColor3=Color3.fromRGB(38,38,38)
+        reachBox.BorderSizePixel=0
+        reachBox.Text="1.00"
+        reachBox.ClearTextOnFocus=false
+        reachBox.Font=Enum.Font.GothamBold
+        reachBox.TextSize=11
+        reachBox.TextColor3=Color3.fromRGB(235,235,235)
+        reachBox.TextXAlignment=Enum.TextXAlignment.Center
+        reachBox.Parent=reachRow
+        corner(reachBox,8)
+
+        local autoInfo=Instance.new("TextLabel")
+        autoInfo.Name="PulseCoreAutoInteractInfo"
+        autoInfo.LayoutOrder=62
+        autoInfo.Size=UDim2.new(1,0,0,42)
+        autoInfo.BackgroundTransparency=1
+        autoInfo.Text="Auto Interact: hold R to automatically activate the nearest prompt; release R to stop."
+        autoInfo.Font=Enum.Font.GothamMedium
+        autoInfo.TextSize=10
+        autoInfo.TextColor3=Color3.fromRGB(145,145,145)
+        autoInfo.TextWrapped=true
+        autoInfo.TextXAlignment=Enum.TextXAlignment.Left
+        autoInfo.Parent=localPage
+
+        instantButton.Activated:Connect(function()
+            promptState.instant=not promptState.instant
+            applyAllPrompts()
+            setToggle(instantButton,instantDot,promptState.instant)
+        end)
+        setToggle(instantButton,instantDot,false)
+
+        local function setReachText()
+            reachBox.Text=string.format("%.2f",promptState.reach)
+        end
+
+        local function updateReachFromText()
+            local value=tonumber(reachBox.Text)
+            if not value then
+                setReachText()
+                return
+            end
+
+            promptState.reach=math.clamp(value,0.1,100)
+            setReachText()
+            applyAllPrompts()
+        end
+
+        reachBox.FocusLost:Connect(updateReachFromText)
+
+        UserInputService.InputBegan:Connect(function(input,gameProcessed)
+            if gameProcessed or UserInputService:GetFocusedTextBox() then
+                return
+            end
+            if input.KeyCode==Enum.KeyCode.R then
+                promptState.autoInteract=true
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.KeyCode==Enum.KeyCode.R then
+                promptState.autoInteract=false
+            end
+        end)
+
+        RunService.Heartbeat:Connect(function()
+            if not promptState.autoInteract then
+                return
+            end
+
+            local now=os.clock()
+            if now-promptState.lastFire<0.12 then
+                return
+            end
+
+            local character=player.Character
+            local root=character and character:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+
+            local nearest=nil
+            local nearestDistance=math.huge
+
+            for _,prompt in ipairs(workspace:GetDescendants()) do
+                if prompt:IsA("ProximityPrompt") and prompt.Enabled and prompt.Parent then
+                    applyPrompt(prompt)
+
+                    local parent=prompt.Parent
+                    local position
+
+                    if parent:IsA("Attachment") then
+                        position=parent.WorldPosition
+                    elseif parent:IsA("BasePart") then
+                        position=parent.Position
+                    elseif parent:IsA("Model") and parent.PrimaryPart then
+                        position=parent.PrimaryPart.Position
+                    end
+
+                    if position then
+                        local distance=(root.Position-position).Magnitude
+                        local maxDistance=(prompt.MaxActivationDistance or 10)
+
+                        if distance<=maxDistance and distance<nearestDistance then
+                            nearest=prompt
+                            nearestDistance=distance
+                        end
+                    end
+                end
+            end
+
+            if nearest then
+                promptState.lastFire=now
+                task.spawn(firePrompt,nearest)
+            end
+        end)
+
+        workspace.DescendantAdded:Connect(function(obj)
+            if obj:IsA("ProximityPrompt") then
+                task.defer(function()
+                    applyPrompt(obj)
+                end)
+            end
+        end)
+
+        applyAllPrompts()
+        pcall(function() layoutEmotesTab() end)
+        refreshUI()
+    end)
 end)
 
 return _result
