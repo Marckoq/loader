@@ -1372,7 +1372,7 @@ task.spawn(function()
 
         if emoteState.autoPlay
             and now-emoteState.lastAuto>3
-            and #emoteState.slots>0
+            and next(emoteState.slots)~=nil
         then
             local character=player.Character
             local humanoid=character and character:FindFirstChildOfClass("Humanoid")
