@@ -916,7 +916,7 @@ task.defer(function()
     local stats=Instance.new("Frame")
     stats.Name="PulseCoreExecutionStats"
     stats.LayoutOrder=5
-    stats.Size=UDim2.new(1,0,0,92)
+    stats.Size=UDim2.new(1,0,0,58)
     stats.BackgroundColor3=Color3.fromRGB(30,30,30)
     stats.BackgroundTransparency=.16
     stats.BorderSizePixel=0
@@ -937,26 +937,7 @@ task.defer(function()
     txt.Parent=stats
 
     local localCount=tonumber(_G.PulseCoreTotalExecutionsLocal) or 0
-    txt.Text=string.format("Total Executions (local): %d\nTotal Executions (Global): unavailable",localCount)
-
-    -- Optional CounterAPI V2 support. A valid authenticated endpoint/token
-    -- can be supplied before execution through _G.PulseCoreGlobalCounterUrl
-    -- and _G.PulseCoreGlobalCounterToken.
-    local url=_G.PulseCoreGlobalCounterUrl
-    local token=_G.PulseCoreGlobalCounterToken
-    if type(url)=="string" and url~="" and type(request)=="function" then
-        task.spawn(function()
-            local headers={}
-            if type(token)=="string" and token~="" then headers.Authorization="Bearer "..token end
-            local ok,res=pcall(request,{Url=url,Method="GET",Headers=headers})
-            if ok and type(res)=="table" and type(res.Body)=="string" then
-                local n=res.Body:match('"up_count"%s*:%s*(%d+)') or res.Body:match('"value"%s*:%s*(%d+)')
-                if n and txt.Parent then
-                    txt.Text=string.format("Total Executions (local): %d\nTotal Executions (Global): %s",localCount,n)
-                end
-            end
-        end)
-    end
+    txt.Text=string.format("Total Executions (local): %d",localCount)
 end)
 
 return _result
