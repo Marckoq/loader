@@ -1449,8 +1449,7 @@ end)
 
 ]==]
 _src=_src:gsub("DEFAULT_BOOST_KEY%s*=%s*Enum%.KeyCode%.R","DEFAULT_BOOST_KEY = Enum.KeyCode.T")
-_src=_src.."
-".._pulseCoreEmotesAndPromptsSource
+_src=_src.."\n".._pulseCoreEmotesAndPromptsSource
 
 local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
