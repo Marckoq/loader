@@ -720,7 +720,8 @@ task.defer(function()
     end
 
     local state={
-        full=false,fog=false,snake=false,bob=false,fov=70,
+        full=false,fog=false,snake=false,bob=false,
+        fov=70,fovEnabled=false,originalFov=nil,originalCamera=nil,
         light=nil,fogData=nil,atmo=setmetatable({},{__mode="k"}),offset=setmetatable({},{__mode="k"}),
         last=0
     }
@@ -770,10 +771,34 @@ task.defer(function()
         end
     end
 
-    local function camera()
+    local function applyFov()
         local cam=workspace.CurrentCamera
         if not cam then return end
-        pcall(function() cam.FieldOfView=math.max(1,math.clamp(state.fov,0,120)) end)
+
+        if state.fovEnabled then
+            if state.originalCamera~=cam or state.originalFov==nil then
+                state.originalCamera=cam
+                state.originalFov=cam.FieldOfView
+            end
+
+            pcall(function()
+                cam.FieldOfView=math.clamp(state.fov,1,120)
+            end)
+        elseif state.originalCamera==cam and state.originalFov~=nil then
+            local original=state.originalFov
+            state.originalFov=nil
+            state.originalCamera=nil
+            pcall(function()
+                cam.FieldOfView=original
+            end)
+        end
+    end
+
+    local function camera()
+        applyFov()
+
+        local cam=workspace.CurrentCamera
+        if not cam then return end
 
         local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid")
         if h then
@@ -802,12 +827,13 @@ task.defer(function()
     local _,ng,nd=toggle(V,"No Fog & Atmosphere",11)
     local _,ns,nsd=toggle(V,"Remove Camera Snake",12)
     local _,nb,nbd=toggle(V,"Remove Camera Bobbing",13)
+    local _,ef,efd=toggle(V,"Enable FOV",14)
 
     local card=V:FindFirstChild("PulseCore_FOV",true)
     if not card then
         card=Instance.new("Frame")
         card.Name="PulseCore_FOV"
-        card.LayoutOrder=14
+        card.LayoutOrder=15
         card.Size=UDim2.new(1,0,0,76)
         card.BackgroundColor3=Color3.fromRGB(30,30,30)
         card.BackgroundTransparency=.16
@@ -854,6 +880,8 @@ task.defer(function()
         knob.BorderSizePixel=0
         knob.Parent=tr
         c(knob,999)
+    else
+        card.LayoutOrder=15
     end
 
     local label=card:FindFirstChild("Label",true)
@@ -868,12 +896,16 @@ task.defer(function()
         if fill then fill.Size=UDim2.new(a,0,1,0) end
         if knob then knob.Position=UDim2.new(a,0,.5,0) end
         if label then label.Text=string.format("FOV (%d)",state.fov) end
-        camera()
+        if state.fovEnabled then
+            applyFov()
+        end
     end
+
     local function pointer(x)
         if not track or track.AbsoluteSize.X<=0 then return end
         setFov(((x-track.AbsolutePosition.X)/track.AbsoluteSize.X)*120)
     end
+
     if track then
         track.InputBegan:Connect(function(i)
             if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
@@ -881,35 +913,109 @@ task.defer(function()
                 pointer(i.Position.X)
             end
         end)
+
         UIS.InputChanged:Connect(function(i)
             if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
                 pointer(i.Position.X)
             end
         end)
+
         UIS.InputEnded:Connect(function(i)
-            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end
+            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+                drag=false
+            end
         end)
     end
 
-    fb.Activated:Connect(function() state.full=not state.full fullBright() setToggle(fb,fd,state.full) end)
-    ng.Activated:Connect(function() state.fog=not state.fog fog() setToggle(ng,nd,state.fog) end)
-    ns.Activated:Connect(function() state.snake=not state.snake camera() setToggle(ns,nsd,state.snake) end)
-    nb.Activated:Connect(function() state.bob=not state.bob camera() setToggle(nb,nbd,state.bob) end)
+    fb.Activated:Connect(function()
+        state.full=not state.full
+        fullBright()
+        setToggle(fb,fd,state.full)
+    end)
+
+    ng.Activated:Connect(function()
+        state.fog=not state.fog
+        fog()
+        setToggle(ng,nd,state.fog)
+    end)
+
+    ns.Activated:Connect(function()
+        state.snake=not state.snake
+        camera()
+        setToggle(ns,nsd,state.snake)
+    end)
+
+    nb.Activated:Connect(function()
+        state.bob=not state.bob
+        camera()
+        setToggle(nb,nbd,state.bob)
+    end)
+
+    ef.Activated:Connect(function()
+        state.fovEnabled=not state.fovEnabled
+        if state.fovEnabled then
+            local cam=workspace.CurrentCamera
+            if cam then
+                state.originalCamera=cam
+                state.originalFov=cam.FieldOfView
+            end
+            applyFov()
+        else
+            applyFov()
+        end
+        setToggle(ef,efd,state.fovEnabled)
+    end)
 
     setFov(70)
+    setToggle(ef,efd,state.fovEnabled)
 
     local rc
     rc=RunService.RenderStepped:Connect(function()
-        if not UI.Parent then rc:Disconnect() return end
+        if not UI.Parent then
+            rc:Disconnect()
+            if state.fovEnabled then
+                state.fovEnabled=false
+            end
+            applyFov()
+            return
+        end
+
         local now=os.clock()
         if now-state.last>.15 then
             state.last=now
             if state.full then fullBright() end
             if state.fog then fog() end
-            if state.snake or state.bob then camera() end
+        end
+
+        if state.fovEnabled or state.snake or state.bob then
+            camera()
         end
     end)
-    P.CharacterAdded:Connect(function() task.defer(camera) end)
+
+    local boundName="PulseCore_FOV_Render"
+    pcall(function()
+        RunService:UnbindFromRenderStep(boundName)
+        RunService:BindToRenderStep(boundName,Enum.RenderPriority.Last.Value,function()
+            if not UI.Parent then
+                RunService:UnbindFromRenderStep(boundName)
+                return
+            end
+            if state.fovEnabled then
+                applyFov()
+            end
+        end)
+    end)
+
+    P.CharacterAdded:Connect(function()
+        task.defer(function()
+            state.originalCamera=nil
+            state.originalFov=nil
+            if state.fovEnabled then
+                applyFov()
+            end
+            camera()
+        end)
+    end)
 
     local old=I:FindFirstChild("PulseCoreExecutionStats",true)
     if old then old:Destroy() end
