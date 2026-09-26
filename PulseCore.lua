@@ -1297,6 +1297,9 @@ task.defer(function()
             end
         end
         setEmoteTabText()
+        emotesTab.Visible=true
+        emotesTab.Active=true
+        emotesTab.Selectable=true
 
         clientModules=clientModules or {}
         clientModules.tabs=clientModules.tabs or {}
