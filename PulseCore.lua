@@ -262,7 +262,7 @@ do
 end
 
 local _pulseCoreEmotesAndPromptsSource=[==[
--- PULSECORE_EMOTES_AND_PROMPTS_PATCH_V2
+-- PULSECORE_EMOTES_AND_PROMPTS_PATCH_V3
 task.spawn(function()
     local Players=game:GetService("Players")
     local UserInputService=game:GetService("UserInputService")
@@ -301,31 +301,19 @@ task.spawn(function()
         return
     end
 
-    local scroller=sidebar:FindFirstChild("PulseCoreTabScroller")
-    if not scroller then
-        scroller=Instance.new("ScrollingFrame")
-        scroller.Name="PulseCoreTabScroller"
-        scroller.Position=UDim2.fromOffset(0,0)
-        scroller.Size=UDim2.new(1,0,1,0)
-        scroller.BackgroundColor3=Color3.fromRGB(14,14,14)
-        scroller.BackgroundTransparency=.13
-        scroller.BorderSizePixel=0
-        scroller.CanvasSize=UDim2.fromOffset(0,560)
-        scroller.ScrollingDirection=Enum.ScrollingDirection.Y
-        scroller.ScrollingEnabled=true
-        scroller.Active=true
-        scroller.ScrollBarThickness=5
-        scroller.ZIndex=2
-        scroller.Parent=sidebar
+    local scroller
+    local scrollerDeadline=os.clock()+20
 
-        for _,name in ipairs({
-            "InfoTab","LocalTab","VisualsTab","CustomTab","CombatTab",
-            "FunTab","PerformanceTab","AutoSelectTab","KeyListTab","SettingsTab",
-            "AnimatedTabBackground","AnimatedTabBar"
-        }) do
-            local obj=sidebar:FindFirstChild(name)
-            if obj then obj.Parent=scroller end
+    repeat
+        scroller=sidebar:FindFirstChild("PulseCoreTabScroller")
+        if not scroller then
+            task.wait(.1)
         end
+    until scroller or os.clock()>scrollerDeadline
+
+    if not scroller then
+        warn("[PulseCore] Tab scroller was not ready for the Emotes patch.")
+        return
     end
 
     local function addCorner(obj,r)
