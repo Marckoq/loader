@@ -207,8 +207,8 @@ for _i=_total,1,-1 do
     _out[#_out+1]=_u(_d[_i],_cn,_off)
 end
 local _src=table.concat(_out)
-_src=string.gsub(_src,'SCRIPT_VERSION = "2%.5%.9"','SCRIPT_VERSION = "2.6.0"',1)
-_src=string.gsub(_src,'-- PulseCore Version: 2%.5%.9','-- PulseCore Version: 2.6.0',1)
+_src=string.gsub(_src,'SCRIPT_VERSION = "2%.5%.9"','SCRIPT_VERSION = "2.6.1"',1)
+_src=string.gsub(_src,'-- PulseCore Version: 2%.5%.9','-- PulseCore Version: 2.6.1',1)
 
 _src=string.gsub(_src,[[
     clientModules.combat.scanConnection = RunService.Heartbeat:Connect(function(deltaTime)
@@ -236,6 +236,30 @@ _src=string.gsub(_src,[[
         clientModules.combat.scanEnemyHooks()
     end)
 ]],1)
+
+
+-- PULSECORE_EXECUTION_COUNTER_BOOTSTRAP_V1
+do
+    local path = "PulseCore\\total_executions.txt"
+    local count = 0
+    pcall(function()
+        if type(readfile) == "function" and (type(isfile) ~= "function" or isfile(path)) then
+            count = tonumber(readfile(path)) or 0
+        end
+    end)
+    count = count + 1
+    pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" and not isfolder("PulseCore") then
+            makefolder("PulseCore")
+        end
+    end)
+    pcall(function()
+        if type(writefile) == "function" then
+            writefile(path, tostring(count))
+        end
+    end)
+    _G.PulseCoreTotalExecutionsLocal = count
+end
 
 local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
@@ -600,6 +624,339 @@ task.defer(function()
 
         refresh()
     end)
+end)
+
+
+-- PULSECORE_EXECUTION_VISUAL_PATCH_V1
+task.defer(function()
+    local P=game:GetService("Players").LocalPlayer
+    local G=P and P:FindFirstChildOfClass("PlayerGui")
+    local UI=G and G:FindFirstChild("AssemblySpeedBoostUI")
+    if not (P and UI) then return end
+
+    local V=UI:FindFirstChild("VisualsPage",true)
+    local I=UI:FindFirstChild("InfoPage",true)
+    local L=UI:FindFirstChild("LocalPage",true)
+    if not V or not I then return end
+
+    local Lighting=game:GetService("Lighting")
+    local RunService=game:GetService("RunService")
+    local UIS=game:GetService("UserInputService")
+    local TweenService=game:GetService("TweenService")
+
+    local function c(o,r)
+        local x=Instance.new("UICorner")
+        x.CornerRadius=UDim.new(0,r or 9)
+        x.Parent=o
+    end
+    local function s(o)
+        local x=Instance.new("UIStroke")
+        x.Color=Color3.fromRGB(75,75,75)
+        x.Transparency=.25
+        x.Thickness=1
+        x.Parent=o
+    end
+    local function toggle(parent,name,order)
+        local old=parent:FindFirstChild("PulseCore_"..name,true)
+        if old then return old,old:FindFirstChild("Toggle",true),old:FindFirstChild("Dot",true) end
+        local row=Instance.new("Frame")
+        row.Name="PulseCore_"..name
+        row.LayoutOrder=order
+        row.Size=UDim2.new(1,0,0,50)
+        row.BackgroundColor3=Color3.fromRGB(30,30,30)
+        row.BackgroundTransparency=.16
+        row.BorderSizePixel=0
+        row.Parent=parent
+        c(row) s(row)
+
+        local label=Instance.new("TextLabel")
+        label.BackgroundTransparency=1
+        label.Position=UDim2.fromOffset(14,0)
+        label.Size=UDim2.new(1,-100,1,0)
+        label.Text=name
+        label.Font=Enum.Font.GothamMedium
+        label.TextSize=13
+        label.TextColor3=Color3.fromRGB(235,235,235)
+        label.TextXAlignment=Enum.TextXAlignment.Left
+        label.Parent=row
+
+        local b=Instance.new("TextButton")
+        b.Name="Toggle"
+        b.AnchorPoint=Vector2.new(1,.5)
+        b.Position=UDim2.new(1,-11,.5,0)
+        b.Size=UDim2.fromOffset(58,30)
+        b.BackgroundColor3=Color3.fromRGB(38,38,38)
+        b.BorderSizePixel=0
+        b.Text=""
+        b.AutoButtonColor=false
+        b.Parent=row
+        c(b,999)
+
+        local d=Instance.new("Frame")
+        d.Name="Dot"
+        d.AnchorPoint=Vector2.new(0,.5)
+        d.Position=UDim2.new(0,5,.5,0)
+        d.Size=UDim2.fromOffset(22,22)
+        d.BackgroundColor3=Color3.fromRGB(135,135,135)
+        d.BorderSizePixel=0
+        d.Parent=b
+        c(d,999)
+        return row,b,d
+    end
+    local function setToggle(b,d,on)
+        b.BackgroundColor3=on and Color3.fromRGB(20,95,135) or Color3.fromRGB(38,38,38)
+        d.BackgroundColor3=on and Color3.fromRGB(225,245,255) or Color3.fromRGB(135,135,135)
+        TweenService:Create(d,TweenInfo.new(.14),{Position=on and UDim2.new(1,-27,.5,0) or UDim2.new(0,5,.5,0)}):Play()
+    end
+
+    if L then
+        for _,o in ipairs(L:GetDescendants()) do
+            if (o:IsA("TextLabel") or o:IsA("TextButton"))
+                and (o.Text=="Sharp Movement / Anti-Slide" or o.Text=="Movement / Anti Slide")
+            then
+                o.Text="No Acceleration"
+            end
+        end
+    end
+
+    local state={
+        full=false,fog=false,snake=false,bob=false,fov=70,
+        light=nil,fogData=nil,atmo=setmetatable({},{__mode="k"}),offset=setmetatable({},{__mode="k"}),
+        last=0
+    }
+
+    local function fullBright()
+        if state.full then
+            if not state.light then
+                state.light={
+                    Brightness=Lighting.Brightness,Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient,
+                    ColorShift_Bottom=Lighting.ColorShift_Bottom,ColorShift_Top=Lighting.ColorShift_Top,
+                    GlobalShadows=Lighting.GlobalShadows,ClockTime=Lighting.ClockTime,ExposureCompensation=Lighting.ExposureCompensation
+                }
+            end
+            pcall(function() Lighting.Brightness=2 end)
+            pcall(function() Lighting.Ambient=Color3.new(1,1,1) end)
+            pcall(function() Lighting.OutdoorAmbient=Color3.new(1,1,1) end)
+            pcall(function() Lighting.ColorShift_Bottom=Color3.new(0,0,0) end)
+            pcall(function() Lighting.ColorShift_Top=Color3.new(0,0,0) end)
+            pcall(function() Lighting.GlobalShadows=false end)
+            pcall(function() Lighting.ClockTime=14 end)
+            pcall(function() Lighting.ExposureCompensation=0 end)
+        elseif state.light then
+            for k,v in pairs(state.light) do pcall(function() Lighting[k]=v end) end
+            state.light=nil
+        end
+    end
+
+    local function fog()
+        if state.fog then
+            state.fogData=state.fogData or {FogStart=Lighting.FogStart,FogEnd=Lighting.FogEnd}
+            pcall(function() Lighting.FogStart=0 end)
+            pcall(function() Lighting.FogEnd=1000000 end)
+            for _,o in ipairs(Lighting:GetChildren()) do
+                if o:IsA("Atmosphere") then
+                    if state.atmo[o]==nil then state.atmo[o]=o.Enabled end
+                    pcall(function() o.Enabled=false end)
+                end
+            end
+        elseif state.fogData then
+            pcall(function() Lighting.FogStart=state.fogData.FogStart end)
+            pcall(function() Lighting.FogEnd=state.fogData.FogEnd end)
+            state.fogData=nil
+            for o,v in pairs(state.atmo) do
+                if o and o.Parent then pcall(function() o.Enabled=v end) end
+                state.atmo[o]=nil
+            end
+        end
+    end
+
+    local function camera()
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+        pcall(function() cam.FieldOfView=math.max(1,math.clamp(state.fov,0,120)) end)
+
+        local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid")
+        if h then
+            if state.bob then
+                if state.offset[h]==nil then state.offset[h]=h.CameraOffset end
+                pcall(function() h.CameraOffset=Vector3.zero end)
+            elseif state.offset[h]~=nil then
+                local old=state.offset[h]
+                pcall(function() h.CameraOffset=old end)
+                state.offset[h]=nil
+            end
+        end
+
+        if state.snake then
+            local cf=cam.CFrame
+            local look=cf.LookVector
+            if look.Magnitude>.001 then
+                local up=Vector3.yAxis
+                if math.abs(look:Dot(up))>.985 then up=cf.UpVector end
+                pcall(function() cam.CFrame=CFrame.lookAt(cf.Position,cf.Position+look,up) end)
+            end
+        end
+    end
+
+    local _,fb,fd=toggle(V,"Full Bright",10)
+    local _,ng,nd=toggle(V,"No Fog & Atmosphere",11)
+    local _,ns,nsd=toggle(V,"Remove Camera Snake",12)
+    local _,nb,nbd=toggle(V,"Remove Camera Bobbing",13)
+
+    local card=V:FindFirstChild("PulseCore_FOV",true)
+    if not card then
+        card=Instance.new("Frame")
+        card.Name="PulseCore_FOV"
+        card.LayoutOrder=14
+        card.Size=UDim2.new(1,0,0,76)
+        card.BackgroundColor3=Color3.fromRGB(30,30,30)
+        card.BackgroundTransparency=.16
+        card.BorderSizePixel=0
+        card.Parent=V
+        c(card) s(card)
+
+        local t=Instance.new("TextLabel")
+        t.Name="Label"
+        t.BackgroundTransparency=1
+        t.Position=UDim2.fromOffset(14,7)
+        t.Size=UDim2.new(1,-28,0,25)
+        t.Text="FOV (70)"
+        t.Font=Enum.Font.GothamMedium
+        t.TextSize=13
+        t.TextColor3=Color3.fromRGB(235,235,235)
+        t.TextXAlignment=Enum.TextXAlignment.Left
+        t.Parent=card
+
+        local tr=Instance.new("Frame")
+        tr.Name="Track"
+        tr.Position=UDim2.new(0,14,1,-24)
+        tr.Size=UDim2.new(1,-28,0,10)
+        tr.BackgroundColor3=Color3.fromRGB(50,50,50)
+        tr.BorderSizePixel=0
+        tr.Active=true
+        tr.Parent=card
+        c(tr,999)
+
+        local fill=Instance.new("Frame")
+        fill.Name="Fill"
+        fill.Size=UDim2.new(70/120,0,1,0)
+        fill.BackgroundColor3=Color3.fromRGB(20,145,195)
+        fill.BorderSizePixel=0
+        fill.Parent=tr
+        c(fill,999)
+
+        local knob=Instance.new("Frame")
+        knob.Name="Knob"
+        knob.AnchorPoint=Vector2.new(.5,.5)
+        knob.Position=UDim2.new(70/120,0,.5,0)
+        knob.Size=UDim2.fromOffset(20,20)
+        knob.BackgroundColor3=Color3.fromRGB(235,245,250)
+        knob.BorderSizePixel=0
+        knob.Parent=tr
+        c(knob,999)
+    end
+
+    local label=card:FindFirstChild("Label",true)
+    local track=card:FindFirstChild("Track",true)
+    local fill=track and track:FindFirstChild("Fill")
+    local knob=track and track:FindFirstChild("Knob")
+    local drag=false
+
+    local function setFov(v)
+        state.fov=math.clamp(math.floor((tonumber(v) or 70)+.5),0,120)
+        local a=state.fov/120
+        if fill then fill.Size=UDim2.new(a,0,1,0) end
+        if knob then knob.Position=UDim2.new(a,0,.5,0) end
+        if label then label.Text=string.format("FOV (%d)",state.fov) end
+        camera()
+    end
+    local function pointer(x)
+        if not track or track.AbsoluteSize.X<=0 then return end
+        setFov(((x-track.AbsolutePosition.X)/track.AbsoluteSize.X)*120)
+    end
+    if track then
+        track.InputBegan:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+                drag=true
+                pointer(i.Position.X)
+            end
+        end)
+        UIS.InputChanged:Connect(function(i)
+            if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+                pointer(i.Position.X)
+            end
+        end)
+        UIS.InputEnded:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end
+        end)
+    end
+
+    fb.Activated:Connect(function() state.full=not state.full fullBright() setToggle(fb,fd,state.full) end)
+    ng.Activated:Connect(function() state.fog=not state.fog fog() setToggle(ng,nd,state.fog) end)
+    ns.Activated:Connect(function() state.snake=not state.snake camera() setToggle(ns,nsd,state.snake) end)
+    nb.Activated:Connect(function() state.bob=not state.bob camera() setToggle(nb,nbd,state.bob) end)
+
+    setFov(70)
+
+    local rc
+    rc=RunService.RenderStepped:Connect(function()
+        if not UI.Parent then rc:Disconnect() return end
+        local now=os.clock()
+        if now-state.last>.15 then
+            state.last=now
+            if state.full then fullBright() end
+            if state.fog then fog() end
+            if state.snake or state.bob then camera() end
+        end
+    end)
+    P.CharacterAdded:Connect(function() task.defer(camera) end)
+
+    local old=I:FindFirstChild("PulseCoreExecutionStats",true)
+    if old then old:Destroy() end
+    local stats=Instance.new("Frame")
+    stats.Name="PulseCoreExecutionStats"
+    stats.LayoutOrder=5
+    stats.Size=UDim2.new(1,0,0,92)
+    stats.BackgroundColor3=Color3.fromRGB(30,30,30)
+    stats.BackgroundTransparency=.16
+    stats.BorderSizePixel=0
+    stats.Parent=I
+    c(stats) s(stats)
+
+    local txt=Instance.new("TextLabel")
+    txt.Name="StatsLabel"
+    txt.BackgroundTransparency=1
+    txt.Position=UDim2.fromOffset(14,7)
+    txt.Size=UDim2.new(1,-28,1,-14)
+    txt.Font=Enum.Font.GothamBold
+    txt.TextSize=14
+    txt.TextColor3=Color3.fromRGB(235,235,235)
+    txt.TextWrapped=true
+    txt.TextXAlignment=Enum.TextXAlignment.Left
+    txt.TextYAlignment=Enum.TextYAlignment.Center
+    txt.Parent=stats
+
+    local localCount=tonumber(_G.PulseCoreTotalExecutionsLocal) or 0
+    txt.Text=string.format("Total Executions (local): %d\nTotal Executions (Global): unavailable",localCount)
+
+    -- Optional CounterAPI V2 support. A valid authenticated endpoint/token
+    -- can be supplied before execution through _G.PulseCoreGlobalCounterUrl
+    -- and _G.PulseCoreGlobalCounterToken.
+    local url=_G.PulseCoreGlobalCounterUrl
+    local token=_G.PulseCoreGlobalCounterToken
+    if type(url)=="string" and url~="" and type(request)=="function" then
+        task.spawn(function()
+            local headers={}
+            if type(token)=="string" and token~="" then headers.Authorization="Bearer "..token end
+            local ok,res=pcall(request,{Url=url,Method="GET",Headers=headers})
+            if ok and type(res)=="table" and type(res.Body)=="string" then
+                local n=res.Body:match('"up_count"%s*:%s*(%d+)') or res.Body:match('"value"%s*:%s*(%d+)')
+                if n and txt.Parent then
+                    txt.Text=string.format("Total Executions (local): %d\nTotal Executions (Global): %s",localCount,n)
+                end
+            end
+        end)
+    end
 end)
 
 return _result
