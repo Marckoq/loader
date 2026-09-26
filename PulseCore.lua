@@ -261,795 +261,7 @@ do
     _G.PulseCoreTotalExecutionsLocal = count
 end
 
-local _load=loadstring or load
-if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
-local _fn,_err=_load(_src,"@PulseCore")
-if not _fn then error(_err or "PulseCore payload failed to load.",0) end
-
-_src=_src:gsub("DEFAULT_BOOST_KEY%s*=%s*Enum%.KeyCode%.R","DEFAULT_BOOST_KEY = Enum.KeyCode.T")
-local _result=_fn()
-task.defer(function()
-    pcall(function()
-        local _plr=game:GetService("Players").LocalPlayer
-        local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
-        local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
-        local _f=_g and _g:FindFirstChild("MainFrame")
-        local _us=_g and _g:FindFirstChildOfClass("UIScale")
-        local _cam=workspace.CurrentCamera
-        if not (_g and _f and _cam) then return end
-
-        local function _mobile()
-            local _v=_cam.ViewportSize
-            return game:GetService("UserInputService").TouchEnabled
-                and math.min(_v.X,_v.Y)<700
-        end
-
-        local function _apply()
-            if _mobile() then
-                _g.IgnoreGuiInset=true
-                _f.AnchorPoint=Vector2.new(0.5,0.5)
-                _f.Position=UDim2.fromScale(0.5,0.5)
-                _f.Size=UDim2.new(1,-8,1,-8)
-
-                if _us then
-                    _us.Scale=1
-                end
-            end
-        end
-
-        _apply()
-        _cam:GetPropertyChangedSignal("ViewportSize"):Connect(_apply)
-
-        if _us then
-            _us:GetPropertyChangedSignal("Scale"):Connect(function()
-                if _mobile() and _us.Scale ~= 1 then
-                    _us.Scale=1
-                end
-            end)
-        end
-    end)
-end)
-task.defer(function()
-    pcall(function()
-        local _plr=game:GetService("Players").LocalPlayer
-        local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
-        local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
-        local _main=_g and _g:FindFirstChild("MainFrame")
-        local _sidebar=_main and _main:FindFirstChild("Sidebar")
-        if not _sidebar then return end
-
-        local _scroll=_sidebar:FindFirstChild("PulseCoreTabScroller")
-        if not _scroll then
-            _scroll=Instance.new("ScrollingFrame")
-            _scroll.Name="PulseCoreTabScroller"
-            _scroll.Position=UDim2.fromOffset(0,0)
-            _scroll.Size=UDim2.new(1,0,1,0)
-            _scroll.BackgroundColor3=Color3.fromRGB(14,14,14)
-            _scroll.BackgroundTransparency=0.13
-            _scroll.BorderSizePixel=0
-            _scroll.CanvasSize=UDim2.fromOffset(0,560)
-            _scroll.ScrollingDirection=Enum.ScrollingDirection.Y
-            _scroll.ScrollingEnabled=true
-            _scroll.Active=true
-            _scroll.TouchScrollingEnabled=true
-            _scroll.ScrollBarThickness=5
-            _scroll.ScrollBarImageColor3=Color3.fromRGB(165,165,165)
-            _scroll.ScrollBarImageTransparency=0.15
-            _scroll.ElasticBehavior=Enum.ElasticBehavior.WhenScrollable
-            _scroll.ZIndex=2
-            _scroll.Parent=_sidebar
-
-            local _moveNames={
-                "InfoTab","LocalTab","VisualsTab","CustomTab","CombatTab",
-                "FunTab","PerformanceTab","AutoSelectTab","KeyListTab",
-                "SettingsTab","AnimatedTabBackground","AnimatedTabBar"
-            }
-
-            for _,_name in ipairs(_moveNames) do
-                local _obj=_sidebar:FindFirstChild(_name)
-                if _obj then
-                    _obj.Parent=_scroll
-                end
-            end
-        end
-
-        local _maxBottom=0
-        for _,_obj in ipairs(_scroll:GetChildren()) do
-            if _obj:IsA("GuiObject") then
-                local _bottom=_obj.Position.Y.Offset+_obj.Size.Y.Offset
-                if _bottom>_maxBottom then _maxBottom=_bottom end
-            end
-        end
-        _scroll.CanvasSize=UDim2.fromOffset(0,math.max(560,_maxBottom+24))
-    end)
-end)
-
-
-
-task.defer(function()
-    pcall(function()
-        local Players=game:GetService("Players")
-        local RunService=game:GetService("RunService")
-        local TweenService=game:GetService("TweenService")
-
-        local player=Players.LocalPlayer
-        local playerGui=player and player:FindFirstChildOfClass("PlayerGui")
-        if not playerGui then
-            return
-        end
-
-        local gui=playerGui:FindFirstChild("AssemblySpeedBoostUI")
-        local localPage=gui and gui:FindFirstChild("LocalPage",true)
-        if not (gui and localPage) then
-            return
-        end
-
-        local enabled=true
-        local connections={}
-        local humanoidStates=setmetatable({}, {__mode="k"})
-
-        local function disconnectHumanoid(humanoid)
-            local data=humanoidStates[humanoid]
-            if not data then
-                return
-            end
-
-            if data.stateConnection then
-                data.stateConnection:Disconnect()
-            end
-
-            if data.heartbeatConnection then
-                data.heartbeatConnection:Disconnect()
-            end
-
-            if humanoid.Parent and data.originalJumpingEnabled~=nil then
-                pcall(function()
-                    humanoid:SetStateEnabled(
-                        Enum.HumanoidStateType.Jumping,
-                        data.originalJumpingEnabled
-                    )
-                end)
-            end
-
-            humanoidStates[humanoid]=nil
-        end
-
-        local function attachHumanoid(humanoid)
-            if not humanoid or humanoid.Health<=0 then
-                return
-            end
-
-            disconnectHumanoid(humanoid)
-
-            local originalJumpingEnabled=true
-            pcall(function()
-                originalJumpingEnabled=humanoid:GetStateEnabled(
-                    Enum.HumanoidStateType.Jumping
-                )
-            end)
-
-            local data={
-                originalJumpingEnabled=originalJumpingEnabled,
-                stateConnection=nil,
-                heartbeatConnection=nil,
-            }
-
-            humanoidStates[humanoid]=data
-
-            if enabled then
-                pcall(function()
-                    humanoid:SetStateEnabled(
-                        Enum.HumanoidStateType.Jumping,
-                        true
-                    )
-                end)
-            end
-
-            data.stateConnection=humanoid.StateEnabledChanged:Connect(function(state,isEnabled)
-                if state~=Enum.HumanoidStateType.Jumping then
-                    return
-                end
-
-                if enabled and not isEnabled and humanoid.Parent and humanoid.Health>0 then
-                    task.defer(function()
-                        if enabled and humanoid.Parent and humanoid.Health>0 then
-                            pcall(function()
-                                humanoid:SetStateEnabled(
-                                    Enum.HumanoidStateType.Jumping,
-                                    true
-                                )
-                            end)
-                        end
-                    end)
-                end
-            end)
-
-            data.heartbeatConnection=RunService.Heartbeat:Connect(function()
-                if not humanoid.Parent or humanoid.Health<=0 then
-                    disconnectHumanoid(humanoid)
-                    return
-                end
-
-                if enabled then
-                    local stateEnabled=true
-                    pcall(function()
-                        stateEnabled=humanoid:GetStateEnabled(
-                            Enum.HumanoidStateType.Jumping
-                        )
-                    end)
-
-                    if not stateEnabled then
-                        pcall(function()
-                            humanoid:SetStateEnabled(
-                                Enum.HumanoidStateType.Jumping,
-                                true
-                            )
-                        end)
-                    end
-                end
-            end)
-        end
-
-        local function setEnabled(value)
-            enabled=value==true
-
-            local _,currentHumanoid=(function()
-                local character=player.Character
-                return character,character and character:FindFirstChildOfClass("Humanoid")
-            end)()
-
-            for humanoid in pairs(humanoidStates) do
-                if enabled then
-                    if humanoid.Parent and humanoid.Health>0 then
-                        pcall(function()
-                            humanoid:SetStateEnabled(
-                                Enum.HumanoidStateType.Jumping,
-                                true
-                            )
-                        end)
-                    end
-                else
-                    disconnectHumanoid(humanoid)
-                end
-            end
-
-            if enabled and currentHumanoid then
-                attachHumanoid(currentHumanoid)
-            end
-        end
-
-        local characterConnection=player.CharacterAdded:Connect(function(character)
-            task.defer(function()
-                local humanoid=character:FindFirstChildOfClass("Humanoid")
-                    or character:WaitForChild("Humanoid",5)
-
-                if humanoid and enabled then
-                    attachHumanoid(humanoid)
-                end
-            end)
-        end)
-        connections[#connections+1]=characterConnection
-
-        local character=player.Character
-        local humanoid=character and character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            attachHumanoid(humanoid)
-        end
-
-        local old=localPage:FindFirstChild("PulseCoreNoJumpCooldown",true)
-        if old then
-            old:Destroy()
-        end
-
-        local row=Instance.new("Frame")
-        row.Name="PulseCoreNoJumpCooldown"
-        row.LayoutOrder=12
-        row.Size=UDim2.new(1,0,0,50)
-        row.BackgroundColor3=Color3.fromRGB(30,30,30)
-        row.BackgroundTransparency=0.16
-        row.BorderSizePixel=0
-        row.Parent=localPage
-
-        local rowCorner=Instance.new("UICorner")
-        rowCorner.CornerRadius=UDim.new(0,9)
-        rowCorner.Parent=row
-
-        local rowStroke=Instance.new("UIStroke")
-        rowStroke.Color=Color3.fromRGB(70,70,70)
-        rowStroke.Transparency=0.28
-        rowStroke.Thickness=1
-        rowStroke.Parent=row
-
-        local label=Instance.new("TextLabel")
-        label.Position=UDim2.fromOffset(14,0)
-        label.Size=UDim2.new(1,-100,1,0)
-        label.BackgroundTransparency=1
-        label.Text="No Jump Cooldown (BETA)"
-        label.Font=Enum.Font.GothamMedium
-        label.TextSize=13
-        label.TextColor3=Color3.fromRGB(235,235,235)
-        label.TextXAlignment=Enum.TextXAlignment.Left
-        label.Parent=row
-
-        local toggle=Instance.new("TextButton")
-        toggle.Name="Toggle"
-        toggle.AnchorPoint=Vector2.new(1,0.5)
-        toggle.Position=UDim2.new(1,-11,0.5,0)
-        toggle.Size=UDim2.fromOffset(58,30)
-        toggle.BackgroundColor3=Color3.fromRGB(20,95,135)
-        toggle.BorderSizePixel=0
-        toggle.Text=""
-        toggle.AutoButtonColor=false
-        toggle.Parent=row
-
-        local toggleCorner=Instance.new("UICorner")
-        toggleCorner.CornerRadius=UDim.new(0,999)
-        toggleCorner.Parent=toggle
-
-        local dot=Instance.new("Frame")
-        dot.Name="Dot"
-        dot.AnchorPoint=Vector2.new(0,0.5)
-        dot.Position=UDim2.new(1,-27,0.5,0)
-        dot.Size=UDim2.fromOffset(22,22)
-        dot.BackgroundColor3=Color3.fromRGB(225,245,255)
-        dot.BorderSizePixel=0
-        dot.Parent=toggle
-
-        local dotCorner=Instance.new("UICorner")
-        dotCorner.CornerRadius=UDim.new(0,999)
-        dotCorner.Parent=dot
-
-        local function refresh()
-            toggle.BackgroundColor3=enabled
-                and Color3.fromRGB(20,95,135)
-                or Color3.fromRGB(38,38,38)
-
-            dot.BackgroundColor3=enabled
-                and Color3.fromRGB(225,245,255)
-                or Color3.fromRGB(135,135,135)
-
-            TweenService:Create(
-                dot,
-                TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
-                {
-                    Position=enabled
-                        and UDim2.new(1,-27,0.5,0)
-                        or UDim2.new(0,5,0.5,0)
-                }
-            ):Play()
-        end
-
-        toggle.Activated:Connect(function()
-            setEnabled(not enabled)
-            refresh()
-        end)
-
-        refresh()
-    end)
-end)
-
-
--- PULSECORE_EXECUTION_VISUAL_PATCH_V1
-task.defer(function()
-    local P=game:GetService("Players").LocalPlayer
-    local G=P and P:FindFirstChildOfClass("PlayerGui")
-    local UI=G and G:FindFirstChild("AssemblySpeedBoostUI")
-    if not (P and UI) then return end
-
-    local V=UI:FindFirstChild("VisualsPage",true)
-    local I=UI:FindFirstChild("InfoPage",true)
-    local L=UI:FindFirstChild("LocalPage",true)
-    if not V or not I then return end
-
-    local Lighting=game:GetService("Lighting")
-    local RunService=game:GetService("RunService")
-    local UIS=game:GetService("UserInputService")
-    local TweenService=game:GetService("TweenService")
-
-    local function c(o,r)
-        local x=Instance.new("UICorner")
-        x.CornerRadius=UDim.new(0,r or 9)
-        x.Parent=o
-    end
-    local function s(o)
-        local x=Instance.new("UIStroke")
-        x.Color=Color3.fromRGB(75,75,75)
-        x.Transparency=.25
-        x.Thickness=1
-        x.Parent=o
-    end
-    local function toggle(parent,name,order)
-        local old=parent:FindFirstChild("PulseCore_"..name,true)
-        if old then return old,old:FindFirstChild("Toggle",true),old:FindFirstChild("Dot",true) end
-        local row=Instance.new("Frame")
-        row.Name="PulseCore_"..name
-        row.LayoutOrder=order
-        row.Size=UDim2.new(1,0,0,50)
-        row.BackgroundColor3=Color3.fromRGB(30,30,30)
-        row.BackgroundTransparency=.16
-        row.BorderSizePixel=0
-        row.Parent=parent
-        c(row) s(row)
-
-        local label=Instance.new("TextLabel")
-        label.BackgroundTransparency=1
-        label.Position=UDim2.fromOffset(14,0)
-        label.Size=UDim2.new(1,-100,1,0)
-        label.Text=name
-        label.Font=Enum.Font.GothamMedium
-        label.TextSize=13
-        label.TextColor3=Color3.fromRGB(235,235,235)
-        label.TextXAlignment=Enum.TextXAlignment.Left
-        label.Parent=row
-
-        local b=Instance.new("TextButton")
-        b.Name="Toggle"
-        b.AnchorPoint=Vector2.new(1,.5)
-        b.Position=UDim2.new(1,-11,.5,0)
-        b.Size=UDim2.fromOffset(58,30)
-        b.BackgroundColor3=Color3.fromRGB(38,38,38)
-        b.BorderSizePixel=0
-        b.Text=""
-        b.AutoButtonColor=false
-        b.Parent=row
-        c(b,999)
-
-        local d=Instance.new("Frame")
-        d.Name="Dot"
-        d.AnchorPoint=Vector2.new(0,.5)
-        d.Position=UDim2.new(0,5,.5,0)
-        d.Size=UDim2.fromOffset(22,22)
-        d.BackgroundColor3=Color3.fromRGB(135,135,135)
-        d.BorderSizePixel=0
-        d.Parent=b
-        c(d,999)
-        return row,b,d
-    end
-    local function setToggle(b,d,on)
-        b.BackgroundColor3=on and Color3.fromRGB(20,95,135) or Color3.fromRGB(38,38,38)
-        d.BackgroundColor3=on and Color3.fromRGB(225,245,255) or Color3.fromRGB(135,135,135)
-        TweenService:Create(d,TweenInfo.new(.14),{Position=on and UDim2.new(1,-27,.5,0) or UDim2.new(0,5,.5,0)}):Play()
-    end
-
-    if L then
-        for _,o in ipairs(L:GetDescendants()) do
-            if (o:IsA("TextLabel") or o:IsA("TextButton"))
-                and (o.Text=="Sharp Movement / Anti-Slide" or o.Text=="Movement / Anti Slide")
-            then
-                o.Text="No Acceleration"
-            end
-        end
-    end
-
-    local state={
-        full=false,fog=false,snake=false,bob=false,
-        fov=70,fovEnabled=false,originalFov=nil,originalCamera=nil,
-        light=nil,fogData=nil,atmo=setmetatable({},{__mode="k"}),offset=setmetatable({},{__mode="k"}),
-        last=0
-    }
-
-    local function fullBright()
-        if state.full then
-            if not state.light then
-                state.light={
-                    Brightness=Lighting.Brightness,Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient,
-                    ColorShift_Bottom=Lighting.ColorShift_Bottom,ColorShift_Top=Lighting.ColorShift_Top,
-                    GlobalShadows=Lighting.GlobalShadows,ClockTime=Lighting.ClockTime,ExposureCompensation=Lighting.ExposureCompensation
-                }
-            end
-            pcall(function() Lighting.Brightness=2 end)
-            pcall(function() Lighting.Ambient=Color3.new(1,1,1) end)
-            pcall(function() Lighting.OutdoorAmbient=Color3.new(1,1,1) end)
-            pcall(function() Lighting.ColorShift_Bottom=Color3.new(0,0,0) end)
-            pcall(function() Lighting.ColorShift_Top=Color3.new(0,0,0) end)
-            pcall(function() Lighting.GlobalShadows=false end)
-            pcall(function() Lighting.ClockTime=14 end)
-            pcall(function() Lighting.ExposureCompensation=0 end)
-        elseif state.light then
-            for k,v in pairs(state.light) do pcall(function() Lighting[k]=v end) end
-            state.light=nil
-        end
-    end
-
-    local function fog()
-        if state.fog then
-            state.fogData=state.fogData or {FogStart=Lighting.FogStart,FogEnd=Lighting.FogEnd}
-            pcall(function() Lighting.FogStart=0 end)
-            pcall(function() Lighting.FogEnd=1000000 end)
-            for _,o in ipairs(Lighting:GetChildren()) do
-                if o:IsA("Atmosphere") then
-                    if state.atmo[o]==nil then state.atmo[o]=o.Enabled end
-                    pcall(function() o.Enabled=false end)
-                end
-            end
-        elseif state.fogData then
-            pcall(function() Lighting.FogStart=state.fogData.FogStart end)
-            pcall(function() Lighting.FogEnd=state.fogData.FogEnd end)
-            state.fogData=nil
-            for o,v in pairs(state.atmo) do
-                if o and o.Parent then pcall(function() o.Enabled=v end) end
-                state.atmo[o]=nil
-            end
-        end
-    end
-
-    local function applyFov()
-        local cam=workspace.CurrentCamera
-        if not cam then return end
-
-        if state.fovEnabled then
-            if state.originalCamera~=cam or state.originalFov==nil then
-                state.originalCamera=cam
-                state.originalFov=cam.FieldOfView
-            end
-
-            pcall(function()
-                cam.FieldOfView=math.clamp(state.fov,1,120)
-            end)
-        elseif state.originalCamera==cam and state.originalFov~=nil then
-            local original=state.originalFov
-            state.originalFov=nil
-            state.originalCamera=nil
-            pcall(function()
-                cam.FieldOfView=original
-            end)
-        end
-    end
-
-    local function camera()
-        applyFov()
-
-        local cam=workspace.CurrentCamera
-        if not cam then return end
-
-        local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid")
-        if h then
-            if state.bob then
-                if state.offset[h]==nil then state.offset[h]=h.CameraOffset end
-                pcall(function() h.CameraOffset=Vector3.zero end)
-            elseif state.offset[h]~=nil then
-                local old=state.offset[h]
-                pcall(function() h.CameraOffset=old end)
-                state.offset[h]=nil
-            end
-        end
-
-        if state.snake then
-            local cf=cam.CFrame
-            local look=cf.LookVector
-            if look.Magnitude>.001 then
-                local up=Vector3.yAxis
-                if math.abs(look:Dot(up))>.985 then up=cf.UpVector end
-                pcall(function() cam.CFrame=CFrame.lookAt(cf.Position,cf.Position+look,up) end)
-            end
-        end
-    end
-
-    local _,fb,fd=toggle(V,"Full Bright",10)
-    local _,ng,nd=toggle(V,"No Fog & Atmosphere",11)
-    local _,ns,nsd=toggle(V,"Remove Camera Snake",12)
-    local _,nb,nbd=toggle(V,"Remove Camera Bobbing",13)
-    local _,ef,efd=toggle(V,"Enable FOV",14)
-
-    local card=V:FindFirstChild("PulseCore_FOV",true)
-    if not card then
-        card=Instance.new("Frame")
-        card.Name="PulseCore_FOV"
-        card.LayoutOrder=15
-        card.Size=UDim2.new(1,0,0,76)
-        card.BackgroundColor3=Color3.fromRGB(30,30,30)
-        card.BackgroundTransparency=.16
-        card.BorderSizePixel=0
-        card.Parent=V
-        c(card) s(card)
-
-        local t=Instance.new("TextLabel")
-        t.Name="Label"
-        t.BackgroundTransparency=1
-        t.Position=UDim2.fromOffset(14,7)
-        t.Size=UDim2.new(1,-28,0,25)
-        t.Text="FOV (70)"
-        t.Font=Enum.Font.GothamMedium
-        t.TextSize=13
-        t.TextColor3=Color3.fromRGB(235,235,235)
-        t.TextXAlignment=Enum.TextXAlignment.Left
-        t.Parent=card
-
-        local tr=Instance.new("Frame")
-        tr.Name="Track"
-        tr.Position=UDim2.new(0,14,1,-24)
-        tr.Size=UDim2.new(1,-28,0,10)
-        tr.BackgroundColor3=Color3.fromRGB(50,50,50)
-        tr.BorderSizePixel=0
-        tr.Active=true
-        tr.Parent=card
-        c(tr,999)
-
-        local fill=Instance.new("Frame")
-        fill.Name="Fill"
-        fill.Size=UDim2.new(70/120,0,1,0)
-        fill.BackgroundColor3=Color3.fromRGB(20,145,195)
-        fill.BorderSizePixel=0
-        fill.Parent=tr
-        c(fill,999)
-
-        local knob=Instance.new("Frame")
-        knob.Name="Knob"
-        knob.AnchorPoint=Vector2.new(.5,.5)
-        knob.Position=UDim2.new(70/120,0,.5,0)
-        knob.Size=UDim2.fromOffset(20,20)
-        knob.BackgroundColor3=Color3.fromRGB(235,245,250)
-        knob.BorderSizePixel=0
-        knob.Parent=tr
-        c(knob,999)
-    else
-        card.LayoutOrder=15
-    end
-
-    local label=card:FindFirstChild("Label",true)
-    local track=card:FindFirstChild("Track",true)
-    local fill=track and track:FindFirstChild("Fill")
-    local knob=track and track:FindFirstChild("Knob")
-    local drag=false
-
-    local function setFov(v)
-        state.fov=math.clamp(math.floor((tonumber(v) or 70)+.5),0,120)
-        local a=state.fov/120
-        if fill then fill.Size=UDim2.new(a,0,1,0) end
-        if knob then knob.Position=UDim2.new(a,0,.5,0) end
-        if label then label.Text=string.format("FOV (%d)",state.fov) end
-        if state.fovEnabled then
-            applyFov()
-        end
-    end
-
-    local function pointer(x)
-        if not track or track.AbsoluteSize.X<=0 then return end
-        setFov(((x-track.AbsolutePosition.X)/track.AbsoluteSize.X)*120)
-    end
-
-    if track then
-        track.InputBegan:Connect(function(i)
-            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-                drag=true
-                pointer(i.Position.X)
-            end
-        end)
-
-        UIS.InputChanged:Connect(function(i)
-            if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
-                pointer(i.Position.X)
-            end
-        end)
-
-        UIS.InputEnded:Connect(function(i)
-            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-                drag=false
-            end
-        end)
-    end
-
-    fb.Activated:Connect(function()
-        state.full=not state.full
-        fullBright()
-        setToggle(fb,fd,state.full)
-    end)
-
-    ng.Activated:Connect(function()
-        state.fog=not state.fog
-        fog()
-        setToggle(ng,nd,state.fog)
-    end)
-
-    ns.Activated:Connect(function()
-        state.snake=not state.snake
-        camera()
-        setToggle(ns,nsd,state.snake)
-    end)
-
-    nb.Activated:Connect(function()
-        state.bob=not state.bob
-        camera()
-        setToggle(nb,nbd,state.bob)
-    end)
-
-    ef.Activated:Connect(function()
-        state.fovEnabled=not state.fovEnabled
-        if state.fovEnabled then
-            local cam=workspace.CurrentCamera
-            if cam then
-                state.originalCamera=cam
-                state.originalFov=cam.FieldOfView
-            end
-            applyFov()
-        else
-            applyFov()
-        end
-        setToggle(ef,efd,state.fovEnabled)
-    end)
-
-    setFov(70)
-    setToggle(ef,efd,state.fovEnabled)
-
-    local rc
-    rc=RunService.RenderStepped:Connect(function()
-        if not UI.Parent then
-            rc:Disconnect()
-            if state.fovEnabled then
-                state.fovEnabled=false
-            end
-            applyFov()
-            return
-        end
-
-        local now=os.clock()
-        if now-state.last>.15 then
-            state.last=now
-            if state.full then fullBright() end
-            if state.fog then fog() end
-        end
-
-        if state.fovEnabled or state.snake or state.bob then
-            camera()
-        end
-    end)
-
-    local boundName="PulseCore_FOV_Render"
-    pcall(function()
-        RunService:UnbindFromRenderStep(boundName)
-        RunService:BindToRenderStep(boundName,Enum.RenderPriority.Last.Value,function()
-            if not UI.Parent then
-                RunService:UnbindFromRenderStep(boundName)
-                return
-            end
-            if state.fovEnabled then
-                applyFov()
-            end
-        end)
-    end)
-
-    P.CharacterAdded:Connect(function()
-        task.defer(function()
-            state.originalCamera=nil
-            state.originalFov=nil
-            if state.fovEnabled then
-                applyFov()
-            end
-            camera()
-        end)
-    end)
-
-    local old=I:FindFirstChild("PulseCoreExecutionStats",true)
-    if old then old:Destroy() end
-    local stats=Instance.new("Frame")
-    stats.Name="PulseCoreExecutionStats"
-    stats.LayoutOrder=5
-    stats.Size=UDim2.new(1,0,0,58)
-    stats.BackgroundColor3=Color3.fromRGB(30,30,30)
-    stats.BackgroundTransparency=.16
-    stats.BorderSizePixel=0
-    stats.Parent=I
-    c(stats) s(stats)
-
-    local txt=Instance.new("TextLabel")
-    txt.Name="StatsLabel"
-    txt.BackgroundTransparency=1
-    txt.Position=UDim2.fromOffset(14,7)
-    txt.Size=UDim2.new(1,-28,1,-14)
-    txt.Font=Enum.Font.GothamBold
-    txt.TextSize=14
-    txt.TextColor3=Color3.fromRGB(235,235,235)
-    txt.TextWrapped=true
-    txt.TextXAlignment=Enum.TextXAlignment.Left
-    txt.TextYAlignment=Enum.TextYAlignment.Center
-    txt.Parent=stats
-
-    local localCount=tonumber(_G.PulseCoreTotalExecutionsLocal) or 0
-    txt.Text=string.format("Total Executions (local): %d",localCount)
-end)
-
-
-
+local _pulseCoreEmotesAndPromptsSource=[==[
 -- PULSECORE_EMOTES_AND_PROMPTS_PATCH_V2
 task.spawn(function()
     local Players=game:GetService("Players")
@@ -2234,5 +1446,799 @@ task.spawn(function()
     relayoutEmotesTab()
     refreshEmoteUI()
 end)
+
+]==]
+_src=_src:gsub("DEFAULT_BOOST_KEY%s*=%s*Enum%.KeyCode%.R","DEFAULT_BOOST_KEY = Enum.KeyCode.T")
+_src=_src.."
+".._pulseCoreEmotesAndPromptsSource
+
+local _load=loadstring or load
+if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
+local _fn,_err=_load(_src,"@PulseCore")
+if not _fn then error(_err or "PulseCore payload failed to load.",0) end
+
+local _result=_fn()
+task.defer(function()
+    pcall(function()
+        local _plr=game:GetService("Players").LocalPlayer
+        local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
+        local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
+        local _f=_g and _g:FindFirstChild("MainFrame")
+        local _us=_g and _g:FindFirstChildOfClass("UIScale")
+        local _cam=workspace.CurrentCamera
+        if not (_g and _f and _cam) then return end
+
+        local function _mobile()
+            local _v=_cam.ViewportSize
+            return game:GetService("UserInputService").TouchEnabled
+                and math.min(_v.X,_v.Y)<700
+        end
+
+        local function _apply()
+            if _mobile() then
+                _g.IgnoreGuiInset=true
+                _f.AnchorPoint=Vector2.new(0.5,0.5)
+                _f.Position=UDim2.fromScale(0.5,0.5)
+                _f.Size=UDim2.new(1,-8,1,-8)
+
+                if _us then
+                    _us.Scale=1
+                end
+            end
+        end
+
+        _apply()
+        _cam:GetPropertyChangedSignal("ViewportSize"):Connect(_apply)
+
+        if _us then
+            _us:GetPropertyChangedSignal("Scale"):Connect(function()
+                if _mobile() and _us.Scale ~= 1 then
+                    _us.Scale=1
+                end
+            end)
+        end
+    end)
+end)
+task.defer(function()
+    pcall(function()
+        local _plr=game:GetService("Players").LocalPlayer
+        local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
+        local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
+        local _main=_g and _g:FindFirstChild("MainFrame")
+        local _sidebar=_main and _main:FindFirstChild("Sidebar")
+        if not _sidebar then return end
+
+        local _scroll=_sidebar:FindFirstChild("PulseCoreTabScroller")
+        if not _scroll then
+            _scroll=Instance.new("ScrollingFrame")
+            _scroll.Name="PulseCoreTabScroller"
+            _scroll.Position=UDim2.fromOffset(0,0)
+            _scroll.Size=UDim2.new(1,0,1,0)
+            _scroll.BackgroundColor3=Color3.fromRGB(14,14,14)
+            _scroll.BackgroundTransparency=0.13
+            _scroll.BorderSizePixel=0
+            _scroll.CanvasSize=UDim2.fromOffset(0,560)
+            _scroll.ScrollingDirection=Enum.ScrollingDirection.Y
+            _scroll.ScrollingEnabled=true
+            _scroll.Active=true
+            _scroll.TouchScrollingEnabled=true
+            _scroll.ScrollBarThickness=5
+            _scroll.ScrollBarImageColor3=Color3.fromRGB(165,165,165)
+            _scroll.ScrollBarImageTransparency=0.15
+            _scroll.ElasticBehavior=Enum.ElasticBehavior.WhenScrollable
+            _scroll.ZIndex=2
+            _scroll.Parent=_sidebar
+
+            local _moveNames={
+                "InfoTab","LocalTab","VisualsTab","CustomTab","CombatTab",
+                "FunTab","PerformanceTab","AutoSelectTab","KeyListTab",
+                "SettingsTab","AnimatedTabBackground","AnimatedTabBar"
+            }
+
+            for _,_name in ipairs(_moveNames) do
+                local _obj=_sidebar:FindFirstChild(_name)
+                if _obj then
+                    _obj.Parent=_scroll
+                end
+            end
+        end
+
+        local _maxBottom=0
+        for _,_obj in ipairs(_scroll:GetChildren()) do
+            if _obj:IsA("GuiObject") then
+                local _bottom=_obj.Position.Y.Offset+_obj.Size.Y.Offset
+                if _bottom>_maxBottom then _maxBottom=_bottom end
+            end
+        end
+        _scroll.CanvasSize=UDim2.fromOffset(0,math.max(560,_maxBottom+24))
+    end)
+end)
+
+
+
+task.defer(function()
+    pcall(function()
+        local Players=game:GetService("Players")
+        local RunService=game:GetService("RunService")
+        local TweenService=game:GetService("TweenService")
+
+        local player=Players.LocalPlayer
+        local playerGui=player and player:FindFirstChildOfClass("PlayerGui")
+        if not playerGui then
+            return
+        end
+
+        local gui=playerGui:FindFirstChild("AssemblySpeedBoostUI")
+        local localPage=gui and gui:FindFirstChild("LocalPage",true)
+        if not (gui and localPage) then
+            return
+        end
+
+        local enabled=true
+        local connections={}
+        local humanoidStates=setmetatable({}, {__mode="k"})
+
+        local function disconnectHumanoid(humanoid)
+            local data=humanoidStates[humanoid]
+            if not data then
+                return
+            end
+
+            if data.stateConnection then
+                data.stateConnection:Disconnect()
+            end
+
+            if data.heartbeatConnection then
+                data.heartbeatConnection:Disconnect()
+            end
+
+            if humanoid.Parent and data.originalJumpingEnabled~=nil then
+                pcall(function()
+                    humanoid:SetStateEnabled(
+                        Enum.HumanoidStateType.Jumping,
+                        data.originalJumpingEnabled
+                    )
+                end)
+            end
+
+            humanoidStates[humanoid]=nil
+        end
+
+        local function attachHumanoid(humanoid)
+            if not humanoid or humanoid.Health<=0 then
+                return
+            end
+
+            disconnectHumanoid(humanoid)
+
+            local originalJumpingEnabled=true
+            pcall(function()
+                originalJumpingEnabled=humanoid:GetStateEnabled(
+                    Enum.HumanoidStateType.Jumping
+                )
+            end)
+
+            local data={
+                originalJumpingEnabled=originalJumpingEnabled,
+                stateConnection=nil,
+                heartbeatConnection=nil,
+            }
+
+            humanoidStates[humanoid]=data
+
+            if enabled then
+                pcall(function()
+                    humanoid:SetStateEnabled(
+                        Enum.HumanoidStateType.Jumping,
+                        true
+                    )
+                end)
+            end
+
+            data.stateConnection=humanoid.StateEnabledChanged:Connect(function(state,isEnabled)
+                if state~=Enum.HumanoidStateType.Jumping then
+                    return
+                end
+
+                if enabled and not isEnabled and humanoid.Parent and humanoid.Health>0 then
+                    task.defer(function()
+                        if enabled and humanoid.Parent and humanoid.Health>0 then
+                            pcall(function()
+                                humanoid:SetStateEnabled(
+                                    Enum.HumanoidStateType.Jumping,
+                                    true
+                                )
+                            end)
+                        end
+                    end)
+                end
+            end)
+
+            data.heartbeatConnection=RunService.Heartbeat:Connect(function()
+                if not humanoid.Parent or humanoid.Health<=0 then
+                    disconnectHumanoid(humanoid)
+                    return
+                end
+
+                if enabled then
+                    local stateEnabled=true
+                    pcall(function()
+                        stateEnabled=humanoid:GetStateEnabled(
+                            Enum.HumanoidStateType.Jumping
+                        )
+                    end)
+
+                    if not stateEnabled then
+                        pcall(function()
+                            humanoid:SetStateEnabled(
+                                Enum.HumanoidStateType.Jumping,
+                                true
+                            )
+                        end)
+                    end
+                end
+            end)
+        end
+
+        local function setEnabled(value)
+            enabled=value==true
+
+            local _,currentHumanoid=(function()
+                local character=player.Character
+                return character,character and character:FindFirstChildOfClass("Humanoid")
+            end)()
+
+            for humanoid in pairs(humanoidStates) do
+                if enabled then
+                    if humanoid.Parent and humanoid.Health>0 then
+                        pcall(function()
+                            humanoid:SetStateEnabled(
+                                Enum.HumanoidStateType.Jumping,
+                                true
+                            )
+                        end)
+                    end
+                else
+                    disconnectHumanoid(humanoid)
+                end
+            end
+
+            if enabled and currentHumanoid then
+                attachHumanoid(currentHumanoid)
+            end
+        end
+
+        local characterConnection=player.CharacterAdded:Connect(function(character)
+            task.defer(function()
+                local humanoid=character:FindFirstChildOfClass("Humanoid")
+                    or character:WaitForChild("Humanoid",5)
+
+                if humanoid and enabled then
+                    attachHumanoid(humanoid)
+                end
+            end)
+        end)
+        connections[#connections+1]=characterConnection
+
+        local character=player.Character
+        local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            attachHumanoid(humanoid)
+        end
+
+        local old=localPage:FindFirstChild("PulseCoreNoJumpCooldown",true)
+        if old then
+            old:Destroy()
+        end
+
+        local row=Instance.new("Frame")
+        row.Name="PulseCoreNoJumpCooldown"
+        row.LayoutOrder=12
+        row.Size=UDim2.new(1,0,0,50)
+        row.BackgroundColor3=Color3.fromRGB(30,30,30)
+        row.BackgroundTransparency=0.16
+        row.BorderSizePixel=0
+        row.Parent=localPage
+
+        local rowCorner=Instance.new("UICorner")
+        rowCorner.CornerRadius=UDim.new(0,9)
+        rowCorner.Parent=row
+
+        local rowStroke=Instance.new("UIStroke")
+        rowStroke.Color=Color3.fromRGB(70,70,70)
+        rowStroke.Transparency=0.28
+        rowStroke.Thickness=1
+        rowStroke.Parent=row
+
+        local label=Instance.new("TextLabel")
+        label.Position=UDim2.fromOffset(14,0)
+        label.Size=UDim2.new(1,-100,1,0)
+        label.BackgroundTransparency=1
+        label.Text="No Jump Cooldown (BETA)"
+        label.Font=Enum.Font.GothamMedium
+        label.TextSize=13
+        label.TextColor3=Color3.fromRGB(235,235,235)
+        label.TextXAlignment=Enum.TextXAlignment.Left
+        label.Parent=row
+
+        local toggle=Instance.new("TextButton")
+        toggle.Name="Toggle"
+        toggle.AnchorPoint=Vector2.new(1,0.5)
+        toggle.Position=UDim2.new(1,-11,0.5,0)
+        toggle.Size=UDim2.fromOffset(58,30)
+        toggle.BackgroundColor3=Color3.fromRGB(20,95,135)
+        toggle.BorderSizePixel=0
+        toggle.Text=""
+        toggle.AutoButtonColor=false
+        toggle.Parent=row
+
+        local toggleCorner=Instance.new("UICorner")
+        toggleCorner.CornerRadius=UDim.new(0,999)
+        toggleCorner.Parent=toggle
+
+        local dot=Instance.new("Frame")
+        dot.Name="Dot"
+        dot.AnchorPoint=Vector2.new(0,0.5)
+        dot.Position=UDim2.new(1,-27,0.5,0)
+        dot.Size=UDim2.fromOffset(22,22)
+        dot.BackgroundColor3=Color3.fromRGB(225,245,255)
+        dot.BorderSizePixel=0
+        dot.Parent=toggle
+
+        local dotCorner=Instance.new("UICorner")
+        dotCorner.CornerRadius=UDim.new(0,999)
+        dotCorner.Parent=dot
+
+        local function refresh()
+            toggle.BackgroundColor3=enabled
+                and Color3.fromRGB(20,95,135)
+                or Color3.fromRGB(38,38,38)
+
+            dot.BackgroundColor3=enabled
+                and Color3.fromRGB(225,245,255)
+                or Color3.fromRGB(135,135,135)
+
+            TweenService:Create(
+                dot,
+                TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+                {
+                    Position=enabled
+                        and UDim2.new(1,-27,0.5,0)
+                        or UDim2.new(0,5,0.5,0)
+                }
+            ):Play()
+        end
+
+        toggle.Activated:Connect(function()
+            setEnabled(not enabled)
+            refresh()
+        end)
+
+        refresh()
+    end)
+end)
+
+
+-- PULSECORE_EXECUTION_VISUAL_PATCH_V1
+task.defer(function()
+    local P=game:GetService("Players").LocalPlayer
+    local G=P and P:FindFirstChildOfClass("PlayerGui")
+    local UI=G and G:FindFirstChild("AssemblySpeedBoostUI")
+    if not (P and UI) then return end
+
+    local V=UI:FindFirstChild("VisualsPage",true)
+    local I=UI:FindFirstChild("InfoPage",true)
+    local L=UI:FindFirstChild("LocalPage",true)
+    if not V or not I then return end
+
+    local Lighting=game:GetService("Lighting")
+    local RunService=game:GetService("RunService")
+    local UIS=game:GetService("UserInputService")
+    local TweenService=game:GetService("TweenService")
+
+    local function c(o,r)
+        local x=Instance.new("UICorner")
+        x.CornerRadius=UDim.new(0,r or 9)
+        x.Parent=o
+    end
+    local function s(o)
+        local x=Instance.new("UIStroke")
+        x.Color=Color3.fromRGB(75,75,75)
+        x.Transparency=.25
+        x.Thickness=1
+        x.Parent=o
+    end
+    local function toggle(parent,name,order)
+        local old=parent:FindFirstChild("PulseCore_"..name,true)
+        if old then return old,old:FindFirstChild("Toggle",true),old:FindFirstChild("Dot",true) end
+        local row=Instance.new("Frame")
+        row.Name="PulseCore_"..name
+        row.LayoutOrder=order
+        row.Size=UDim2.new(1,0,0,50)
+        row.BackgroundColor3=Color3.fromRGB(30,30,30)
+        row.BackgroundTransparency=.16
+        row.BorderSizePixel=0
+        row.Parent=parent
+        c(row) s(row)
+
+        local label=Instance.new("TextLabel")
+        label.BackgroundTransparency=1
+        label.Position=UDim2.fromOffset(14,0)
+        label.Size=UDim2.new(1,-100,1,0)
+        label.Text=name
+        label.Font=Enum.Font.GothamMedium
+        label.TextSize=13
+        label.TextColor3=Color3.fromRGB(235,235,235)
+        label.TextXAlignment=Enum.TextXAlignment.Left
+        label.Parent=row
+
+        local b=Instance.new("TextButton")
+        b.Name="Toggle"
+        b.AnchorPoint=Vector2.new(1,.5)
+        b.Position=UDim2.new(1,-11,.5,0)
+        b.Size=UDim2.fromOffset(58,30)
+        b.BackgroundColor3=Color3.fromRGB(38,38,38)
+        b.BorderSizePixel=0
+        b.Text=""
+        b.AutoButtonColor=false
+        b.Parent=row
+        c(b,999)
+
+        local d=Instance.new("Frame")
+        d.Name="Dot"
+        d.AnchorPoint=Vector2.new(0,.5)
+        d.Position=UDim2.new(0,5,.5,0)
+        d.Size=UDim2.fromOffset(22,22)
+        d.BackgroundColor3=Color3.fromRGB(135,135,135)
+        d.BorderSizePixel=0
+        d.Parent=b
+        c(d,999)
+        return row,b,d
+    end
+    local function setToggle(b,d,on)
+        b.BackgroundColor3=on and Color3.fromRGB(20,95,135) or Color3.fromRGB(38,38,38)
+        d.BackgroundColor3=on and Color3.fromRGB(225,245,255) or Color3.fromRGB(135,135,135)
+        TweenService:Create(d,TweenInfo.new(.14),{Position=on and UDim2.new(1,-27,.5,0) or UDim2.new(0,5,.5,0)}):Play()
+    end
+
+    if L then
+        for _,o in ipairs(L:GetDescendants()) do
+            if (o:IsA("TextLabel") or o:IsA("TextButton"))
+                and (o.Text=="Sharp Movement / Anti-Slide" or o.Text=="Movement / Anti Slide")
+            then
+                o.Text="No Acceleration"
+            end
+        end
+    end
+
+    local state={
+        full=false,fog=false,snake=false,bob=false,
+        fov=70,fovEnabled=false,originalFov=nil,originalCamera=nil,
+        light=nil,fogData=nil,atmo=setmetatable({},{__mode="k"}),offset=setmetatable({},{__mode="k"}),
+        last=0
+    }
+
+    local function fullBright()
+        if state.full then
+            if not state.light then
+                state.light={
+                    Brightness=Lighting.Brightness,Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient,
+                    ColorShift_Bottom=Lighting.ColorShift_Bottom,ColorShift_Top=Lighting.ColorShift_Top,
+                    GlobalShadows=Lighting.GlobalShadows,ClockTime=Lighting.ClockTime,ExposureCompensation=Lighting.ExposureCompensation
+                }
+            end
+            pcall(function() Lighting.Brightness=2 end)
+            pcall(function() Lighting.Ambient=Color3.new(1,1,1) end)
+            pcall(function() Lighting.OutdoorAmbient=Color3.new(1,1,1) end)
+            pcall(function() Lighting.ColorShift_Bottom=Color3.new(0,0,0) end)
+            pcall(function() Lighting.ColorShift_Top=Color3.new(0,0,0) end)
+            pcall(function() Lighting.GlobalShadows=false end)
+            pcall(function() Lighting.ClockTime=14 end)
+            pcall(function() Lighting.ExposureCompensation=0 end)
+        elseif state.light then
+            for k,v in pairs(state.light) do pcall(function() Lighting[k]=v end) end
+            state.light=nil
+        end
+    end
+
+    local function fog()
+        if state.fog then
+            state.fogData=state.fogData or {FogStart=Lighting.FogStart,FogEnd=Lighting.FogEnd}
+            pcall(function() Lighting.FogStart=0 end)
+            pcall(function() Lighting.FogEnd=1000000 end)
+            for _,o in ipairs(Lighting:GetChildren()) do
+                if o:IsA("Atmosphere") then
+                    if state.atmo[o]==nil then state.atmo[o]=o.Enabled end
+                    pcall(function() o.Enabled=false end)
+                end
+            end
+        elseif state.fogData then
+            pcall(function() Lighting.FogStart=state.fogData.FogStart end)
+            pcall(function() Lighting.FogEnd=state.fogData.FogEnd end)
+            state.fogData=nil
+            for o,v in pairs(state.atmo) do
+                if o and o.Parent then pcall(function() o.Enabled=v end) end
+                state.atmo[o]=nil
+            end
+        end
+    end
+
+    local function applyFov()
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+
+        if state.fovEnabled then
+            if state.originalCamera~=cam or state.originalFov==nil then
+                state.originalCamera=cam
+                state.originalFov=cam.FieldOfView
+            end
+
+            pcall(function()
+                cam.FieldOfView=math.clamp(state.fov,1,120)
+            end)
+        elseif state.originalCamera==cam and state.originalFov~=nil then
+            local original=state.originalFov
+            state.originalFov=nil
+            state.originalCamera=nil
+            pcall(function()
+                cam.FieldOfView=original
+            end)
+        end
+    end
+
+    local function camera()
+        applyFov()
+
+        local cam=workspace.CurrentCamera
+        if not cam then return end
+
+        local h=P.Character and P.Character:FindFirstChildOfClass("Humanoid")
+        if h then
+            if state.bob then
+                if state.offset[h]==nil then state.offset[h]=h.CameraOffset end
+                pcall(function() h.CameraOffset=Vector3.zero end)
+            elseif state.offset[h]~=nil then
+                local old=state.offset[h]
+                pcall(function() h.CameraOffset=old end)
+                state.offset[h]=nil
+            end
+        end
+
+        if state.snake then
+            local cf=cam.CFrame
+            local look=cf.LookVector
+            if look.Magnitude>.001 then
+                local up=Vector3.yAxis
+                if math.abs(look:Dot(up))>.985 then up=cf.UpVector end
+                pcall(function() cam.CFrame=CFrame.lookAt(cf.Position,cf.Position+look,up) end)
+            end
+        end
+    end
+
+    local _,fb,fd=toggle(V,"Full Bright",10)
+    local _,ng,nd=toggle(V,"No Fog & Atmosphere",11)
+    local _,ns,nsd=toggle(V,"Remove Camera Snake",12)
+    local _,nb,nbd=toggle(V,"Remove Camera Bobbing",13)
+    local _,ef,efd=toggle(V,"Enable FOV",14)
+
+    local card=V:FindFirstChild("PulseCore_FOV",true)
+    if not card then
+        card=Instance.new("Frame")
+        card.Name="PulseCore_FOV"
+        card.LayoutOrder=15
+        card.Size=UDim2.new(1,0,0,76)
+        card.BackgroundColor3=Color3.fromRGB(30,30,30)
+        card.BackgroundTransparency=.16
+        card.BorderSizePixel=0
+        card.Parent=V
+        c(card) s(card)
+
+        local t=Instance.new("TextLabel")
+        t.Name="Label"
+        t.BackgroundTransparency=1
+        t.Position=UDim2.fromOffset(14,7)
+        t.Size=UDim2.new(1,-28,0,25)
+        t.Text="FOV (70)"
+        t.Font=Enum.Font.GothamMedium
+        t.TextSize=13
+        t.TextColor3=Color3.fromRGB(235,235,235)
+        t.TextXAlignment=Enum.TextXAlignment.Left
+        t.Parent=card
+
+        local tr=Instance.new("Frame")
+        tr.Name="Track"
+        tr.Position=UDim2.new(0,14,1,-24)
+        tr.Size=UDim2.new(1,-28,0,10)
+        tr.BackgroundColor3=Color3.fromRGB(50,50,50)
+        tr.BorderSizePixel=0
+        tr.Active=true
+        tr.Parent=card
+        c(tr,999)
+
+        local fill=Instance.new("Frame")
+        fill.Name="Fill"
+        fill.Size=UDim2.new(70/120,0,1,0)
+        fill.BackgroundColor3=Color3.fromRGB(20,145,195)
+        fill.BorderSizePixel=0
+        fill.Parent=tr
+        c(fill,999)
+
+        local knob=Instance.new("Frame")
+        knob.Name="Knob"
+        knob.AnchorPoint=Vector2.new(.5,.5)
+        knob.Position=UDim2.new(70/120,0,.5,0)
+        knob.Size=UDim2.fromOffset(20,20)
+        knob.BackgroundColor3=Color3.fromRGB(235,245,250)
+        knob.BorderSizePixel=0
+        knob.Parent=tr
+        c(knob,999)
+    else
+        card.LayoutOrder=15
+    end
+
+    local label=card:FindFirstChild("Label",true)
+    local track=card:FindFirstChild("Track",true)
+    local fill=track and track:FindFirstChild("Fill")
+    local knob=track and track:FindFirstChild("Knob")
+    local drag=false
+
+    local function setFov(v)
+        state.fov=math.clamp(math.floor((tonumber(v) or 70)+.5),0,120)
+        local a=state.fov/120
+        if fill then fill.Size=UDim2.new(a,0,1,0) end
+        if knob then knob.Position=UDim2.new(a,0,.5,0) end
+        if label then label.Text=string.format("FOV (%d)",state.fov) end
+        if state.fovEnabled then
+            applyFov()
+        end
+    end
+
+    local function pointer(x)
+        if not track or track.AbsoluteSize.X<=0 then return end
+        setFov(((x-track.AbsolutePosition.X)/track.AbsoluteSize.X)*120)
+    end
+
+    if track then
+        track.InputBegan:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+                drag=true
+                pointer(i.Position.X)
+            end
+        end)
+
+        UIS.InputChanged:Connect(function(i)
+            if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+                pointer(i.Position.X)
+            end
+        end)
+
+        UIS.InputEnded:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+                drag=false
+            end
+        end)
+    end
+
+    fb.Activated:Connect(function()
+        state.full=not state.full
+        fullBright()
+        setToggle(fb,fd,state.full)
+    end)
+
+    ng.Activated:Connect(function()
+        state.fog=not state.fog
+        fog()
+        setToggle(ng,nd,state.fog)
+    end)
+
+    ns.Activated:Connect(function()
+        state.snake=not state.snake
+        camera()
+        setToggle(ns,nsd,state.snake)
+    end)
+
+    nb.Activated:Connect(function()
+        state.bob=not state.bob
+        camera()
+        setToggle(nb,nbd,state.bob)
+    end)
+
+    ef.Activated:Connect(function()
+        state.fovEnabled=not state.fovEnabled
+        if state.fovEnabled then
+            local cam=workspace.CurrentCamera
+            if cam then
+                state.originalCamera=cam
+                state.originalFov=cam.FieldOfView
+            end
+            applyFov()
+        else
+            applyFov()
+        end
+        setToggle(ef,efd,state.fovEnabled)
+    end)
+
+    setFov(70)
+    setToggle(ef,efd,state.fovEnabled)
+
+    local rc
+    rc=RunService.RenderStepped:Connect(function()
+        if not UI.Parent then
+            rc:Disconnect()
+            if state.fovEnabled then
+                state.fovEnabled=false
+            end
+            applyFov()
+            return
+        end
+
+        local now=os.clock()
+        if now-state.last>.15 then
+            state.last=now
+            if state.full then fullBright() end
+            if state.fog then fog() end
+        end
+
+        if state.fovEnabled or state.snake or state.bob then
+            camera()
+        end
+    end)
+
+    local boundName="PulseCore_FOV_Render"
+    pcall(function()
+        RunService:UnbindFromRenderStep(boundName)
+        RunService:BindToRenderStep(boundName,Enum.RenderPriority.Last.Value,function()
+            if not UI.Parent then
+                RunService:UnbindFromRenderStep(boundName)
+                return
+            end
+            if state.fovEnabled then
+                applyFov()
+            end
+        end)
+    end)
+
+    P.CharacterAdded:Connect(function()
+        task.defer(function()
+            state.originalCamera=nil
+            state.originalFov=nil
+            if state.fovEnabled then
+                applyFov()
+            end
+            camera()
+        end)
+    end)
+
+    local old=I:FindFirstChild("PulseCoreExecutionStats",true)
+    if old then old:Destroy() end
+    local stats=Instance.new("Frame")
+    stats.Name="PulseCoreExecutionStats"
+    stats.LayoutOrder=5
+    stats.Size=UDim2.new(1,0,0,58)
+    stats.BackgroundColor3=Color3.fromRGB(30,30,30)
+    stats.BackgroundTransparency=.16
+    stats.BorderSizePixel=0
+    stats.Parent=I
+    c(stats) s(stats)
+
+    local txt=Instance.new("TextLabel")
+    txt.Name="StatsLabel"
+    txt.BackgroundTransparency=1
+    txt.Position=UDim2.fromOffset(14,7)
+    txt.Size=UDim2.new(1,-28,1,-14)
+    txt.Font=Enum.Font.GothamBold
+    txt.TextSize=14
+    txt.TextColor3=Color3.fromRGB(235,235,235)
+    txt.TextWrapped=true
+    txt.TextXAlignment=Enum.TextXAlignment.Left
+    txt.TextYAlignment=Enum.TextYAlignment.Center
+    txt.Parent=stats
+
+    local localCount=tonumber(_G.PulseCoreTotalExecutionsLocal) or 0
+    txt.Text=string.format("Total Executions (local): %d",localCount)
+end)
+
+
+
 
 return _result
