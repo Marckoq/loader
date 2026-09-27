@@ -408,6 +408,26 @@ task.spawn(function()
     emotesPage.ZIndex=20
     emotesPage.Parent=pageParent
 
+    local emotePadding=Instance.new("UIPadding")
+    emotePadding.PaddingTop=UDim.new(0,22)
+    emotePadding.PaddingBottom=UDim.new(0,24)
+    emotePadding.PaddingLeft=UDim.new(0,22)
+    emotePadding.PaddingRight=UDim.new(0,22)
+    emotePadding.Parent=emotesPage
+
+    local emoteLayout=Instance.new("UIListLayout")
+    emoteLayout.FillDirection=Enum.FillDirection.Vertical
+    emoteLayout.HorizontalAlignment=Enum.HorizontalAlignment.Left
+    emoteLayout.SortOrder=Enum.SortOrder.LayoutOrder
+    emoteLayout.Padding=UDim.new(0,10)
+    emoteLayout.Parent=emotesPage
+
+    local function updateEmoteCanvas()
+        emotesPage.CanvasSize=UDim2.fromOffset(0,emoteLayout.AbsoluteContentSize.Y+46)
+    end
+    emoteLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateEmoteCanvas)
+    task.defer(updateEmoteCanvas)
+
     local header=Instance.new("TextLabel")
     header.LayoutOrder=1
     header.Size=UDim2.new(1,0,0,42)
@@ -720,7 +740,7 @@ task.spawn(function()
             if page then page.Visible=false end
         end
 
-        local mainHeader=findDesc(main,"Header")
+        local mainHeader=findDesc(main,"PageHeader")
         local title=mainHeader and mainHeader:FindFirstChild("Title",true)
         local subtitle=mainHeader and mainHeader:FindFirstChild("Subtitle",true)
         if title then title.Text="EMOTES" end
