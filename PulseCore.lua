@@ -279,7 +279,7 @@ task.spawn(function()
         if not ui then return end
 
         local main=ui:FindFirstChild("MainFrame")
-        local sidebar=main and main:FindFirstChild("Sidebar")
+        local sidebar=main and main:FindFirstChild("Sidebar",true)
         local localPage=ui:FindFirstChild("LocalPage",true)
 
         if not (main and sidebar and localPage) then return end
@@ -1525,7 +1525,7 @@ task.defer(function()
         local _pg=_plr and _plr:FindFirstChildOfClass("PlayerGui")
         local _g=_pg and _pg:FindFirstChild("AssemblySpeedBoostUI")
         local _main=_g and _g:FindFirstChild("MainFrame")
-        local _sidebar=_main and _main:FindFirstChild("Sidebar")
+        local _sidebar=_main and _main:FindFirstChild("Sidebar",true)
         if not _sidebar then return end
 
         local _scroll=_sidebar:FindFirstChild("PulseCoreTabScroller")
