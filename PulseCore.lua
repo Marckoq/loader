@@ -1984,4 +1984,234 @@ task.defer(function()
     end
 end)
 
+
+-- ================================================================
+-- PULSE USER OVERHEAD
+-- ================================================================
+do
+    local PULSE_LIST_URL = "https://raw.githubusercontent.com/Marckoq/loader/main/pulse_users.dat"
+    local PULSE_LIST_SEED = 26391
+    local PULSE_LIST_ALPHA = "MNBVCXZLKJHGFDSAPOIUYTREWQmnbvcxzlkjhgfdsapoiuytrewq9876543210+/"
+    local PULSE_LIST_EXPECTED = 1012
+
+    local function pulseXor8(a,b)
+        local r=0
+        local bit=1
+        for _=1,8 do
+            local aa=a%2
+            local bb=b%2
+            if aa~=bb then r=r+bit end
+            a=math.floor(a/2)
+            b=math.floor(b/2)
+            bit=bit*2
+        end
+        return r
+    end
+
+    local pulseMap={}
+    for i=1,#PULSE_LIST_ALPHA do
+        pulseMap[PULSE_LIST_ALPHA:sub(i,i)]=i-1
+    end
+
+    local function pulseB64(s)
+        local out={}
+        local i=1
+        while i<=#s do
+            local c1=s:sub(i,i)
+            local c2=s:sub(i+1,i+1)
+            local c3=s:sub(i+2,i+2)
+            local c4=s:sub(i+3,i+3)
+            local v1=pulseMap[c1] or 0
+            local v2=pulseMap[c2] or 0
+            local v3=(c3=="=") and 0 or (pulseMap[c3] or 0)
+            local v4=(c4=="=") and 0 or (pulseMap[c4] or 0)
+            local n=v1*262144+v2*4096+v3*64+v4
+            out[#out+1]=string.char(math.floor(n/65536)%256)
+            if c3~="=" then out[#out+1]=string.char(math.floor(n/256)%256) end
+            if c4~="=" then out[#out+1]=string.char(n%256) end
+            i=i+4
+        end
+        return table.concat(out)
+    end
+
+    local function pulseDecode(blob)
+        local enc=pulseB64(blob)
+        local out={}
+        local st=PULSE_LIST_SEED
+        for i=1,#enc do
+            st=(st*73+41)%256
+            out[i]=string.char(pulseXor8(string.byte(enc,i),st))
+        end
+        return table.concat(out)
+    end
+
+    local function pulseGetRaw()
+        local ok,body=pcall(function()
+            return game:HttpGet(PULSE_LIST_URL,true)
+        end)
+        if ok and type(body)=="string" and #body>0 then
+            return body
+        end
+
+        local req=(request or http_request or (syn and syn.request))
+        if type(req)=="function" then
+            local ok2,res=pcall(function()
+                return req({Url=PULSE_LIST_URL,Method="GET"})
+            end)
+            if ok2 and type(res)=="table" and type(res.Body)=="string" then
+                return res.Body
+            end
+        end
+        return nil
+    end
+
+    local function pulseLoadUsers()
+        local body=pulseGetRaw()
+        if not body then return {} end
+
+        local okDecode,decoded=pcall(pulseDecode,body)
+        if not okDecode or type(decoded)~="string" then
+            return {}
+        end
+
+        local checksum=0
+        for i=1,#decoded do
+            checksum=(checksum+string.byte(decoded,i))%4294967296
+        end
+        if checksum~=PULSE_LIST_EXPECTED then
+            return {}
+        end
+
+        local okJson,data=pcall(function()
+            return game:GetService("HttpService"):JSONDecode(decoded)
+        end)
+        if not okJson or type(data)~="table" or type(data.u)~="table" then
+            return {}
+        end
+
+        local users={}
+        for _,id in ipairs(data.u) do
+            local n=tonumber(id)
+            if n then users[n]=true end
+        end
+        return users
+    end
+
+    local pulseUsers=pulseLoadUsers()
+    local pulsePlayers=game:GetService("Players")
+    local pulseRunService=game:GetService("RunService")
+    local pulseLocalPlayer=pulsePlayers.LocalPlayer
+    local pulseLabels={}
+    local pulseConnections={}
+
+    local function pulseIsUser(player)
+        return player and player ~= pulseLocalPlayer and pulseUsers[player.UserId]==true
+    end
+
+    local function pulseRemoveLabel(player)
+        local info=pulseLabels[player]
+        if info then
+            if info.connection then pcall(function() info.connection:Disconnect() end) end
+            if info.gui then pcall(function() info.gui:Destroy() end) end
+            pulseLabels[player]=nil
+        end
+    end
+
+    local function pulseCreateLabel(player)
+        pulseRemoveLabel(player)
+        if not pulseIsUser(player) then return end
+
+        local function attach(character)
+            pulseRemoveLabel(player)
+            if not pulseIsUser(player) or not character then return end
+
+            local head=character:FindFirstChild("Head")
+            if not head then return end
+
+            local gui=Instance.new("BillboardGui")
+            gui.Name="PulseUserMarker"
+            gui.Adornee=head
+            gui.AlwaysOnTop=true
+            gui.LightInfluence=0
+            gui.MaxDistance=math.huge
+            gui.Size=UDim2.fromOffset(180,36)
+            gui.StudsOffsetWorldSpace=Vector3.new(0,2.65,0)
+            gui.Parent=head
+
+            local label=Instance.new("TextLabel")
+            label.BackgroundTransparency=1
+            label.Size=UDim2.fromScale(1,1)
+            label.Font=Enum.Font.GothamBold
+            label.Text="Pulse User"
+            label.TextColor3=Color3.fromRGB(255,255,255)
+            label.TextStrokeColor3=Color3.fromRGB(0,0,0)
+            label.TextStrokeTransparency=0
+            label.TextXAlignment=Enum.TextXAlignment.Center
+            label.TextYAlignment=Enum.TextYAlignment.Center
+            label.TextSize=22
+            label.Parent=gui
+
+            local conn
+            conn=pulseRunService.RenderStepped:Connect(function()
+                if not gui.Parent or not player.Parent or not pulseIsUser(player) then
+                    if conn then conn:Disconnect() end
+                    if gui then gui:Destroy() end
+                    pulseLabels[player]=nil
+                    return
+                end
+
+                local myChar=pulseLocalPlayer.Character
+                local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
+                local targetRoot=character:FindFirstChild("HumanoidRootPart")
+                if myRoot and targetRoot then
+                    local d=(myRoot.Position-targetRoot.Position).Magnitude
+                    local size=math.max(8,math.floor(22/(1+d/32)+0.5))
+                    label.TextSize=size
+                    gui.Size=UDim2.fromOffset(math.max(96,size*7),math.max(24,size+10))
+                end
+            end)
+
+            pulseLabels[player]={gui=gui,connection=conn}
+        end
+
+        if player.Character then
+            task.defer(attach,player.Character)
+        end
+
+        pulseConnections[player]=player.CharacterAdded:Connect(function(character)
+            task.defer(attach,character)
+        end)
+    end
+
+    local function pulseRefresh()
+        if not pulseUsers[pulseLocalPlayer.UserId] then
+            for player in pairs(pulseLabels) do pulseRemoveLabel(player) end
+            return
+        end
+
+        for _,player in ipairs(pulsePlayers:GetPlayers()) do
+            if player~=pulseLocalPlayer and pulseUsers[player.UserId] then
+                pulseCreateLabel(player)
+            else
+                pulseRemoveLabel(player)
+            end
+        end
+    end
+
+    pulsePlayers.PlayerAdded:Connect(function(player)
+        if pulseUsers[player.UserId] then
+            pulseCreateLabel(player)
+        end
+    end)
+
+    pulsePlayers.PlayerRemoving:Connect(function(player)
+        pulseRemoveLabel(player)
+        local c=pulseConnections[player]
+        if c then pcall(function() c:Disconnect() end) end
+        pulseConnections[player]=nil
+    end)
+
+    pulseRefresh()
+end
+
 return _result
