@@ -2184,11 +2184,8 @@ do
     end
 
     local function pulseRefresh()
-        if not pulseUsers[pulseLocalPlayer.UserId] then
-            for player in pairs(pulseLabels) do pulseRemoveLabel(player) end
-            return
-        end
-
+        -- Any client running PulseCore may see the markers.
+        -- Only players whose UserId is in the protected list receive the marker.
         for _,player in ipairs(pulsePlayers:GetPlayers()) do
             if player~=pulseLocalPlayer and pulseUsers[player.UserId] then
                 pulseCreateLabel(player)
