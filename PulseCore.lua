@@ -1663,7 +1663,9 @@ task.defer(function()
     local txt=Instance.new("TextLabel")txt.Name="StatsLabel"txt.BackgroundTransparency=1 txt.Position=UDim2.fromOffset(14,7)txt.Size=UDim2.new(1,-28,1,-14)txt.Font=Enum.Font.GothamBold txt.TextSize=14 txt.TextColor3=Color3.fromRGB(235,235,235)txt.TextWrapped=true txt.TextXAlignment=Enum.TextXAlignment.Left txt.TextYAlignment=Enum.TextYAlignment.Center txt.Parent=stats
     local localCount=tonumber(_G.PulseCoreTotalExecutionsLocal) or 0
     txt.Text=string.format("Total Executions (local): %d",localCount)
-endtask.defer(function()
+end)
+
+task.defer(function()
     local ok, err = pcall(function()
         local _loader = loadstring or load
         if type(_loader) ~= "function" then
