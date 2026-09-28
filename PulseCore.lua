@@ -1695,7 +1695,7 @@ task.defer(function()
 end)
 
 
--- PULSECORE_TRIPWIRE_MINES_ESP_V2_NAME_EVENT
+-- PULSECORE_TRIPWIRE_MINES_ESP_V3_NAME_TARGETED
 task.defer(function()
     local ok, err = pcall(function()
         local Players = game:GetService("Players")
@@ -1775,6 +1775,9 @@ task.defer(function()
         local enabled = false
         local tracked = {}
         local connections = {}
+        local projectile = nil
+        local trapsFolder = nil
+        local trapsConnection = nil
 
         local function setToggleVisual(on)
             button.BackgroundColor3 = on
@@ -1800,11 +1803,14 @@ task.defer(function()
             step = true,
             stepmine = true,
             bomb = true,
+            bombs = true,
             bombmine = true,
+            tripwire = true,
             tripwiremine = true,
             tailsdollmine = true,
             glorbwiremine = true,
             deadglorbwiremine = true,
+            trapmine = true,
         }
 
         local function isPlayerCharacter(instance)
@@ -1812,11 +1818,14 @@ task.defer(function()
                 return false
             end
 
-            local model = instance:IsA("Model") and instance or instance:FindFirstAncestorOfClass("Model")
+            local model = instance:IsA("Model")
+                and instance
+                or instance:FindFirstAncestorOfClass("Model")
+
             return model and Players:GetPlayerFromCharacter(model) ~= nil
         end
 
-        local function getTarget(instance)
+        local function findTarget(instance)
             if not instance or not instance.Parent then
                 return nil
             end
@@ -1825,33 +1834,37 @@ task.defer(function()
                 return nil
             end
 
-            if instance:IsA("Model") then
-                return instance
-            end
-
-            if instance:IsA("BasePart") then
-                local parent = instance.Parent
-                if parent and parent:IsA("Model") and not isPlayerCharacter(parent) then
-                    return parent
-                end
+            if instance:IsA("Model") or instance:IsA("BasePart") then
                 return instance
             end
 
             return nil
         end
 
-        local function isNameMatch(instance)
-            if not (instance:IsA("Model") or instance:IsA("BasePart")) then
+        local function isMineName(instance)
+            if not instance then
                 return false
             end
 
             local normalized = normalizeName(instance.Name)
+
             if mineNames[normalized] then
                 return true
             end
 
-            return normalized:find("mine", 1, true) ~= nil
-                or normalized:find("bomb", 1, true) ~= nil
+            if normalized:find("mine", 1, true)
+                or normalized:find("bomb", 1, true)
+            then
+                return true
+            end
+
+            if normalized == "union" then
+                local parent = instance.Parent
+                return parent
+                    and normalizeName(parent.Name) == "traps"
+            end
+
+            return false
         end
 
         local function findAnchor(target)
@@ -1880,27 +1893,31 @@ task.defer(function()
                 return
             end
 
-            if data.highlight then
-                pcall(function()
+            pcall(function()
+                if data.highlight then
                     data.highlight:Destroy()
-                end)
-            end
+                end
+            end)
 
-            if data.billboard then
-                pcall(function()
+            pcall(function()
+                if data.billboard then
                     data.billboard:Destroy()
-                end)
-            end
+                end
+            end)
 
             tracked[target] = nil
         end
 
         local function addESP(instance)
-            if not enabled or not isNameMatch(instance) then
+            if not enabled or not instance or not instance.Parent then
                 return
             end
 
-            local target = getTarget(instance)
+            if not isMineName(instance) then
+                return
+            end
+
+            local target = findTarget(instance)
             if not target or tracked[target] then
                 return
             end
@@ -1914,7 +1931,7 @@ task.defer(function()
             highlight.Name = "PulseCoreTripwireMineHighlight"
             highlight.Adornee = target
             highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.FillColor = Color3.fromRGB(255, 70, 70)
+            highlight.FillColor = Color3.fromRGB(255, 45, 45)
             highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
             highlight.FillTransparency = 0.45
             highlight.OutlineTransparency = 0
@@ -1946,24 +1963,6 @@ task.defer(function()
             }
         end
 
-        local function targetStillMatches(target)
-            if not target or not target.Parent then
-                return false
-            end
-
-            if isNameMatch(target) then
-                return true
-            end
-
-            for _, descendant in ipairs(target:GetDescendants()) do
-                if isNameMatch(descendant) then
-                    return true
-                end
-            end
-
-            return false
-        end
-
         local function clearAll()
             local targets = {}
             for target in pairs(tracked) do
@@ -1975,68 +1974,139 @@ task.defer(function()
             end
         end
 
-        local function initialScan()
-            task.spawn(function()
-                local stack = {workspace}
-                local index = 1
-                local processed = 0
+        local function scanContainer(container)
+            if not container or not container.Parent or not enabled then
+                return
+            end
 
-                while enabled and ui.Parent and index <= #stack do
-                    local node = stack[index]
-                    index = index + 1
+            for _, instance in ipairs(container:GetDescendants()) do
+                if not enabled then
+                    return
+                end
 
-                    for _, child in ipairs(node:GetChildren()) do
-                        stack[#stack + 1] = child
+                if isMineName(instance) then
+                    addESP(instance)
+                end
+            end
+        end
 
-                        if isNameMatch(child) then
-                            addESP(child)
-                        end
+        local function disconnectTrapsConnection()
+            if trapsConnection then
+                pcall(function()
+                    trapsConnection:Disconnect()
+                end)
+                trapsConnection = nil
+            end
+            trapsFolder = nil
+        end
 
-                        processed = processed + 1
-                        if processed >= 300 then
-                            processed = 0
-                            task.wait()
-                        end
+        local function watchTraps(container)
+            if not container or not container:IsDescendantOf(workspace) then
+                return
+            end
 
-                        if not enabled or not ui.Parent then
-                            return
-                        end
+            if trapsFolder == container and trapsConnection then
+                return
+            end
+
+            disconnectTrapsConnection()
+            trapsFolder = container
+
+            trapsConnection = container.DescendantAdded:Connect(function(instance)
+                if not enabled then
+                    return
+                end
+
+                if isMineName(instance) then
+                    task.defer(function()
+                        addESP(instance)
+                    end)
+                end
+            end)
+
+            scanContainer(container)
+        end
+
+        local function disconnectProjectileConnection()
+            if projectile then
+                return
+            end
+        end
+
+        local function setupProjectile(container)
+            if not container or projectile == container then
+                return
+            end
+
+            projectile = container
+
+            connections[#connections + 1] = projectile.DescendantAdded:Connect(function(instance)
+                if not enabled then
+                    return
+                end
+
+                if isMineName(instance) then
+                    task.defer(function()
+                        addESP(instance)
+                    end)
+                end
+
+                if normalizeName(instance.Name) == "traps"
+                    and (instance:IsA("Folder") or instance:IsA("Model"))
+                then
+                    watchTraps(instance)
+                end
+            end)
+
+            connections[#connections + 1] = projectile.DescendantRemoving:Connect(function(instance)
+                local target = tracked[instance] and instance
+                if target then
+                    destroyESP(target)
+                    return
+                end
+
+                for trackedTarget in pairs(tracked) do
+                    if trackedTarget == instance then
+                        destroyESP(trackedTarget)
+                        break
                     end
                 end
             end)
+
+            local existingTraps = projectile:FindFirstChild("Traps")
+            if existingTraps then
+                watchTraps(existingTraps)
+            else
+                scanContainer(projectile)
+            end
         end
 
-        connections[#connections + 1] = workspace.DescendantAdded:Connect(function(instance)
+        local function setup()
             if not enabled then
                 return
             end
 
-            if isNameMatch(instance) then
-                task.defer(function()
-                    addESP(instance)
-                end)
+            local candidate = workspace:FindFirstChild("Projectile")
+            if candidate then
+                setupProjectile(candidate)
             end
-        end)
-
-        connections[#connections + 1] = workspace.DescendantRemoving:Connect(function(instance)
-            local target = getTarget(instance)
-            if target then
-                task.defer(function()
-                    if not targetStillMatches(target) then
-                        destroyESP(target)
-                    end
-                end)
-            end
-        end)
+        end
 
         button.Activated:Connect(function()
             enabled = not enabled
             setToggleVisual(enabled)
 
             if enabled then
-                initialScan()
+                setup()
             else
                 clearAll()
+                disconnectTrapsConnection()
+            end
+        end)
+
+        connections[#connections + 1] = workspace.ChildAdded:Connect(function(instance)
+            if enabled and normalizeName(instance.Name) == "projectile" then
+                setupProjectile(instance)
             end
         end)
 
@@ -2047,15 +2117,19 @@ task.defer(function()
 
             enabled = false
             clearAll()
+            disconnectTrapsConnection()
 
             for _, connection in ipairs(connections) do
                 pcall(function()
                     connection:Disconnect()
                 end)
             end
+
+            connections = {}
         end)
 
         setToggleVisual(false)
+        setup()
     end)
 
     if not ok then
