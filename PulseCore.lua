@@ -1256,6 +1256,9 @@ _src=_src:gsub("FPS limit %(15 %- 240%)","FPS limit (1 - 1000)")
 
 -- PULSECORE_EMOTES_AND_PROMPTS_RUNTIME_ATTACH_V4
 
+_src=string.gsub(_src,"fpsMin = 15,%s*fpsMax = 240,","fpsMin = 1, fpsMax = 1000,",1)
+_src=string.gsub(_src,"FPS limit %(15 %- 240%)","FPS limit (1 - 1000)",1)
+
 local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
 local _fn,_err=_load(_src,"@PulseCore")
@@ -1691,6 +1694,447 @@ task.defer(function()
     end
 end)
 
+
+-- PULSECORE_TRIPWIRE_MINES_ESP_V1
+task.defer(function()
+    local ok, err = pcall(function()
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local CollectionService = game:GetService("CollectionService")
+
+        local player = Players.LocalPlayer
+        local playerGui = player and player:FindFirstChildOfClass("PlayerGui")
+        local ui = playerGui and playerGui:FindFirstChild("AssemblySpeedBoostUI")
+        local visualsPage = ui and ui:FindFirstChild("VisualsPage", true)
+
+        if not (player and ui and visualsPage) then
+            return
+        end
+
+        local old = visualsPage:FindFirstChild("PulseCoreESPTripwireMines", true)
+        if old then
+            old:Destroy()
+        end
+
+        local row = Instance.new("Frame")
+        row.Name = "PulseCoreESPTripwireMines"
+        row.LayoutOrder = 11
+        row.Size = UDim2.new(1, 0, 0, 50)
+        row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        row.BackgroundTransparency = 0.16
+        row.BorderSizePixel = 0
+        row.Parent = visualsPage
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 9)
+        rowCorner.Parent = row
+
+        local rowStroke = Instance.new("UIStroke")
+        rowStroke.Color = Color3.fromRGB(70, 70, 70)
+        rowStroke.Transparency = 0.28
+        rowStroke.Thickness = 1
+        rowStroke.Parent = row
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.BackgroundTransparency = 1
+        textLabel.Position = UDim2.fromOffset(14, 0)
+        textLabel.Size = UDim2.new(1, -100, 1, 0)
+        textLabel.Text = "ESP Tripwire Mines"
+        textLabel.Font = Enum.Font.GothamMedium
+        textLabel.TextSize = 13
+        textLabel.TextColor3 = Color3.fromRGB(235, 235, 235)
+        textLabel.TextXAlignment = Enum.TextXAlignment.Left
+        textLabel.Parent = row
+
+        local button = Instance.new("TextButton")
+        button.Name = "Toggle"
+        button.AnchorPoint = Vector2.new(1, 0.5)
+        button.Position = UDim2.new(1, -11, 0.5, 0)
+        button.Size = UDim2.fromOffset(58, 30)
+        button.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
+        button.BorderSizePixel = 0
+        button.Text = ""
+        button.AutoButtonColor = false
+        button.Parent = row
+
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 999)
+        buttonCorner.Parent = button
+
+        local dot = Instance.new("Frame")
+        dot.Name = "Dot"
+        dot.AnchorPoint = Vector2.new(0, 0.5)
+        dot.Position = UDim2.new(0, 5, 0.5, 0)
+        dot.Size = UDim2.fromOffset(22, 22)
+        dot.BackgroundColor3 = Color3.fromRGB(135, 135, 135)
+        dot.BorderSizePixel = 0
+        dot.Parent = button
+
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(0, 999)
+        dotCorner.Parent = dot
+
+        local enabled = false
+        local tracked = {}
+        local scanAccumulator = 0
+        local connections = {}
+
+        local function setToggleVisual(on)
+            button.BackgroundColor3 = on
+                and Color3.fromRGB(20, 95, 135)
+                or Color3.fromRGB(38, 38, 38)
+
+            dot.BackgroundColor3 = on
+                and Color3.fromRGB(225, 245, 255)
+                or Color3.fromRGB(135, 135, 135)
+
+            dot.Position = on
+                and UDim2.new(1, -27, 0.5, 0)
+                or UDim2.new(0, 5, 0.5, 0)
+        end
+
+        local function normalizeName(value)
+            return string.lower(tostring(value or "")):gsub("[^%w]+", "")
+        end
+
+        local strongNames = {
+            mine = true,
+            mines = true,
+            tripwiremine = true,
+            tailsdollmine = true,
+            glorbwiremine = true,
+            deadglorbwiremine = true,
+        }
+
+        local function isMineTag(instance)
+            return CollectionService:HasTag(instance, "TripwireMine")
+                or CollectionService:HasTag(instance, "TailsDollMine")
+                or CollectionService:HasTag(instance, "Mine")
+        end
+
+        local function hasTripwireAttribute(instance)
+            for _, attributeName in ipairs({
+                "Character",
+                "CharacterName",
+                "SelectedCharacter",
+                "CurrentCharacter",
+                "OwnerCharacter",
+                "Exe",
+                "EXE",
+            }) do
+                local value = instance:GetAttribute(attributeName)
+                if type(value) == "string" then
+                    local normalized = normalizeName(value)
+                    if normalized == "tripwire"
+                        or normalized == "tailsdoll"
+                        or normalized == "glorbwire"
+                    then
+                        return true
+                    end
+                end
+            end
+
+            return false
+        end
+
+        local function getAdornee(instance)
+            if instance:IsA("Model") then
+                if Players:GetPlayerFromCharacter(instance) then
+                    return nil
+                end
+
+                local humanoid = instance:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    return nil
+                end
+
+                if instance.PrimaryPart then
+                    return instance
+                end
+
+                local root = instance:FindFirstChild("HumanoidRootPart", true)
+                    or instance:FindFirstChild("RootPart", true)
+                    or instance:FindFirstChild("Handle", true)
+
+                if root and root:IsA("BasePart") then
+                    return instance
+                end
+
+                if instance:FindFirstChildWhichIsA("BasePart", true) then
+                    return instance
+                end
+
+                return nil
+            end
+
+            if instance:IsA("BasePart") then
+                local ancestor = instance.Parent
+                for _ = 1, 4 do
+                    if not ancestor then
+                        break
+                    end
+
+                    if ancestor:IsA("Model")
+                        and (
+                            Players:GetPlayerFromCharacter(ancestor)
+                            or ancestor:FindFirstChildOfClass("Humanoid")
+                        )
+                    then
+                        return nil
+                    end
+
+                    if ancestor == workspace then
+                        break
+                    end
+
+                    ancestor = ancestor.Parent
+                end
+
+                return instance
+            end
+
+            return nil
+        end
+
+        local function isTripwireMine(instance)
+            if not instance or not instance.Parent then
+                return false
+            end
+
+            local adornee = getAdornee(instance)
+            if not adornee then
+                return false
+            end
+
+            if isMineTag(instance) then
+                return true
+            end
+
+            local normalized = normalizeName(instance.Name)
+
+            if strongNames[normalized]
+                or normalized:find("tripwiremine", 1, true)
+                or normalized:find("tailsdollmine", 1, true)
+                or normalized:find("glorbwiremine", 1, true)
+                or normalized:find("deadglorbwiremine", 1, true)
+            then
+                return true
+            end
+
+            if hasTripwireAttribute(instance)
+                and normalized:find("mine", 1, true)
+            then
+                return true
+            end
+
+            local parent = instance.Parent
+            for _ = 1, 5 do
+                if not parent then
+                    break
+                end
+
+                local parentName = normalizeName(parent.Name)
+
+                if (
+                    parentName == "tripwire"
+                    or parentName == "tailsdoll"
+                    or parentName == "glorbwire"
+                ) and normalized:find("mine", 1, true)
+                then
+                    return true
+                end
+
+                if parent == workspace then
+                    break
+                end
+
+                parent = parent.Parent
+            end
+
+            return false
+        end
+
+        local function getAnchor(instance)
+            if instance:IsA("BasePart") then
+                return instance
+            end
+
+            if instance:IsA("Model") then
+                return instance.PrimaryPart
+                    or instance:FindFirstChild("HumanoidRootPart", true)
+                    or instance:FindFirstChild("RootPart", true)
+                    or instance:FindFirstChild("Handle", true)
+                    or instance:FindFirstChildWhichIsA("BasePart", true)
+            end
+
+            return nil
+        end
+
+        local function removeESP(instance)
+            local data = tracked[instance]
+            if not data then
+                return
+            end
+
+            if data.highlight then
+                pcall(function()
+                    data.highlight:Destroy()
+                end)
+            end
+
+            if data.billboard then
+                pcall(function()
+                    data.billboard:Destroy()
+                end)
+            end
+
+            tracked[instance] = nil
+        end
+
+        local function addESP(instance)
+            if tracked[instance] or not isTripwireMine(instance) then
+                return
+            end
+
+            local adornee = getAdornee(instance)
+            local anchor = getAnchor(instance)
+            if not adornee or not anchor then
+                return
+            end
+
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "PulseCoreTripwireMineHighlight"
+            highlight.Adornee = adornee
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.FillColor = Color3.fromRGB(255, 70, 70)
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.FillTransparency = 0.45
+            highlight.OutlineTransparency = 0
+            highlight.Parent = adornee
+
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "PulseCoreTripwireMineLabel"
+            billboard.Adornee = anchor
+            billboard.AlwaysOnTop = true
+            billboard.Size = UDim2.fromOffset(90, 28)
+            billboard.StudsOffset = Vector3.new(0, 2.2, 0)
+            billboard.MaxDistance = 100000
+            billboard.Parent = anchor
+
+            local nameText = Instance.new("TextLabel")
+            nameText.BackgroundTransparency = 1
+            nameText.Size = UDim2.fromScale(1, 1)
+            nameText.Text = "Mine"
+            nameText.Font = Enum.Font.GothamBold
+            nameText.TextSize = 14
+            nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            nameText.TextStrokeTransparency = 0
+            nameText.Parent = billboard
+
+            tracked[instance] = {
+                highlight = highlight,
+                billboard = billboard,
+            }
+        end
+
+        local function scan()
+            if not enabled or not ui.Parent then
+                return
+            end
+
+            local seen = {}
+
+            for _, instance in ipairs(workspace:GetDescendants()) do
+                if isTripwireMine(instance) then
+                    seen[instance] = true
+                    addESP(instance)
+                end
+            end
+
+            for instance in pairs(tracked) do
+                if not seen[instance]
+                    or not instance.Parent
+                    or not isTripwireMine(instance)
+                then
+                    removeESP(instance)
+                end
+            end
+        end
+
+        local function clearAll()
+            local list = {}
+            for instance in pairs(tracked) do
+                list[#list + 1] = instance
+            end
+
+            for _, instance in ipairs(list) do
+                removeESP(instance)
+            end
+        end
+
+        button.Activated:Connect(function()
+            enabled = not enabled
+            setToggleVisual(enabled)
+
+            if enabled then
+                scan()
+            else
+                clearAll()
+            end
+        end)
+
+        connections[#connections + 1] = workspace.DescendantAdded:Connect(function(instance)
+            if not enabled then
+                return
+            end
+
+            task.defer(function()
+                addESP(instance)
+
+                if instance:IsA("Model") or instance:IsA("BasePart") then
+                    for _, descendant in ipairs(instance:GetDescendants()) do
+                        addESP(descendant)
+                    end
+                end
+            end)
+        end)
+
+        connections[#connections + 1] = workspace.DescendantRemoving:Connect(function(instance)
+            removeESP(instance)
+        end)
+
+        connections[#connections + 1] = RunService.Heartbeat:Connect(function(dt)
+            scanAccumulator = scanAccumulator + dt
+
+            if scanAccumulator >= 0.35 then
+                scanAccumulator = 0
+                scan()
+            end
+        end)
+
+        connections[#connections + 1] = ui.AncestryChanged:Connect(function(_, parent)
+            if parent then
+                return
+            end
+
+            enabled = false
+            clearAll()
+
+            for _, connection in ipairs(connections) do
+                pcall(function()
+                    connection:Disconnect()
+                end)
+            end
+        end)
+
+        setToggleVisual(false)
+    end)
+
+    if not ok then
+        warn("[PulseCore] Tripwire Mines ESP error: " .. tostring(err))
+    end
+end)
 
 
 return _result
