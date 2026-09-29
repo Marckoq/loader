@@ -1250,13 +1250,13 @@ end)
 ]==]
 _src=_src:gsub("DEFAULT_BOOST_KEY%s*=%s*Enum%.KeyCode%.R","DEFAULT_BOOST_KEY = Enum.KeyCode.T")
 -- PULSECORE_FPS_LIMIT_1_1000_V1
-_src=_src:gsub("fpsMin = 15,","fpsMin = 1,")
-_src=_src:gsub("fpsMax = 240,","fpsMax = 1000,")
+_src=_src:gsub("fpsMin = 1,","fpsMin = 1,")
+_src=_src:gsub("fpsMax = 1000,","fpsMax = 1000,")
 _src=_src:gsub("FPS limit %(15 %- 240%)","FPS limit (1 - 1000)")
 
 -- PULSECORE_EMOTES_AND_PROMPTS_RUNTIME_ATTACH_V4
 
-_src=string.gsub(_src,"fpsMin = 15,%s*fpsMax = 240,","fpsMin = 1, fpsMax = 1000,",1)
+_src=string.gsub(_src,"fpsMin = 1,%s*fpsMax = 1000,","fpsMin = 1, fpsMax = 1000,",1)
 _src=string.gsub(_src,"FPS limit %(15 %- 240%)","FPS limit (1 - 1000)",1)
 
 local _load=loadstring or load
@@ -1931,8 +1931,8 @@ task.defer(function()
             highlight.Name = "PulseCoreTripwireMineHighlight"
             highlight.Adornee = target
             highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.FillColor = Color3.fromRGB(255, 45, 45)
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.FillColor = Color3.fromRGB(90, 0, 0)
+            highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
             highlight.FillTransparency = 0.45
             highlight.OutlineTransparency = 0
             highlight.Parent = target
@@ -1952,7 +1952,7 @@ task.defer(function()
             label.Text = "Mine"
             label.Font = Enum.Font.GothamBold
             label.TextSize = 14
-            label.TextColor3 = Color3.fromRGB(255, 255, 255)
+            label.TextColor3 = Color3.fromRGB(90, 0, 0)
             label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
             label.TextStrokeTransparency = 0
             label.Parent = billboard
