@@ -2259,5 +2259,30 @@ task.defer(function()
         warn("[PulseCore] Tripwire Mines ESP error: " .. tostring(err))
     end
 end)
+-- PULSECORE_CREDITS_CREATOR_PATCH_V1
+task.defer(function()
+    pcall(function()
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local playerGui = player and player:FindFirstChildOfClass("PlayerGui")
+        local gui = playerGui and playerGui:FindFirstChild("AssemblySpeedBoostUI")
+        if not gui then
+            return
+        end
+
+        for _, object in ipairs(gui:GetDescendants()) do
+            if object:IsA("TextLabel") then
+                local text = tostring(object.Text or "")
+                if text == "CREATOR\nMarckoq (Scriptblox)"
+                    or text == "CREATOR\nMarckoq (Scriptblox)\nCommunityGame125 (Roblox)"
+                then
+                    object.Text = "CREATOR\nMarckoq (Scriptblox)\nCommunityGame125 (Roblox)"
+                    object.Size = UDim2.new(1, 0, 0, 82)
+                end
+            end
+        end
+    end)
+end)
+
 
 return _result
