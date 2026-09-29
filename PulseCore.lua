@@ -1699,7 +1699,7 @@ task.defer(function()
 end)
 
 
--- PULSECORE_TRIPWIRE_MINES_ESP_V5_NAME_TARGETED
+-- PULSECORE_TRIPWIRE_MINES_ESP_V6_HITBOX
 task.defer(function()
     local ok, err = pcall(function()
         local Players = game:GetService("Players")
@@ -1713,7 +1713,9 @@ task.defer(function()
                 local pg = player:FindFirstChildOfClass("PlayerGui")
                 local ui = pg and pg:FindFirstChild("AssemblySpeedBoostUI")
                 local page = ui and ui:FindFirstChild("VisualsPage", true)
-                if pg and ui and page then return pg, ui, page end
+                if pg and ui and page then
+                    return pg, ui, page
+                end
                 task.wait(0.15)
             end
         end
@@ -1727,59 +1729,59 @@ task.defer(function()
         local row = Instance.new("Frame")
         row.Name = "PulseCoreESPTripwireMines"
         row.LayoutOrder = 11
-        row.Size = UDim2.new(1,0,0,50)
-        row.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        row.Size = UDim2.new(1, 0, 0, 50)
+        row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         row.BackgroundTransparency = 0.16
         row.BorderSizePixel = 0
         row.Parent = visualsPage
 
         local rc = Instance.new("UICorner")
-        rc.CornerRadius = UDim.new(0,9)
+        rc.CornerRadius = UDim.new(0, 9)
         rc.Parent = row
 
         local rs = Instance.new("UIStroke")
-        rs.Color = Color3.fromRGB(75,75,75)
+        rs.Color = Color3.fromRGB(75, 75, 75)
         rs.Transparency = 0.25
         rs.Thickness = 1
         rs.Parent = row
 
         local label = Instance.new("TextLabel")
         label.BackgroundTransparency = 1
-        label.Position = UDim2.fromOffset(14,0)
-        label.Size = UDim2.new(1,-100,1,0)
+        label.Position = UDim2.fromOffset(14, 0)
+        label.Size = UDim2.new(1, -100, 1, 0)
         label.Text = "ESP Tripwire Mines"
         label.Font = Enum.Font.GothamMedium
         label.TextSize = 13
-        label.TextColor3 = Color3.fromRGB(235,235,235)
+        label.TextColor3 = Color3.fromRGB(235, 235, 235)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = row
 
         local button = Instance.new("TextButton")
         button.Name = "Toggle"
-        button.AnchorPoint = Vector2.new(1,0.5)
-        button.Position = UDim2.new(1,-11,0.5,0)
-        button.Size = UDim2.fromOffset(58,30)
-        button.BackgroundColor3 = Color3.fromRGB(38,38,38)
+        button.AnchorPoint = Vector2.new(1, 0.5)
+        button.Position = UDim2.new(1, -11, 0.5, 0)
+        button.Size = UDim2.fromOffset(58, 30)
+        button.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
         button.BorderSizePixel = 0
         button.Text = ""
         button.AutoButtonColor = false
         button.Parent = row
 
         local bc = Instance.new("UICorner")
-        bc.CornerRadius = UDim.new(0,999)
+        bc.CornerRadius = UDim.new(0, 999)
         bc.Parent = button
 
         local dot = Instance.new("Frame")
         dot.Name = "Dot"
-        dot.AnchorPoint = Vector2.new(0,0.5)
-        dot.Position = UDim2.new(0,5,0.5,0)
-        dot.Size = UDim2.fromOffset(22,22)
-        dot.BackgroundColor3 = Color3.fromRGB(135,135,135)
+        dot.AnchorPoint = Vector2.new(0, 0.5)
+        dot.Position = UDim2.new(0, 5, 0.5, 0)
+        dot.Size = UDim2.fromOffset(22, 22)
+        dot.BackgroundColor3 = Color3.fromRGB(135, 135, 135)
         dot.BorderSizePixel = 0
         dot.Parent = button
 
         local dc = Instance.new("UICorner")
-        dc.CornerRadius = UDim.new(0,999)
+        dc.CornerRadius = UDim.new(0, 999)
         dc.Parent = dot
 
         local enabled = false
@@ -1790,184 +1792,301 @@ task.defer(function()
         local trapsFolder
         local destroyed = false
 
+        local HITBOX_SIZE = Vector3.new(16, 16, 16)
+        local OUTLINE_SIZE = HITBOX_SIZE + Vector3.new(1, 1, 1)
+
         local function setToggleVisual(state, animate)
-            button.BackgroundColor3 = state and Color3.fromRGB(20,95,135) or Color3.fromRGB(38,38,38)
-            dot.BackgroundColor3 = state and Color3.fromRGB(225,245,255) or Color3.fromRGB(135,135,135)
-            local pos = state and UDim2.new(1,-27,0.5,0) or UDim2.new(0,5,0.5,0)
+            local targetBackground = state and Color3.fromRGB(20, 95, 135) or Color3.fromRGB(38, 38, 38)
+            local targetDot = state and Color3.fromRGB(225, 245, 255) or Color3.fromRGB(135, 135, 135)
+            local targetPosition = state
+                and UDim2.new(1, -27, 0.5, 0)
+                or UDim2.new(0, 5, 0.5, 0)
+
+            button.BackgroundColor3 = targetBackground
+            dot.BackgroundColor3 = targetDot
+
             if animate then
                 pcall(function()
-                    TweenService:Create(dot,TweenInfo.new(0.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Position=pos}):Play()
+                    TweenService:Create(
+                        dot,
+                        TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                        { Position = targetPosition }
+                    ):Play()
                 end)
             else
-                dot.Position = pos
+                dot.Position = targetPosition
             end
         end
 
         local function normalizeName(value)
-            return string.lower(tostring(value or "")):gsub("[^%w]+","")
+            return string.lower(tostring(value or "")):gsub("[^%w]+", "")
         end
 
         local function disconnectDynamic()
-            for i=#dynamicConnections,1,-1 do
-                local connection=dynamicConnections[i]
-                dynamicConnections[i]=nil
-                pcall(function() connection:Disconnect() end)
+            for i = #dynamicConnections, 1, -1 do
+                local connection = dynamicConnections[i]
+                dynamicConnections[i] = nil
+                pcall(function()
+                    connection:Disconnect()
+                end)
             end
-            projectile=nil
-            trapsFolder=nil
+            projectile = nil
+            trapsFolder = nil
         end
 
         local function disconnectPersistent()
-            for i=#persistentConnections,1,-1 do
-                local connection=persistentConnections[i]
-                persistentConnections[i]=nil
-                pcall(function() connection:Disconnect() end)
+            for i = #persistentConnections, 1, -1 do
+                local connection = persistentConnections[i]
+                persistentConnections[i] = nil
+                pcall(function()
+                    connection:Disconnect()
+                end)
             end
+        end
+
+        local function isMineName(value)
+            local n = normalizeName(value)
+            return n == "mine"
+                or n == "mines"
+                or n == "step"
+                or n == "stepmine"
+                or n == "st e p"
+                or n == "bomb"
+                or n == "bombs"
+                or n == "bombmine"
+                or n == "tripwire"
+                or n == "tripwiremine"
+                or n == "tripwiretrap"
+                or n == "tailsdollmine"
+                or n == "glorbwiremine"
+                or n == "deadglorbwiremine"
+                or n == "trapmine"
+                or n == "trap"
+                or n:find("mine", 1, true) ~= nil
+                or n:find("bomb", 1, true) ~= nil
+                or n:find("tripwire", 1, true) ~= nil
+                or n:find("step", 1, true) ~= nil
+                or n:find("s.t.e.p", 1, true) ~= nil
+        end
+
+        local function isUnionTrap(instance)
+            return instance
+                and instance:IsA("BasePart")
+                and normalizeName(instance.Name) == "union"
+                and instance.Parent
+                and normalizeName(instance.Parent.Name) == "traps"
         end
 
         local function isCharacterLike(instance)
-            local model=instance and (instance:IsA("Model") and instance or instance:FindFirstAncestorOfClass("Model"))
+            local model = instance
+                and (instance:IsA("Model") and instance or instance:FindFirstAncestorOfClass("Model"))
             return model and Players:GetPlayerFromCharacter(model) ~= nil or false
         end
 
-        local function isMineNamed(value)
-            local n=normalizeName(value)
-            return n=="mine" or n=="mines" or n=="step" or n=="stepmine"
-                or n=="bomb" or n=="bombs" or n=="bombmine"
-                or n=="tripwire" or n=="tripwiremine" or n=="tripwiretrap"
-                or n=="tailsdollmine" or n=="glorbwiremine" or n=="deadglorbwiremine"
-                or n=="trapmine" or n=="trap"
-                or n:find("mine",1,true)~=nil
-                or n:find("bomb",1,true)~=nil
-        end
+        local function getMineTarget(instance)
+            if not instance or not instance.Parent or isCharacterLike(instance) then
+                return nil
+            end
 
-        local function isKnownUnionTrap(instance)
-            return instance and instance:IsA("BasePart")
-                and normalizeName(instance.Name)=="union"
-                and instance.Parent
-                and normalizeName(instance.Parent.Name)=="traps"
-        end
+            if isUnionTrap(instance) then
+                return instance
+            end
 
-        local function findMineTarget(instance)
-            if not instance or not instance.Parent or isCharacterLike(instance) then return nil end
-            if isKnownUnionTrap(instance) then return instance end
+            local current = instance
+            while current and current ~= workspace do
+                if current == projectile then
+                    break
+                end
 
-            local current=instance
-            while current and current~=workspace do
-                if current==projectile then break end
-                if isMineNamed(current.Name) then
+                if isMineName(current.Name) then
                     if current:IsA("Model") or current:IsA("BasePart") then
                         return current
                     end
+
                     return current:FindFirstAncestorOfClass("Model")
-                        or current:FindFirstChildWhichIsA("BasePart",true)
+                        or current:FindFirstChildWhichIsA("BasePart", true)
                 end
-                current=current.Parent
+
+                current = current.Parent
             end
+
             return nil
         end
 
-        local function getAnchor(target)
-            if target:IsA("BasePart") then return target end
-            if target:IsA("Model") then
-                return target.PrimaryPart
-                    or target:FindFirstChild("HumanoidRootPart",true)
-                    or target:FindFirstChild("RootPart",true)
-                    or target:FindFirstChild("Handle",true)
-                    or target:FindFirstChildWhichIsA("BasePart",true)
+        local function getHitbox(target)
+            if target:IsA("BasePart") then
+                return target
             end
+
+            if target:IsA("Model") then
+                local union = target:FindFirstChild("Union", true)
+                if union and union:IsA("BasePart") then
+                    return union
+                end
+
+                return target.PrimaryPart
+                    or target:FindFirstChild("HumanoidRootPart", true)
+                    or target:FindFirstChild("RootPart", true)
+                    or target:FindFirstChildWhichIsA("BasePart", true)
+            end
+
+            return nil
         end
 
         local function destroyESP(target)
-            local data=tracked[target]
+            local data = tracked[target]
             if not data then return end
-            pcall(function() if data.highlight then data.highlight:Destroy() end end)
-            pcall(function() if data.billboard then data.billboard:Destroy() end end)
-            tracked[target]=nil
+
+            pcall(function()
+                if data.fill then data.fill:Destroy() end
+            end)
+            pcall(function()
+                if data.outline then data.outline:Destroy() end
+            end)
+            pcall(function()
+                if data.billboard then data.billboard:Destroy() end
+            end)
+
+            tracked[target] = nil
         end
 
         local function addESP(instance)
-            if destroyed or not enabled or not instance or not instance.Parent then return end
-            if projectile and not instance:IsDescendantOf(projectile) then return end
-            local target=findMineTarget(instance)
-            if not target or tracked[target] then return end
-            if trapsFolder and not target:IsDescendantOf(trapsFolder) then return end
+            if destroyed or not enabled or not instance or not instance.Parent then
+                return
+            end
 
-            local anchor=getAnchor(target)
-            if not anchor then return end
+            if projectile and not instance:IsDescendantOf(projectile) then
+                return
+            end
 
-            local highlight=Instance.new("Highlight")
-            highlight.Name="PulseCoreTripwireMineHighlight"
-            highlight.Adornee=target
-            highlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.FillColor=Color3.fromRGB(90,0,0)
-            highlight.OutlineColor=Color3.fromRGB(255,0,0)
-            highlight.FillTransparency=0.42
-            highlight.OutlineTransparency=0
-            highlight.Parent=target
+            local target = getMineTarget(instance)
+            if not target or tracked[target] then
+                return
+            end
 
-            local billboard=Instance.new("BillboardGui")
-            billboard.Name="PulseCoreTripwireMineLabel"
-            billboard.Adornee=anchor
-            billboard.AlwaysOnTop=true
-            billboard.Size=UDim2.fromOffset(90,28)
-            billboard.StudsOffset=Vector3.new(0,2.2,0)
-            billboard.MaxDistance=100000
-            billboard.Parent=anchor
+            if trapsFolder and not target:IsDescendantOf(trapsFolder) then
+                return
+            end
 
-            local mineLabel=Instance.new("TextLabel")
-            mineLabel.BackgroundTransparency=1
-            mineLabel.Size=UDim2.fromScale(1,1)
-            mineLabel.Text="Mine"
-            mineLabel.Font=Enum.Font.GothamBold
-            mineLabel.TextSize=14
-            mineLabel.TextColor3=Color3.fromRGB(90,0,0)
-            mineLabel.TextStrokeColor3=Color3.fromRGB(0,0,0)
-            mineLabel.TextStrokeTransparency=0
-            mineLabel.Parent=billboard
+            local hitbox = getHitbox(target)
+            if not hitbox or not hitbox.Parent then
+                return
+            end
 
-            tracked[target]={highlight=highlight,billboard=billboard}
+            local fill = Instance.new("BoxHandleAdornment")
+            fill.Name = "PulseCoreTripwireMineHitbox"
+            fill.Adornee = hitbox
+            fill.Size = HITBOX_SIZE
+            fill.AlwaysOnTop = true
+            fill.ZIndex = 9
+            fill.Color3 = Color3.fromRGB(90, 0, 0)
+            fill.Transparency = 0.55
+            fill.Parent = hitbox
+
+            local outline = Instance.new("BoxHandleAdornment")
+            outline.Name = "PulseCoreTripwireMineHitboxOutline"
+            outline.Adornee = hitbox
+            outline.Size = OUTLINE_SIZE
+            outline.AlwaysOnTop = true
+            outline.ZIndex = 10
+            outline.Color3 = Color3.fromRGB(255, 0, 0)
+            outline.Transparency = 0.72
+            outline.Parent = hitbox
+
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "PulseCoreTripwireMineLabel"
+            billboard.Adornee = hitbox
+            billboard.AlwaysOnTop = true
+            billboard.Size = UDim2.fromOffset(90, 28)
+            billboard.StudsOffset = Vector3.new(0, 9, 0)
+            billboard.MaxDistance = 400
+            billboard.Parent = hitbox
+
+            local mineLabel = Instance.new("TextLabel")
+            mineLabel.BackgroundTransparency = 1
+            mineLabel.Size = UDim2.fromScale(1, 1)
+            mineLabel.Text = "Mine"
+            mineLabel.Font = Enum.Font.GothamBold
+            mineLabel.TextSize = 14
+            mineLabel.TextColor3 = Color3.fromRGB(90, 0, 0)
+            mineLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            mineLabel.TextStrokeTransparency = 0
+            mineLabel.Parent = billboard
+
+            tracked[target] = {
+                hitbox = hitbox,
+                fill = fill,
+                outline = outline,
+                billboard = billboard,
+            }
         end
 
         local function clearAll()
-            local targets={}
-            for target in pairs(tracked) do targets[#targets+1]=target end
-            for _,target in ipairs(targets) do destroyESP(target) end
+            local targets = {}
+            for target in pairs(tracked) do
+                targets[#targets + 1] = target
+            end
+
+            for _, target in ipairs(targets) do
+                destroyESP(target)
+            end
         end
 
         local function scanCurrentTraps()
-            if destroyed or not enabled or not trapsFolder or not trapsFolder.Parent then return end
-            for _,child in ipairs(trapsFolder:GetChildren()) do
-                if isMineNamed(child.Name) or isKnownUnionTrap(child) then
-                    addESP(child)
+            if destroyed or not enabled or not trapsFolder or not trapsFolder.Parent then
+                return
+            end
+
+            for _, instance in ipairs(trapsFolder:GetDescendants()) do
+                if isUnionTrap(instance) or isMineName(instance.Name) then
+                    addESP(instance)
                 end
             end
         end
 
         local function watchTraps(folder)
-            if destroyed or not enabled or not folder then return end
-            if trapsFolder==folder then
+            if destroyed or not enabled or not folder then
+                return
+            end
+
+            if trapsFolder == folder then
                 scanCurrentTraps()
                 return
             end
-            disconnectDynamic()
-            trapsFolder=folder
 
-            dynamicConnections[#dynamicConnections+1]=folder.ChildAdded:Connect(function(instance)
-                if enabled and not destroyed and (isMineNamed(instance.Name) or isKnownUnionTrap(instance)) then
-                    task.defer(function() addESP(instance) end)
+            for i = #dynamicConnections, 1, -1 do
+                local connection = dynamicConnections[i]
+                dynamicConnections[i] = nil
+                pcall(function()
+                    connection:Disconnect()
+                end)
+            end
+
+            projectile = folder.Parent
+            trapsFolder = folder
+
+            dynamicConnections[#dynamicConnections + 1] = folder.ChildAdded:Connect(function(instance)
+                if enabled and not destroyed then
+                    task.defer(function()
+                        addESP(instance)
+                    end)
                 end
             end)
 
-            dynamicConnections[#dynamicConnections+1]=folder.DescendantAdded:Connect(function(instance)
-                if enabled and not destroyed and isMineNamed(instance.Name) then
-                    task.defer(function() addESP(instance) end)
+            dynamicConnections[#dynamicConnections + 1] = folder.DescendantAdded:Connect(function(instance)
+                if enabled and not destroyed then
+                    task.defer(function()
+                        addESP(instance)
+                    end)
                 end
             end)
 
-            dynamicConnections[#dynamicConnections+1]=folder.DescendantRemoving:Connect(function(instance)
+            dynamicConnections[#dynamicConnections + 1] = folder.DescendantRemoving:Connect(function(instance)
                 for target in pairs(tracked) do
-                    if target==instance or target==instance:FindFirstAncestorOfClass("Model") or not target.Parent then
+                    if target == instance
+                        or target == instance:FindFirstAncestorOfClass("Model")
+                        or not target.Parent
+                    then
                         destroyESP(target)
                     end
                 end
@@ -1977,42 +2096,60 @@ task.defer(function()
         end
 
         local function setupProjectile(container)
-            if destroyed or not enabled or not container then return end
-            if projectile==container then
-                local traps=container:FindFirstChild("Traps")
-                if traps then watchTraps(traps) end
+            if destroyed or not enabled or not container then
+                return
+            end
+
+            if projectile == container then
+                local traps = container:FindFirstChild("Traps")
+                if traps then
+                    watchTraps(traps)
+                end
                 return
             end
 
             disconnectDynamic()
-            projectile=container
+            projectile = container
 
-            dynamicConnections[#dynamicConnections+1]=container.ChildAdded:Connect(function(instance)
-                if enabled and not destroyed and normalizeName(instance.Name)=="traps" then
+            dynamicConnections[#dynamicConnections + 1] = container.ChildAdded:Connect(function(instance)
+                if enabled
+                    and not destroyed
+                    and normalizeName(instance.Name) == "traps"
+                then
                     watchTraps(instance)
                 end
             end)
 
-            dynamicConnections[#dynamicConnections+1]=container.ChildRemoved:Connect(function(instance)
-                if normalizeName(instance.Name)=="traps" then
+            dynamicConnections[#dynamicConnections + 1] = container.ChildRemoved:Connect(function(instance)
+                if normalizeName(instance.Name) == "traps" then
                     clearAll()
-                    if trapsFolder==instance then trapsFolder=nil end
+                    if trapsFolder == instance then
+                        trapsFolder = nil
+                    end
                 end
             end)
 
-            local traps=container:FindFirstChild("Traps")
-            if traps then watchTraps(traps) end
+            local traps = container:FindFirstChild("Traps")
+            if traps then
+                watchTraps(traps)
+            end
         end
 
         local function setup()
-            if destroyed or not enabled then return end
-            local currentProjectile=workspace:FindFirstChild("Projectile")
-            if currentProjectile then setupProjectile(currentProjectile) end
+            if destroyed or not enabled then
+                return
+            end
+
+            local currentProjectile = workspace:FindFirstChild("Projectile")
+            if currentProjectile then
+                setupProjectile(currentProjectile)
+            end
         end
 
         button.Activated:Connect(function()
-            enabled=not enabled
-            setToggleVisual(enabled,true)
+            enabled = not enabled
+            setToggleVisual(enabled, true)
+
             if enabled then
                 setup()
             else
@@ -2021,27 +2158,39 @@ task.defer(function()
             end
         end)
 
-        persistentConnections[#persistentConnections+1]=workspace.ChildAdded:Connect(function(instance)
-            if enabled and not destroyed and normalizeName(instance.Name)=="projectile" then
+        persistentConnections[#persistentConnections + 1] = workspace.ChildAdded:Connect(function(instance)
+            if enabled
+                and not destroyed
+                and normalizeName(instance.Name) == "projectile"
+            then
                 setupProjectile(instance)
             end
         end)
 
-        persistentConnections[#persistentConnections+1]=ui.AncestryChanged:Connect(function(_,parent)
+        persistentConnections[#persistentConnections + 1] = workspace.ChildRemoved:Connect(function(instance)
+            if instance == projectile then
+                clearAll()
+                disconnectDynamic()
+            end
+        end)
+
+        persistentConnections[#persistentConnections + 1] = ui.AncestryChanged:Connect(function(_, parent)
             if parent then return end
-            destroyed=true
-            enabled=false
+
+            destroyed = true
+            enabled = false
             clearAll()
             disconnectDynamic()
             disconnectPersistent()
         end)
 
-        setToggleVisual(false,false)
+        setToggleVisual(false, false)
     end)
 
     if not ok then
-        warn("[PulseCore] Tripwire Mines ESP error: "..tostring(err))
+        warn("[PulseCore] Tripwire Mines ESP error: " .. tostring(err))
     end
 end)
+
 
 return _result
