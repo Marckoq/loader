@@ -2259,7 +2259,7 @@ task.defer(function()
         warn("[PulseCore] Tripwire Mines ESP error: " .. tostring(err))
     end
 end)
--- PULSECORE_CREDITS_CREATOR_PATCH_V1
+-- PULSECORE_CREDITS_CREATOR_PATCH_V2
 task.defer(function()
     pcall(function()
         local Players = game:GetService("Players")
@@ -2270,17 +2270,29 @@ task.defer(function()
             return
         end
 
+        local creator = nil
+
         for _, object in ipairs(gui:GetDescendants()) do
             if object:IsA("TextLabel") then
                 local text = tostring(object.Text or "")
                 if text == "CREATOR\nMarckoq (Scriptblox)"
                     or text == "CREATOR\nMarckoq (Scriptblox)\nCommunityGame125 (Roblox)"
                 then
-                    object.Text = "CREATOR\nMarckoq (Scriptblox)\nCommunityGame125 (Roblox)"
-                    object.Size = UDim2.new(1, 0, 0, 82)
+                    creator = object
+                    break
                 end
             end
         end
+
+        if not creator then
+            return
+        end
+
+        creator.Text = "CREATOR\nMarckoq (Scriptblox)\nCommunityGame125 (Roblox)"
+        creator.Size = UDim2.new(1, 0, 0, 82)
+        creator.TextWrapped = true
+        creator.TextXAlignment = Enum.TextXAlignment.Left
+        creator.TextYAlignment = Enum.TextYAlignment.Center
     end)
 end)
 
