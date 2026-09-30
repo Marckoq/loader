@@ -287,6 +287,8 @@ end
 end
 
 _src=string.gsub(_src,'SCRIPT_VERSION = "2%.5%.9"','SCRIPT_VERSION = "2.6.1"',1)
+_src=string.gsub(_src,'SCRIPT_VERSION = "2%.6%.1"','SCRIPT_VERSION = "2.6.2"',1)
+_src=string.gsub(_src,'-- PulseCore Version: 2%.6%.1','-- PulseCore Version: 2.6.2',1)
 _src=string.gsub(_src,'-- PulseCore Version: 2%.5%.9','-- PulseCore Version: 2.6.1',1)
 _src=string.gsub(_src,"fpsMin%s*=%s*15","fpsMin = 1",1)
 _src=string.gsub(_src,"fpsMax%s*=%s*240","fpsMax = 1000",1)
@@ -1270,6 +1272,87 @@ local _load=loadstring or load
 if type(_load)~="function" then error("PulseCore requires loadstring/load support.",0) end
 local _fn,_err=_load(_src,"@PulseCore")
 if not _fn then error(_err or "PulseCore payload failed to load.",0) end
+
+-- PULSECORE_NEXOMIA_COMPAT_V1
+do
+    local function readExecutorInfo()
+        local resolvers = {
+            rawget(_G, "identifyexecutor"),
+            rawget(_G, "getexecutorname"),
+            rawget(_G, "whatexecutor"),
+        }
+
+        for _, resolver in ipairs(resolvers) do
+            if type(resolver) == "function" then
+                local ok, name, version = pcall(resolver)
+                if ok and type(name) == "string" and name ~= "" then
+                    return name, type(version) == "string" and version or ""
+                end
+            end
+        end
+
+        return "", ""
+    end
+
+    local executorName, executorVersion = readExecutorInfo()
+    local normalizedExecutor = string.lower(executorName):gsub("[^%w]", "")
+
+    if normalizedExecutor == "nexomia" then
+        local env = _G
+
+        pcall(function()
+            local getgenvFn = rawget(_G, "getgenv")
+            if type(getgenvFn) == "function" then
+                local sharedEnv = getgenvFn()
+                if type(sharedEnv) == "table" then
+                    env = sharedEnv
+                end
+            end
+        end)
+
+        local function exposeAlias(targetName, sourceName)
+            if type(rawget(env, targetName)) == "function" then
+                return
+            end
+
+            local source = rawget(env, sourceName) or rawget(_G, sourceName)
+            if type(source) == "function" then
+                pcall(rawset, env, targetName, source)
+            end
+        end
+
+        exposeAlias("request", "http_request")
+        exposeAlias("http_request", "request")
+
+        exposeAlias("getcustomasset", "getsynasset")
+        exposeAlias("getsynasset", "getcustomasset")
+
+        exposeAlias("setclipboard", "set_clipboard")
+        exposeAlias("set_clipboard", "setclipboard")
+        exposeAlias("toclipboard", "setclipboard")
+
+        exposeAlias("queue_on_teleport", "queueonteleport")
+        exposeAlias("queueonteleport", "queue_on_teleport")
+        exposeAlias("clear_teleport_queue", "clearqueueonteleport")
+        exposeAlias("clearqueueonteleport", "clear_teleport_queue")
+
+        exposeAlias("getexecutorname", "identifyexecutor")
+
+        rawset(env, "PulseCoreExecutorName", executorName)
+        rawset(env, "PulseCoreExecutorVersion", executorVersion)
+        rawset(env, "PulseCoreIsNexomia", true)
+
+        pcall(function()
+            if type(rawget(env, "warn")) == "function" then
+                rawget(env, "warn")(
+                    "[PulseCore] Nexomia compatibility layer enabled" ..
+                    (executorVersion ~= "" and (" (v" .. executorVersion .. ")") or "")
+                )
+            end
+        end)
+    end
+end
+
 
 local _result=_fn()
 task.defer(function()
