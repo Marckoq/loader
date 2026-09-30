@@ -1,3 +1,9 @@
+## 2.6.2
+
+- Added an explicit Nexomia compatibility layer.
+- Normalized common executor aliases for HTTP requests, custom assets, clipboard, teleport queue, and executor identification.
+- Added Nexomia runtime identifiers: `PulseCoreExecutorName`, `PulseCoreExecutorVersion`, and `PulseCoreIsNexomia`.
+
 # Changelog
 
 ## 2026-09-25
