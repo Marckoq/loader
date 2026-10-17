@@ -1,4 +1,4 @@
-# PulseCore Moderation — v2.6.14
+# PulseCore Moderation — v2.6.15
 
 Only Roblox account **wkjkrd**, verified UserId **11409644140**, receives the Moderation tab in the distributed client. Existing Combat/Fun access rules are unchanged. Emotes remains hidden for everyone.
 
@@ -31,9 +31,10 @@ Search Player queries Roblox directly, including accounts that are offline, abse
 - Empty Reason becomes `No reason specified`.
 - The owner cannot be banned from this UI.
 - All successful changes are committed to `Bans.json` in `main`. Each update fetches the latest blob SHA. A concurrent update produces an error instead of overwriting it.
+- Access checks read `Bans.json` through the GitHub Contents API with a unique request query and no-cache headers. They do not use a raw.githubusercontent.com CDN response. Public clients send no token; the owner can reuse the connected session token. GitHub API availability and rate limits still apply.
 - A ban is checked **before loading the main UI and functions**. Banned users receive only an access notice containing the reason and expiry.
 - An expired ban permits access without an Unban action. Expiry is stored as a UTC Unix timestamp; `0` means permanent.
-- While running, clients check every 60 seconds. A newly observed ban shuts down the main script and opens the notice. Raw GitHub caching/network delays mean this is not instantaneous.
+- While running, clients check every 60 seconds. A newly observed ban shuts down the main script and opens the notice. The runtime interval and network delays mean this is not instantaneous.
 - The notice has **RECHECK ACCESS**. After unban or expiry, restart PulseCore once the check reports restored access.
 - If the initial check fails or the ban document is invalid, ordinary users see an access-check error and the core does not start. A temporary network failure during an existing allowed session does not revoke that session by itself. The owner can still open Moderation to repair repository data.
 
@@ -41,6 +42,6 @@ The repository is public: user records and ban reasons are public too. Avoid wri
 
 ## Verification
 
-Verified locally with Lua 5.4: outer loader and transformed core syntax, packed payload/checksum round-trip, username/UserId lookup, invalid and missing accounts, lookup timeout, owner restrictions, duration parsing, UTF-8/base64, mocked authenticated Ban/Unban writes, preservation of unrelated bans, SHA conflicts, and token disconnect. A simulated UI scheduler also verifies debounce, automatic selection, full-body avatar requests, stale search rejection, clearing during lookup, and the selected Ban target.
+Verified locally with Lua 5.4: outer loader and transformed core syntax, packed payload/checksum round-trip, username/UserId lookup, invalid and missing accounts, lookup timeout, owner restrictions, duration parsing, UTF-8/base64, mocked authenticated Ban/Unban writes, preservation of unrelated bans, SHA conflicts, and token disconnect. A simulated UI scheduler also verifies debounce, automatic selection, full-body avatar requests, stale search rejection, clearing during lookup, and the selected Ban target. Access-gate tests additionally cover an active ban for `11804391952`, expired/permanent/removed bans, owner exemption, unique API requests, fail-closed startup on unavailable/malformed data, and shutdown on a newly observed ban.
 
 Actual Roblox/executor rendering and real token-authorized writes were not run in this environment. CONNECT GITHUB checks authenticated reading; GitHub confirms Contents write permission when the first real change is submitted.
